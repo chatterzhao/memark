@@ -45,12 +45,13 @@
 
 ## F. Graphify 集成
 
-- [x] `memark build` 会调用真实 `graphify` CLI
+- [x] `memark build` 会调用外部配置的 Graphify 构建入口
 - [x] `memark build` 支持 `--update`
 - [x] `memark build` 支持 `--wiki`
 - [x] `memark build` 支持 `--obsidian`
 - [x] `memark build` 支持 `--mcp`
 - [x] 当 `graphify` 不存在时会明确报错
+- [x] 当遇到 helper/query 型 `graphify` CLI 时会明确提示接口不匹配
 - [x] `memark run` 能串联 promote + build
 - [x] `memark run` 会先消费 `inbox/promoted` 与 `inbox/documents`
 
@@ -78,4 +79,4 @@
 
 - 一个真实可安装的 Python CLI
 - 一个稳定的 room package -> corpus 编排层
-- 一个可测试、可扩展、可继续往上接 extractor 的实现基线
+- 一个可测试、可扩展、可继续往上接 extractor / Graphify adapter 的实现基线

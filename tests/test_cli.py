@@ -161,6 +161,28 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("--update", logged)
         self.assertIn("--wiki", logged)
 
+    def test_build_reports_graphify_cli_contract_mismatch(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_graphify = fake_bin_dir / "graphify"
+        fake_graphify.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                echo "error: unknown command '$1'" >&2
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_graphify.chmod(fake_graphify.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("build", "--workspace", str(self.workspace), cwd=ROOT, env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("does not accept direct 'graphify <folder>' builds", result.stderr)
+
     def test_promote_is_idempotent_and_can_archive(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         package = {

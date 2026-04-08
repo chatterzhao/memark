@@ -52,8 +52,19 @@ def run_graphify(
         check=False,
     )
     if completed.returncode != 0:
+        stderr = completed.stderr.strip()
+        stdout = completed.stdout.strip()
+        hint = ""
+        combined = "\n".join(part for part in [stdout, stderr] if part)
+        if "unknown command" in combined.lower():
+            hint = (
+                "\nDetected a Graphify CLI that does not accept direct 'graphify <folder>' builds. "
+                "The installed package may expose only helper/query commands at the top level. "
+                "Use a compatible wrapper via --graphify-bin or install a Graphify interface "
+                "that supports corpus builds."
+            )
         raise GraphifyError(
-            f"Graphify build failed with exit code {completed.returncode}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
+            f"Graphify build failed with exit code {completed.returncode}{hint}\nSTDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
         )
     return GraphifyBuildResult(
         command=command,

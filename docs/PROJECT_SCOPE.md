@@ -33,6 +33,8 @@ MemArk 关心的正是这条链路：
 
 - 保存原始对话
 - 提供记忆检索能力
+- 提供 wake-up context
+- 支持通过 hooks / 自动 mine 持续采集
 - 支持溯源到原始记录
 - 通过 `wing -> hall -> room -> closet -> drawer` 组织内容
 
@@ -57,6 +59,8 @@ MemArk 关心的正是这条链路：
 在当前正式口径中，`Graphify` 不应只被描述为“wiki 工具”。
 
 更准确地说，它是一个把目录语料编译成知识图谱、报告、Wiki 和 Obsidian Vault 的知识编译层，也是 `LLM Wiki` 这类思路的一种具体工具形态。
+
+它还提供围绕 `graph.json` 的查询、MCP 和平台集成能力，因此不只是静态导出器。
 
 它更适合处理：
 
@@ -88,14 +92,14 @@ MemArk 关心的正是这条链路：
 - 只有具备项目知识价值的增量内容，才由 `MemArk` 晋升给 `Graphify`
 - 已落盘的项目文档是 `Graphify` 的一等输入
 
-在 `MemPalace` 的宫殿结构中，最适合喂给 `Graphify` 的默认单位不是整个 `wing`，也不是裸 `drawer`，而是：
+在 `MemPalace` 的宫殿结构中，`MemArk` 当前选择的默认晋升单位不是整个 `wing`，也不是裸 `drawer`，而是：
 
 - 以 `project wing` 为边界
 - 以 `room` 为主题单位
 - 以 `closet` 为优先抽取对象
 - 必要时附带 `drawer` 引用
 
-也就是：
+也就是当前桥接层的推荐默认策略：
 
 `project wing -> hall -> room -> closet (+ drawer refs)`
 
@@ -132,6 +136,7 @@ MemArk 关心的正是这条链路：
 - `INSTALL_VERIFICATION.md`：负责记录已经真实执行过的安装与验证结果
 - `IMPLEMENTATION_PLAN.md`：负责定义当前 CLI 的实现边界与下一阶段路线
 - `ACCEPTANCE_CHECKLIST.md`：负责定义当前版本的验收标准
+- `PRODUCT_REQUIREMENTS.md`：负责定义基于上游能力面收敛出的具体产品需求
 - `DOCUMENT_STATUS.md`：负责定义正式文档与研究归档的关系
 
 ## 后续应补的文档

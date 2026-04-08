@@ -9,10 +9,10 @@
 
 ## 当前判断
 
-基于上游源码、README 和本仓库里的实际安装验证，当前可以把三者关系收敛为：
+基于上游源码、README 和本仓库里的实际验证记录，当前可以把三者关系收敛为：
 
-- `MemPalace`：记忆层。保留原始内容，按 `wing -> hall -> room -> closet -> drawer` 组织，并通过 CLI / MCP 供 AI 检索。
-- `Graphify`：知识编译层。读取目录语料，生成 `graph.json`、`GRAPH_REPORT.md`、`graph.html`，也可输出 `--wiki`、`--obsidian`、`--mcp`。
+- `MemPalace`：记忆层。保留原始内容，按 `wing -> hall -> room -> closet -> drawer` 组织；`closet` 是指向原文的摘要，`drawer` 保留逐字内容；既能 CLI 搜索，也能提供 wake-up context、MCP 工具与自动化采集路径。
+- `Graphify`：知识编译层。把目录语料编译为 `graph.json`、`GRAPH_REPORT.md`、`graph.html`，并进一步支持 wiki / Obsidian / MCP / query 等消费路径。
 - `MemArk`：桥接层。把 `MemPalace` 中具备项目知识价值的内容，整理成 `Graphify` 的稳定输入目录。
 
 `MemArk` 不是新的记忆系统，也不是新的图谱引擎。
@@ -24,14 +24,17 @@
 `MemPalace` 的强项不是“人工天天搜库”，而是：
 
 - 本地保存原始对话和资料
-- 让 AI 在后续对话里自动找回上下文
-- 在需要时追溯到原始逐字内容
+- 让 AI 在后续对话里找回上下文
+- 在需要时回到原始逐字内容
+- 给 AI 一个短得多的 wake-up context，而不是每次重喂历史
+- 通过 hooks / `MEMPAL_DIR` 把长期采集自动化
 
 更合适的使用方式是：
 
 1. 安装并执行一次 `mempalace init`、`mempalace mine`
-2. 把它作为 MCP 接给 Claude / ChatGPT / Cursor / Gemini 一类 AI
-3. 让 AI 在问答时自动调用搜索，而不是把它当成人工知识库 UI
+2. 把它接给支持 MCP 的 AI 客户端，或者直接使用它的 CLI / wake-up
+3. 让 AI 在问答时自动调用搜索、wake-up 和记忆工具，而不是把它当成人工知识库 UI
+4. 对长期项目或长期聊天，优先用 hooks / 自动 mine 保持记忆持续更新
 
 需要特别注意的一点是：
 
@@ -44,17 +47,19 @@
 
 `Graphify` 的强项也不只是“把内容排成 wiki”。
 
-它更像一个 skill/CLI-first 的知识编译器，适合：
+它更像一个“编译 + 查询 + 平台接入”的知识图谱层，适合：
 
 - 对一个持续积累的 corpus 目录运行
 - 先形成图谱和报告，再让人或 AI 沿结构下钻原文
-- 用 `--update`、`--watch` 处理增量变化
+- 产出 `graph.json` 后继续做 query / MCP / wiki / Obsidian 导航
+- 对代码变动做 watch / hook，对文档和研究材料做增量更新
 
 更合适的使用方式是：
 
 1. 给它一个稳定的项目语料目录，而不是每次手工粘贴聊天
-2. 先让 AI 读 `GRAPH_REPORT.md` 或 `graph.json` 暴露出的结构
+2. 先让 AI 读 `GRAPH_REPORT.md` 做全局定向，再按需 query `graph.json`
 3. 把代码、文档、图像、研究材料和晋升后的项目记忆放在同一个 corpus 边界里
+4. 把 `graph.json` 继续作为 AI 可读的查询面，而不是只看静态 HTML
 
 ## MemArk 该做什么
 
@@ -66,11 +71,11 @@
 4. 落成 `Graphify` 可直接消费的 Markdown 语料
 5. 触发 `Graphify` 对 corpus 做 `--update`、`--wiki` 或其他编译
 
-当前最稳的默认晋升单位不是整个宫殿，也不是裸 `drawer`，而是：
+当前 `MemArk` 的默认设计假设不是整个宫殿，也不是裸 `drawer`，而是：
 
 `project wing -> hall -> room -> closet (+ drawer refs)`
 
-原因很直接：
+这是桥接层的治理选择，不是上游官方强制接口。原因很直接：
 
 - 直接喂全量 `drawer`，噪音太大
 - 只喂顶层 taxonomy，信息又太薄
@@ -102,6 +107,12 @@
 
 - 直接从 `MemPalace` 数据库或 MCP 自动抽取增量的实现
 - 后台监控或同步服务
+
+另一个重要事实是：
+
+- 当前在 `.venv-skill-check` 中验证到的 `graphifyy 0.3.12` 顶层 `graphify --help` 暴露的是 `install`、`query`、`hook`、`claude/codex install` 等入口
+- 它不是一个稳定公开的“任何版本都支持 `graphify <folder>`”接口
+- 因此 `MemArk build` 当前应被理解为“调用兼容的 Graphify 构建入口”，而不是保证所有 `graphifyy` 安装都可直接按同一命令消费目录
 
 ## 当前 CLI 怎么用
 
@@ -162,7 +173,7 @@ python3 -m memark build --workspace ./memark-work --update --wiki
 python3 -m memark run --workspace ./memark-work --update --wiki
 ```
 
-其中：
+其中当前实现约定：
 
 - `inbox/promoted/` 放 room package JSON
 - `inbox/documents/` 放待并入 corpus 的正式文档
@@ -185,6 +196,7 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 - [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)：真实安装与 CLI 验证结果
 - [`docs/IMPLEMENTATION_PLAN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/IMPLEMENTATION_PLAN.md)：当前 Python CLI 的实现范围与后续分层
 - [`docs/ACCEPTANCE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/ACCEPTANCE_CHECKLIST.md)：当前版本的验收标准与完成状态
+- [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)：基于 `MemPalace` 与 `Graphify` 能力面收敛出的具体需求
 - [`docs/DOCUMENT_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOCUMENT_STATUS.md)：正式文档与研究归档的关系
 - [`docs/MAINTAINER_SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MAINTAINER_SKILL.md)：旧的维护型 Skill 说明
 - [`examples/sample_room_package.json`](/Users/zhaoyu/Downloads/code/my-memark/memark/examples/sample_room_package.json)：可直接试跑的 room package 示例

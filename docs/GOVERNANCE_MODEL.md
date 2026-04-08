@@ -30,7 +30,11 @@
 
 ## 哪一层最适合喂给 `Graphify`
 
-结论先说：
+先说明口径：
+
+下面的“`room + closet (+ drawer refs)`”不是 `MemPalace` 或 `Graphify` 官方强制接口，而是 `MemArk` 当前采用的桥接治理策略。
+
+在这个前提下，结论是：
 
 最适合喂给 `Graphify` 的默认单位，不是整个宫殿，也不是裸 `drawer`，而是：
 

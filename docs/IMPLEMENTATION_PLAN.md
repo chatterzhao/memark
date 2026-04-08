@@ -118,4 +118,5 @@ workspace/
 - 还没有直接抽取 `MemPalace` room package 的适配器
 - 还没有 `imports/` 的实际处理命令
 - 还没有对 `Graphify` 输出结果做二次验证
+- `Graphify` 的直接构建 CLI 契约在不同版本/入口之间并不稳定
 - 还没有 Windows CI

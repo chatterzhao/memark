@@ -30,9 +30,11 @@
 
 最小可用输入单位应为一个 `room package`。
 
+这里的 `room + closet (+ drawer refs)` 是 `MemArk` 当前采用的桥接设计假设，不是上游仓库声明的唯一官方导出格式。
+
 当前实现中的默认入口是：
 
-- `workspace/inbox/*.json`
+- `workspace/inbox/promoted/*.json`
 - `memark validate <file>`
 - `memark promote --workspace <workspace>`
 - `memark run --workspace <workspace>`
