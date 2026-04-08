@@ -1,0 +1,48 @@
+{
+  "wing_id": "project/memark",
+  "wing_kind": "project",
+  "hall_id": "discoveries",
+  "room_id": "auth-migration",
+  "room_title": "Authentication Migration",
+  "room_summary": "The team decided to move authentication into a dedicated service.",
+  "closets": [
+    {
+      "closet_id": "closet-1",
+      "summary": "Auth should be isolated so token policy, audit logging, and rollout can evolve independently.",
+      "key_points": [
+        "Split auth into its own service",
+        "Introduce token rotation",
+        "Keep audit logging mandatory"
+      ],
+      "tags": [
+        "auth",
+        "migration"
+      ],
+      "evidence_refs": [
+        "drawer-001"
+      ]
+    }
+  ],
+  "drawer_refs": [
+    {
+      "drawer_id": "drawer-001",
+      "timestamp": "2026-04-08T12:00:00Z",
+      "speaker": "assistant",
+      "excerpt": "We should split auth to isolate policy and logging decisions.",
+      "source_uri": "mcp://mempalace/project/memark/drawer-001"
+    }
+  ],
+  "participants": [
+    "user",
+    "assistant"
+  ],
+  "related_entities": [
+    "Module: auth-service",
+    "Doc: adr-001.md"
+  ],
+  "source_timestamps": {
+    "start": "2026-04-01T10:00:00Z",
+    "end": "2026-04-07T18:00:00Z"
+  },
+  "updated_at": "2026-04-08T00:00:00Z"
+}

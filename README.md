@@ -78,7 +78,7 @@
 
 ## 当前仓库提供什么
 
-这个仓库当前仍然是文档仓库，不是 `MemArk` 运行时实现仓库。
+这个仓库现在已经提供一个可运行的、CLI-first 的 `MemArk` 最小实现。
 
 已经提供：
 
@@ -86,12 +86,94 @@
 - `MemPalace -> MemArk -> Graphify` 的治理和接口说明
 - 一个只负责安装上游工具的 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
 - 基于真实命令执行结果的安装验证记录
+- 一个真实可运行的 Python CLI：`memark`
 
-还没有提供：
+当前 CLI 已支持：
 
-- `MemArk` 自己的 CLI
-- 稳定的增量抽取实现
+- `memark init`
+- `memark validate`
+- `memark promote`
+- `memark add-documents`
+- `memark build`
+- `memark run`
+- `memark status`
+
+仍然没有提供：
+
+- 直接从 `MemPalace` 数据库或 MCP 自动抽取增量的实现
 - 后台监控或同步服务
+
+## 当前 CLI 怎么用
+
+先安装当前仓库里的 CLI：
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+```
+
+先初始化一个工作区：
+
+```bash
+python3 -m memark init ./memark-work --project myproject
+```
+
+仓库里自带一个可直接试跑的样例：
+
+[`examples/sample_room_package.json`](/Users/zhaoyu/Downloads/code/my-memark/memark/examples/sample_room_package.json)
+
+可以先把它放进 `inbox/promoted/`，再执行校验与晋升：
+
+```bash
+cp examples/sample_room_package.json ./memark-work/inbox/promoted/room.json
+python3 -m memark validate ./memark-work/inbox/promoted/room.json
+python3 -m memark promote --workspace ./memark-work
+```
+
+如果已经有 room package JSON，也可以直接放进去执行同一条主路径。
+
+`promote` 会把输入写成下面这种 Graphify corpus：
+
+```bash
+memark-work/
+  corpus/
+    myproject/
+      promoted/
+        room-*.md
+      documents/
+      imports/
+```
+
+如果还要把已落盘文档一起喂给 `Graphify`：
+
+```bash
+python3 -m memark add-documents --workspace ./memark-work ./docs/adr-001.md
+```
+
+最后由 `MemArk` 触发 `Graphify`：
+
+```bash
+python3 -m memark build --workspace ./memark-work --update --wiki
+```
+
+如果希望“一次消费 inbox 并立刻触发 Graphify”，可以直接：
+
+```bash
+python3 -m memark run --workspace ./memark-work --update --wiki
+```
+
+其中：
+
+- `inbox/promoted/` 放 room package JSON
+- `inbox/documents/` 放待并入 corpus 的正式文档
+- `run` 会先消费这两个目录，再触发 `Graphify`
+
+注意：
+
+- 当前版本不会伪造 `MemPalace` 的 `since` 接口
+- 因此“从宫殿里拿出 room package”这一步，仍需要外部抽取器、AI 助手或后续专门适配器来完成
+- `MemArk` 当前负责的是稳定消费这些 package，并落成 `Graphify` 能直接吃的 corpus
+- `memark status --json` 可作为脚本化验收入口
 
 ## 文档
 
@@ -101,8 +183,11 @@
 - [`docs/GOVERNANCE_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/GOVERNANCE_MODEL.md)：闲聊、项目对话、产出文档的隔离与晋升模型
 - [`docs/INTERFACE_CONTRACT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INTERFACE_CONTRACT.md)：推荐输入契约、输出契约与 Markdown 包格式
 - [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)：真实安装与 CLI 验证结果
+- [`docs/IMPLEMENTATION_PLAN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/IMPLEMENTATION_PLAN.md)：当前 Python CLI 的实现范围与后续分层
+- [`docs/ACCEPTANCE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/ACCEPTANCE_CHECKLIST.md)：当前版本的验收标准与完成状态
 - [`docs/DOCUMENT_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOCUMENT_STATUS.md)：正式文档与研究归档的关系
 - [`docs/MAINTAINER_SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MAINTAINER_SKILL.md)：旧的维护型 Skill 说明
+- [`examples/sample_room_package.json`](/Users/zhaoyu/Downloads/code/my-memark/memark/examples/sample_room_package.json)：可直接试跑的 room package 示例
 
 ## 开源价值
 

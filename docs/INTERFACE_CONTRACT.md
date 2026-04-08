@@ -4,8 +4,10 @@
 
 `MemArk` 作为桥接层，应该从 `MemPalace` 取什么，落成什么，再交给 `Graphify`。
 
-这里不假装外部命令已经验证存在。
-本文件只定义推荐的数据契约与目录契约，供后续实现时对照。
+当前已经有一个最小实现：它消费 room package JSON，并把它们写入 workspace corpus。
+
+这里仍然不假装 `MemPalace` 的自动增量抽取接口已经验证存在。
+本文件定义的是当前实现已采用的输入契约与目录契约。
 
 ## 目标
 
@@ -27,6 +29,13 @@
 `MemArk` 不需要一次拿到整个宫殿。
 
 最小可用输入单位应为一个 `room package`。
+
+当前实现中的默认入口是：
+
+- `workspace/inbox/*.json`
+- `memark validate <file>`
+- `memark promote --workspace <workspace>`
+- `memark run --workspace <workspace>`
 
 推荐字段如下：
 
@@ -257,6 +266,26 @@ drawer_refs:
 - 生成报告、Wiki、Obsidian 输出
 
 因此 `MemArk` 不应该：
+
+- 试图替代 `Graphify` 的图谱构建
+- 试图在桥接层做过重的知识编译
+- 直接把所有原始聊天灌给 `Graphify`
+
+## 当前实现对应关系
+
+当前 CLI 已经把这份契约落成了如下命令面：
+
+- `memark validate`：校验 room package JSON 是否符合最小契约
+- `memark promote`：把 room package 写成 `promoted/room-*.md`
+- `memark add-documents`：把已落盘文档复制进 `documents/`
+- `memark build`：调用 `graphify <project_dir>`
+- `memark run`：先 promote，再 build
+
+它仍然没有实现：
+
+- 直接从 `MemPalace` 自动拉取增量
+- 对 `imports/` 的专门处理逻辑
+- 后台监控与守护进程式同步
 
 - 试图替代 `Graphify` 的图谱构建
 - 试图在桥接层做过重的知识编译
