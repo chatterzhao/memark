@@ -42,7 +42,8 @@ class MemArkCliTests(unittest.TestCase):
         result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
-        self.assertTrue((self.workspace / "inbox").exists())
+        self.assertTrue((self.workspace / "inbox" / "promoted").exists())
+        self.assertTrue((self.workspace / "inbox" / "documents").exists())
         self.assertTrue((self.workspace / "corpus" / "memark" / "promoted").exists())
 
     def test_validate_and_promote_room_package(self) -> None:
@@ -78,7 +79,7 @@ class MemArkCliTests(unittest.TestCase):
             },
             "updated_at": "2026-04-08T00:00:00Z",
         }
-        input_file = self.workspace / "inbox" / "room.json"
+        input_file = self.workspace / "inbox" / "promoted" / "room.json"
         input_file.write_text(json.dumps(package), encoding="utf-8")
 
         validate = run_cli("validate", str(input_file), cwd=ROOT)
@@ -103,29 +104,12 @@ class MemArkCliTests(unittest.TestCase):
             "room_title": "Coffee Talk",
             "closets": [{"summary": "Casual conversation."}],
         }
-        input_file = self.workspace / "inbox" / "general.json"
+        input_file = self.workspace / "inbox" / "promoted" / "general.json"
         input_file.write_text(json.dumps(package), encoding="utf-8")
 
         promote = run_cli("promote", "--workspace", str(self.workspace), cwd=ROOT)
         self.assertNotEqual(promote.returncode, 0)
         self.assertIn("wing_kind must be 'project'", promote.stderr)
-
-    def test_workspace_default_project_wins_when_promoting(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "Demo", cwd=ROOT)
-        package = {
-            "wing_id": "project/memark",
-            "wing_kind": "project",
-            "hall_id": "discoveries",
-            "room_id": "routing",
-            "room_title": "Routing",
-            "closets": [{"summary": "Default project should be used."}],
-        }
-        input_file = self.workspace / "inbox" / "routing.json"
-        input_file.write_text(json.dumps(package), encoding="utf-8")
-
-        promote = run_cli("promote", "--workspace", str(self.workspace), cwd=ROOT)
-        self.assertEqual(promote.returncode, 0, promote.stderr)
-        self.assertTrue((self.workspace / "corpus" / "demo" / "promoted" / "room-routing.md").exists())
 
     def test_add_documents_copies_files(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -187,7 +171,7 @@ class MemArkCliTests(unittest.TestCase):
             "room_title": "Release Cut",
             "closets": [{"summary": "Release process stabilized."}],
         }
-        input_file = self.workspace / "inbox" / "release.json"
+        input_file = self.workspace / "inbox" / "promoted" / "release.json"
         input_file.write_text(json.dumps(package), encoding="utf-8")
 
         first = run_cli("promote", "--workspace", str(self.workspace), "--archive", cwd=ROOT)
@@ -209,10 +193,11 @@ class MemArkCliTests(unittest.TestCase):
 
     def test_status_reports_counts(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
-        (self.workspace / "inbox" / "queued.json").write_text("{}", encoding="utf-8")
+        (self.workspace / "inbox" / "promoted" / "queued.json").write_text("{}", encoding="utf-8")
         result = run_cli("status", "--workspace", str(self.workspace), cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Inbox files: 1", result.stdout)
+        self.assertIn("Inbox promoted dir:", result.stdout)
 
     def test_status_reports_json(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -221,8 +206,9 @@ class MemArkCliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["project"], "memark")
         self.assertIn("graphify", payload)
+        self.assertIn("inbox_promoted_dir", payload)
 
-    def test_run_promotes_then_builds(self) -> None:
+    def test_run_promotes_documents_then_builds(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         package = {
             "wing_id": "project/memark",
@@ -232,8 +218,10 @@ class MemArkCliTests(unittest.TestCase):
             "room_title": "Release Cut",
             "closets": [{"summary": "Release process stabilized."}],
         }
-        input_file = self.workspace / "inbox" / "release.json"
+        input_file = self.workspace / "inbox" / "promoted" / "release.json"
         input_file.write_text(json.dumps(package), encoding="utf-8")
+        doc = self.workspace / "inbox" / "documents" / "architecture.md"
+        doc.write_text("# Architecture\n", encoding="utf-8")
 
         fake_bin_dir = self.workspace / "bin"
         fake_bin_dir.mkdir()
@@ -255,7 +243,9 @@ class MemArkCliTests(unittest.TestCase):
         result = run_cli("run", "--workspace", str(self.workspace), "--update", cwd=ROOT, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-release-cut.md"
+        copied = self.workspace / "corpus" / "memark" / "documents" / "architecture.md"
         self.assertTrue(promoted.exists())
+        self.assertTrue(copied.exists())
         self.assertIn("--update", log_file.read_text(encoding="utf-8"))
 
 

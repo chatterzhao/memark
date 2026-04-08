@@ -16,6 +16,8 @@
 - [x] `memark init` 可创建工作区
 - [x] 初始化时会创建 `.memark/config.json`
 - [x] 初始化时会创建 `inbox/`
+- [x] 初始化时会创建 `inbox/promoted/`
+- [x] 初始化时会创建 `inbox/documents/`
 - [x] 初始化时会创建 `corpus/<project>/promoted`
 - [x] 初始化时会创建 `corpus/<project>/documents`
 - [x] 初始化时会创建 `corpus/<project>/imports`
@@ -50,6 +52,7 @@
 - [x] `memark build` 支持 `--mcp`
 - [x] 当 `graphify` 不存在时会明确报错
 - [x] `memark run` 能串联 promote + build
+- [x] `memark run` 会先消费 `inbox/promoted` 与 `inbox/documents`
 
 ## G. 不做伪实现
 

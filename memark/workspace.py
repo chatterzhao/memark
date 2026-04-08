@@ -37,6 +37,14 @@ class WorkspaceConfig:
         return self.workspace / "inbox"
 
     @property
+    def inbox_promoted_dir(self) -> Path:
+        return self.inbox_dir / "promoted"
+
+    @property
+    def inbox_documents_dir(self) -> Path:
+        return self.inbox_dir / "documents"
+
+    @property
     def archive_dir(self) -> Path:
         return self.config_dir / "archive"
 
@@ -64,6 +72,8 @@ class WorkspaceConfig:
         for path in [
             self.config_dir,
             self.inbox_dir,
+            self.inbox_promoted_dir,
+            self.inbox_documents_dir,
             self.archive_dir,
             self.state_dir,
             self.promoted_dir(project),

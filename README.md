@@ -122,11 +122,11 @@ python3 -m memark init ./memark-work --project myproject
 
 [`examples/sample_room_package.json`](/Users/zhaoyu/Downloads/code/my-memark/memark/examples/sample_room_package.json)
 
-可以先把它放进 `inbox/`，再执行校验与晋升：
+可以先把它放进 `inbox/promoted/`，再执行校验与晋升：
 
 ```bash
-cp examples/sample_room_package.json ./memark-work/inbox/room.json
-python3 -m memark validate ./memark-work/inbox/room.json
+cp examples/sample_room_package.json ./memark-work/inbox/promoted/room.json
+python3 -m memark validate ./memark-work/inbox/promoted/room.json
 python3 -m memark promote --workspace ./memark-work
 ```
 
@@ -161,6 +161,12 @@ python3 -m memark build --workspace ./memark-work --update --wiki
 ```bash
 python3 -m memark run --workspace ./memark-work --update --wiki
 ```
+
+其中：
+
+- `inbox/promoted/` 放 room package JSON
+- `inbox/documents/` 放待并入 corpus 的正式文档
+- `run` 会先消费这两个目录，再触发 `Graphify`
 
 注意：
 

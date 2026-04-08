@@ -48,6 +48,8 @@ workspace/
     state/
       <project>-ledger.json
   inbox/
+    promoted/
+    documents/
   corpus/
     <project>/
       promoted/
@@ -57,11 +59,12 @@ workspace/
 
 说明：
 
-- `inbox/`：外部抽取器投递 room package JSON 的位置
+- `inbox/promoted/`：外部抽取器投递 room package JSON 的位置
+- `inbox/documents/`：待纳入 corpus 的正式文档
 - `promoted/`：由 `MemArk` 生成的 Graphify-ready Markdown
 - `documents/`：已落盘项目文档
 - `imports/`：预留给后续其他输入源
-- `ledger.json`：记录每个 room 的内容指纹，避免重复写入
+- `<project>-ledger.json`：记录每个 room 的内容指纹，避免重复写入
 
 ## 当前实现原则
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .io import dump_json_file, load_json_file, sha256_text
-from .models import RoomPackage, ValidationError
+from .models import RoomPackage
 from .render import render_markdown
 from .workspace import WorkspaceConfig, slugify
 
@@ -26,14 +26,8 @@ class PromoteResult:
 
 def load_room_packages(path: Path) -> list[RoomPackage]:
     payload = load_json_file(path)
-    packages: list[RoomPackage] = []
-    if isinstance(payload, list):
-        items = payload
-    else:
-        items = [payload]
-    for item in items:
-        packages.append(RoomPackage.from_mapping(item))
-    return packages
+    items = payload if isinstance(payload, list) else [payload]
+    return [RoomPackage.from_mapping(item) for item in items]
 
 
 def _load_ledger(path: Path) -> dict[str, str]:
@@ -100,19 +94,18 @@ def promote_file(
 
     for package in packages:
         package.ensure_promotable(allow_non_project=allow_non_project)
-        project = slugify(project_override or config.default_project or package.project or "project")
+        project = slugify(project_override or package.project or config.default_project)
         config.ensure_layout(project)
         ledger_path = config.ledger_file(project)
         ledger = _load_ledger(ledger_path)
         fingerprint = _package_fingerprint(package, project)
-        ledger_key = f"{package.room_id}"
+        ledger_key = package.room_id
         output = config.promoted_dir(project) / f"room-{slugify(package.room_id)}.md"
         changed = ledger.get(ledger_key) != fingerprint or not output.exists()
         if changed:
             output.write_text(render_markdown(package, project), encoding="utf-8")
             ledger[ledger_key] = fingerprint
             _save_ledger(ledger_path, ledger)
-
         results.append(
             PromoteResult(
                 source=source,
@@ -138,8 +131,7 @@ def promote_file(
 def iter_input_files(path: Path) -> list[Path]:
     if path.is_file():
         return [path]
-    files = [item for item in sorted(path.iterdir()) if item.is_file() and item.suffix.lower() == ".json"]
-    return files
+    return [item for item in sorted(path.rglob("*.json")) if item.is_file()]
 
 
 def promote_path(
