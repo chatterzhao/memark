@@ -1,1 +1,15 @@
 .DS_Store
+.pytest_cache/
+.venv-dev/
+.venv-skill-check/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.venv/
+.venv-skill-check/
+__pycache__/
+*.pyc
+dist/
+build/
+*.egg-info/

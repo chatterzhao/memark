@@ -103,22 +103,22 @@ MemArk 关心的正是这条链路：
 
 ## 当前仓库状态
 
-当前仓库是一个文档仓库。它已经提供：
+当前仓库是“文档 + 最小可运行 CLI 实现”的仓库。它已经提供：
 
 - 正式 README
 - 项目治理模型
 - 安装 `MemPalace` 与 `Graphify` 的 AI Skill
 - 真实安装验证记录
+- 一个 Python CLI-first 的最小实现
 - 文档分层说明
 - 原始研究稿与最终评审记录
 
 当前仓库尚未提供：
 
-- `MemArk` 自己的已验证 CLI
 - 稳定的 `MemPalace -> MemArk` 增量抽取实现
-- 可直接执行的实现代码
+- 后台监控或守护进程
 
-因此，任何面向用户的正式表述都不应把本仓库描述为“现在即可安装的产品仓库”。
+因此，任何面向用户的正式表述都不应把本仓库描述为“已经完成所有自动抽取能力的产品仓库”。
 
 ## 文档策略
 
@@ -130,12 +130,13 @@ MemArk 关心的正是这条链路：
 - `INTERFACE_CONTRACT.md`：负责定义 `MemPalace -> MemArk -> Graphify` 的数据与目录契约
 - `SKILL.md`：负责指导 AI 助手安装与验证 `MemPalace`、`Graphify`
 - `INSTALL_VERIFICATION.md`：负责记录已经真实执行过的安装与验证结果
+- `IMPLEMENTATION_PLAN.md`：负责定义当前 CLI 的实现边界与下一阶段路线
+- `ACCEPTANCE_CHECKLIST.md`：负责定义当前版本的验收标准
 - `DOCUMENT_STATUS.md`：负责定义正式文档与研究归档的关系
 
 ## 后续应补的文档
 
 如果后续继续推进，建议新增以下文档，而不是继续把内容堆进 README：
 
-- `docs/IMPLEMENTATION_PLAN.md`
 - `docs/DEPENDENCY_CONTRACT.md`
-- `docs/ACCEPTANCE_CHECKLIST.md`
+- `docs/OPERATIONS.md`
