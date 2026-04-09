@@ -505,12 +505,10 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload["scanned"], 2)
         self.assertEqual(payload["matched"], 1)
         self.assertEqual(payload["copied"], 1)
-        staged = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "08" / "rollout-a.jsonl"
-        self.assertTrue(staged.exists())
-        self.assertFalse(
-            (self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "08" / "rollout-b.jsonl")
-            .exists()
-        )
+        staged_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "08"
+        staged_matches = sorted(staged_dir.glob("rollout-a--*.jsonl"))
+        self.assertEqual(len(staged_matches), 1)
+        self.assertFalse(list(staged_dir.glob("rollout-b--*.jsonl")))
 
     def test_codex_sync_updates_changed_session_and_reports_unchanged(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -596,6 +594,8 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(third.returncode, 0, third.stderr)
         third_payload = json.loads(third.stdout)
         self.assertEqual(third_payload["updated"], 1)
+        staged_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "08"
+        self.assertEqual(len(list(staged_dir.glob("rollout-a--*.jsonl"))), 2)
 
     def test_codex_sync_supports_cwd_prefix(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -731,8 +731,8 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload[0]["sync"]["copied"], 1)
         self.assertTrue(payload[0]["mined"])
         self.assertEqual(counter_file.read_text(encoding="utf-8"), "1")
-        staged = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
-        self.assertTrue(staged.exists())
+        staged_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09"
+        self.assertEqual(len(list(staged_dir.glob("rollout-a--*.jsonl"))), 1)
 
         second = run_cli("projects-run", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
         self.assertEqual(second.returncode, 0, second.stderr)
@@ -1268,21 +1268,28 @@ class MemArkCliTests(unittest.TestCase):
                 [
                     (1, "seg-a", "drawer_auth_1"),
                     (2, "seg-b", "drawer_auth_2"),
+                    (3, "seg-c", "drawer_auth_3"),
                 ],
             )
             metadata_rows = [
                 (1, "chroma:document", "Decision: adopt Clerk for auth and write an ADR.", None, None, None),
                 (1, "wing", "codex_project", None, None, None),
                 (1, "room", "auth_decisions", None, None, None),
-                (1, "source_file", "/tmp/demo/rollout-a.jsonl", None, None, None),
+                (1, "source_file", "/tmp/demo/rollout-a--111-aaaaaaaaaaaa.jsonl", None, None, None),
                 (1, "filed_at", "2026-04-09T02:10:00Z", None, None, None),
                 (1, "ingest_mode", "convos", None, None, None),
-                (2, "chroma:document", "Migration checklist: keep billing internal and stage rollout.", None, None, None),
+                (2, "chroma:document", "Decision update: use Clerk plus staged fallback migration.", None, None, None),
                 (2, "wing", "codex_project", None, None, None),
                 (2, "room", "auth_decisions", None, None, None),
-                (2, "source_file", "/tmp/demo/rollout-b.jsonl", None, None, None),
+                (2, "source_file", "/tmp/demo/rollout-a--222-bbbbbbbbbbbb.jsonl", None, None, None),
                 (2, "filed_at", "2026-04-09T02:11:00Z", None, None, None),
                 (2, "ingest_mode", "convos", None, None, None),
+                (3, "chroma:document", "Migration checklist: keep billing internal and stage rollout.", None, None, None),
+                (3, "wing", "codex_project", None, None, None),
+                (3, "room", "auth_decisions", None, None, None),
+                (3, "source_file", "/tmp/demo/rollout-b--333-cccccccccccc.jsonl", None, None, None),
+                (3, "filed_at", "2026-04-09T02:12:00Z", None, None, None),
+                (3, "ingest_mode", "convos", None, None, None),
             ]
             conn.executemany(
                 """
@@ -1298,14 +1305,16 @@ class MemArkCliTests(unittest.TestCase):
         result = run_cli("palace-package", "--workspace", str(self.workspace), "--json", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["drawers"], 2)
+        self.assertEqual(payload["drawers"], 3)
         self.assertEqual(len(payload["packages"]), 1)
         package = payload["packages"][0]
         self.assertEqual(package["wing_id"], "project/memark")
         self.assertEqual(package["room_id"], "auth-decisions")
         self.assertEqual(len(package["drawer_refs"]), 2)
-        self.assertEqual(package["source_timestamps"]["start"], "2026-04-09T02:10:00Z")
-        self.assertEqual(package["source_timestamps"]["end"], "2026-04-09T02:11:00Z")
+        self.assertEqual(package["drawer_refs"][0]["source_uri"], "/tmp/demo/rollout-a.jsonl")
+        self.assertEqual(package["drawer_refs"][1]["source_uri"], "/tmp/demo/rollout-b.jsonl")
+        self.assertEqual(package["source_timestamps"]["start"], "2026-04-09T02:11:00Z")
+        self.assertEqual(package["source_timestamps"]["end"], "2026-04-09T02:12:00Z")
 
     def test_palace_package_can_write_into_inbox(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)

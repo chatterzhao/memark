@@ -117,6 +117,29 @@ This is the important practical finding for Codex integration:
 - `history.jsonl` should not be treated as the default project-ingest surface
 - MemPalace still stores chunked raw conversation/session text, not curated project knowledge
 
+### 2.2. `convos` re-ingest is path-based, not update-aware
+
+A minimal repro was run against `mempalace 3.0.0`:
+
+1. create one `rollout-a.jsonl`
+2. run `mempalace --palace <tmp> mine <chat_dir> --mode convos`
+3. append more messages to the same file path
+4. run the same `mine --mode convos` command again
+
+Observed result:
+
+- first run: `Files processed: 1`, `Drawers filed: 1`
+- second run: `Files processed: 0`, `Files skipped (already filed): 1`
+- SQLite still contained only the first `source_file`
+
+Practical conclusion:
+
+- `MemPalace convos` currently treats `source_file` as the decisive dedupe surface
+- it does not re-ingest same-path session growth the way normal project `mine` uses `source_mtime`
+- any bridge that needs correct `Codex resume` handling must compensate before `MemPalace`
+
+This is exactly why `MemArk` now writes updated sessions as immutable staging snapshots instead of rewriting the same staging path.
+
 ### 3. Compression exists, but real gains depend on corpus size
 
 Observed dry-run results:

@@ -57,6 +57,22 @@
 - `MemArk` 必须先把“同一路径 session 增长后的增量同步”做对
 - 当前主增量入口应围绕 `source_path + size + mtime_ns + sha256`
 
+### 5. `MemPalace 3.0.0` 的 `convos` ingest 不会重吃已存在 `source_file`
+
+实测可确认：
+
+- 同一路径会话第一次 `mine --mode convos` 之后
+- 如果只是对原 JSONL 继续追加内容
+- 再次执行 `mine --mode convos`
+- `MemPalace` 会直接把该文件视为 `already filed`
+- 它不会像普通项目 `mine` 那样依据 `mtime` 重新 ingest
+
+因此：
+
+- `MemArk` 不能把“更新后的同一路径 session”继续写回同一个 staging 路径
+- 必须把每次变化写成新的 staging snapshot 路径
+- 后续 package 层再按逻辑 session 取最新 snapshot
+
 ## 设计目标
 
 `MemArk` 对 `Codex` 会话 intake 的设计目标如下：
@@ -123,7 +139,7 @@
   staging/
     memark/
       sessions/
-        rollout-2026-04-08T02-44-36-....jsonl
+        2026/04/08/rollout-a--1775741877453319499-03f00be8b810.jsonl
 ```
 
 ### 更新策略
@@ -143,6 +159,7 @@
 - 跨平台最稳定
 - 后续做内容指纹最直接
 - 不依赖 `MemPalace` 对软链接行为的额外假设
+- 可以把每次会话更新落成新的不可变 snapshot
 
 ## 三、增量账本
 
@@ -156,6 +173,7 @@
 
 - `source_path`
 - `staged_path`
+- `staged_relative_path`
 - `size`
 - `mtime_ns`
 - `sha256`
@@ -169,12 +187,13 @@
 
 - `source_path` 不存在记录：新增
 - `size` 或 `mtime_ns` 变化：重新计算 hash
-- hash 未变化：不重写 staging
-- hash 变化：更新 staging，并标记需要重新 mine
+- hash 未变化：不生成新的 staging snapshot
+- hash 变化：写入新的 staging snapshot，并标记需要重新 mine
 
 当前真实优先级：
 
 - 先保证“同一路径 session 追加”可持续进入项目 staging
+- 再保证这类更新不会被 `MemPalace convos` 因同一 `source_file` 而跳过
 - 再由单次 cycle 或外部定时器决定何时触发 `mempalace mine`
 - “同内容异路径”仍可作为后续 hardening，但不是目前已验证主链需求
 
@@ -189,6 +208,12 @@
 ```bash
 mempalace --palace <project-palace> mine <project-staging-dir> --mode convos
 ```
+
+这里的 `<project-staging-dir>` 应理解为：
+
+- 项目隔离后的输入目录
+- 里面放的是 `MemArk` 管理的 session snapshot
+- 不是直接把用户原始 `~/.codex/sessions` 原样交给 `MemPalace`
 
 ### 项目粒度
 

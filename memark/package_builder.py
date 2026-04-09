@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -33,12 +34,40 @@ def _sort_timestamp(value: str | None) -> tuple[int, str]:
         return (0, value)
 
 
+_SNAPSHOT_NAME_RE = re.compile(r"^(?P<stem>.+)--(?P<mtime>\d+)-(?P<sha>[0-9a-f]{12})(?P<suffix>\.[^.]+)?$")
+
+
+def _logical_source_uri(source_uri: str | None) -> str | None:
+    if not source_uri:
+        return None
+    path = Path(source_uri)
+    match = _SNAPSHOT_NAME_RE.match(path.name)
+    if match is None:
+        return source_uri
+    suffix = match.group("suffix") or ""
+    return str(path.with_name(f"{match.group('stem')}{suffix}"))
+
+
+def _latest_drawers_by_logical_source(drawers: list[PalaceDrawer]) -> list[PalaceDrawer]:
+    latest: dict[str, PalaceDrawer] = {}
+    passthrough: list[PalaceDrawer] = []
+    for drawer in drawers:
+        logical_source = _logical_source_uri(drawer.source_file)
+        if logical_source is None:
+            passthrough.append(drawer)
+            continue
+        current = latest.get(logical_source)
+        if current is None or _sort_timestamp(drawer.filed_at) >= _sort_timestamp(current.filed_at):
+            latest[logical_source] = drawer
+    return [*passthrough, *latest.values()]
+
+
 def _drawer_ref(drawer: PalaceDrawer) -> DrawerRef:
     return DrawerRef(
         drawer_id=drawer.drawer_id,
         timestamp=drawer.filed_at,
         excerpt=_excerpt(drawer.document),
-        source_uri=drawer.source_file,
+        source_uri=_logical_source_uri(drawer.source_file),
     )
 
 
@@ -50,7 +79,7 @@ def build_room_package_from_drawers(
     drawers: list[PalaceDrawer],
     hall_id: str = "discoveries",
 ) -> RoomPackage:
-    ordered = sorted(drawers, key=lambda item: _sort_timestamp(item.filed_at))
+    ordered = sorted(_latest_drawers_by_logical_source(drawers), key=lambda item: _sort_timestamp(item.filed_at))
     excerpts = [_excerpt(item.document) for item in ordered[:5]]
     summary = f"Collected {len(ordered)} memory drawer(s) from room '{room}' in wing '{wing}'."
     closet = Closet(
@@ -83,7 +112,7 @@ def build_room_package_from_drawers(
             {
                 f"File: {Path(item.source_file).name}"
                 for item in ordered
-                if item.source_file and Path(item.source_file).name
+                if _logical_source_uri(item.source_file) and Path(_logical_source_uri(item.source_file) or "").name
             }
         ),
         source_time_start=min(timestamps) if timestamps else None,

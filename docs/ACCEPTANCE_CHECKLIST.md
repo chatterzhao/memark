@@ -91,6 +91,7 @@
 - [x] 能扫描 `~/.codex/sessions/**/*.jsonl`
 - [x] 能从 `session_meta.payload.cwd` 判断项目归属
 - [x] 能把一个项目的 session 文件同步到独立 staging 目录
+- [x] 能把同一路径 session 的新版本写成新的 staging snapshot，避免被 `MemPalace convos` 直接跳过
 - [x] 能识别同一路径 session 文件增长后的新增内容
 - [x] 能以项目 staging 为输入执行 `mempalace mine --mode convos`
 - [x] 能对混合项目 session 做正确隔离，不再让它们落成同一个 ingest 输入目录
@@ -103,6 +104,7 @@
 - [x] 能执行单次 `projects-run` cycle，把 `codex-sync` 与 `mempalace mine` 按项目配置串起来
 - [x] 能在 `projects-run` 中对 `resume` 后同一路径 session 增长维持正确同步
 - [x] 能在 `projects-run` 中对项目级 `mine_interval_seconds` 做最小间隔控制
+- [x] 能在 `palace-package` / `palace-run` 中对同一逻辑 session 的旧 snapshot 做下游去重
 - [x] 文档明确说明当前 Graphify fallback 只保证 code graph 重建，不保证 mixed-corpus 完整编译
 
 ## 当前结论

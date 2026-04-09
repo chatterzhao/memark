@@ -267,8 +267,22 @@ python3 -m memark projects-run --workspace ./memark-work
 `projects-run` 的行为是：
 
 - 先按 `projects.toml` 执行项目级 `codex-sync`
+- `codex-sync` 会把每次检测到的新版本 session 写成不可变 snapshot 路径
 - 如果该项目 staging 有新增或更新，会记为 `pending_mine`
 - 当达到项目的 `mine_interval_seconds` 后，自动执行一次 `mempalace mine --mode convos`
+
+这样做不是多此一举，而是为了绕开 `mempalace 3.0.0` 当前 `convos` ingest 的一个实测限制：
+
+- 同一路径会话文件第一次 ingest 后
+- 如果之后只是对原文件追加内容，再次 `mine --mode convos`
+- `MemPalace` 会按 `source_file` 直接跳过，不会重吃更新后的同一路径文件
+
+因此 `MemArk` 当前的真实策略是：
+
+- 用 ledger 识别源 session 是否变化
+- 把变化后的版本写成新的 staging snapshot 文件名
+- 让 `MemPalace` 把每个版本当作新的 `source_file` 摄取
+- 在 `palace-package` / `palace-run` 这层按逻辑 session 只取最新 snapshot，避免旧版本混进下游 room package
 
 这不是后台守护进程。
 
@@ -284,6 +298,14 @@ mempalace --palace ./memark-work/.memark/palaces/<project> \
   mine ./memark-work/.memark/staging/<project>/sessions \
   --mode convos
 ```
+
+其中 `staging/<project>/sessions/` 里的文件名默认类似：
+
+```text
+2026/04/09/rollout-a--1775741877453319499-03f00be8b810.jsonl
+```
+
+也就是“原 session 逻辑名 + mtime_ns + 内容 hash 前缀”的 snapshot 形式。
 
 如果要查看、清空或重建项目 palace，可以直接执行：
 
@@ -320,6 +342,14 @@ python3 -m memark palace-export \
 - `ingest_mode`
 - `extract_mode`
 
+`palace-export` 返回的是 palace 中的原始 drawer 视图。
+
+这意味着：
+
+- 如果同一条 session 后续又有新的 snapshot 被 ingest
+- 这里会同时看到旧 snapshot 和新 snapshot
+- 这是故意保留的原始 provenance，不是自动去重后的摘要层
+
 如果要把这些 drawer 按 `(wing, room)` 自动整理成候选 room package，可以直接执行：
 
 ```bash
@@ -340,6 +370,7 @@ python3 -m memark palace-package \
 
 - 只读 palace 中已经存在的 drawer
 - 按 `(wing, room)` 分组
+- 如果同一逻辑 session 存在多个 snapshot，只保留最新 snapshot 进入 package
 - 生成确定性的 room package JSON
 - 保留 `drawer_id`、`source_file`、`filed_at` 等 provenance
 - 不伪装成 AI 摘要器，只做保守整理

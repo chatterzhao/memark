@@ -21,7 +21,7 @@
 
 1. 扫描 `~/.codex/sessions/**/*.jsonl`
 2. 按 `session_meta.payload.cwd` 匹配项目
-3. 复制到项目级 staging
+3. 写入项目级 staging snapshot
 4. 对 staging 执行 `MemPalace` 的 `mine --mode convos`
 5. 从 `metadata + chroma:document` 整理候选内容
 6. 落成稳定 Markdown 文件
@@ -127,13 +127,15 @@
 - `~/.codex/history.jsonl` 不能作为项目主输入
 - `MemPalace` 不会自动按项目拆分混合 session 目录
 - `MemPalace` convo 去重主要按 `source_file` 路径，而不是内容
+- `MemPalace 3.0.0` 对同一路径追加后的 session 不会重新 ingest
 
 因此，`MemArk` 必须自己拥有：
 
 - 项目匹配
 - staging
 - ledger
-- 内容级去重
+- staging snapshot 策略
+- package 层逻辑去重
 
 更完整设计见 [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)。
 

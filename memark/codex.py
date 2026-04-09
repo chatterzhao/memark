@@ -14,6 +14,7 @@ from .workspace import WorkspaceConfig, slugify
 class CodexSessionRecord:
     source_path: str
     staged_path: str
+    staged_relative_path: str
     size: int
     mtime_ns: int
     sha256: str
@@ -57,6 +58,11 @@ def _load_ledger(path: Path) -> dict[str, CodexSessionRecord]:
         ledger[key] = CodexSessionRecord(
             source_path=str(value.get("source_path", key)),
             staged_path=staged_path,
+            staged_relative_path=(
+                str(value.get("staged_relative_path"))
+                if isinstance(value.get("staged_relative_path"), str)
+                else Path(staged_path).name
+            ),
             size=int(value.get("size", 0)),
             mtime_ns=int(value.get("mtime_ns", 0)),
             sha256=sha256,
@@ -114,6 +120,13 @@ def _fingerprint_session(path: Path) -> tuple[int, int, str]:
     return stat_result.st_size, stat_result.st_mtime_ns, sha256_text(text)
 
 
+def _snapshot_relative_path(relative_path: Path, *, mtime_ns: int, digest: str) -> Path:
+    suffix = relative_path.suffix
+    stem = relative_path.name[: -len(suffix)] if suffix else relative_path.name
+    snapshot_name = f"{stem}--{mtime_ns}-{digest[:12]}{suffix}"
+    return relative_path.with_name(snapshot_name)
+
+
 def sync_codex_sessions(
     config: WorkspaceConfig,
     *,
@@ -151,9 +164,10 @@ def sync_codex_sessions(
             continue
 
         result.matched += 1
-        relative_path = source.relative_to(normalized_sessions_root)
-        destination = staging_dir / relative_path
         size, mtime_ns, digest = _fingerprint_session(source)
+        relative_path = source.relative_to(normalized_sessions_root)
+        staged_relative_path = _snapshot_relative_path(relative_path, mtime_ns=mtime_ns, digest=digest)
+        destination = staging_dir / staged_relative_path
         source_key = str(source)
         existing = ledger.get(source_key)
         changed = (
@@ -176,6 +190,7 @@ def sync_codex_sessions(
         next_ledger[source_key] = CodexSessionRecord(
             source_path=source_key,
             staged_path=str(destination),
+            staged_relative_path=str(staged_relative_path),
             size=size,
             mtime_ns=mtime_ns,
             sha256=digest,

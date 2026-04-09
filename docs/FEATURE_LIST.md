@@ -58,7 +58,8 @@
 说明：
 
 - 每个项目需要独立的 staging 目录
-- 只把属于该项目的 session 文件复制或链接到 staging
+- 只把属于该项目的 session 文件写入该项目的 staging
+- 当 session 内容变化时，写成新的不可变 snapshot 路径
 - `MemPalace` 只对这个 staging 目录执行 `mine --mode convos`
 
 当前状态：
@@ -76,12 +77,14 @@
 为什么必须有：
 
 - 实测确认 `resume` 后会继续往原 JSONL 追加内容
+- 实测确认 `MemPalace 3.0.0` 对同一路径追加后的 `convos` 输入会直接跳过
 - 当前真实刚需是“同一路径 session 增长后，staging 和后续 mine 继续正确更新”
 
 当前状态：
 
-- 已实现“同路径增量检测”
+- 已实现“同路径增量检测 + staging snapshot 写入”
 - 已实现 `projects-run` 对“新增/更新 -> pending_mine -> 自动 mine”的单次 cycle
+- 已实现 package 层对同一逻辑 session 的最新 snapshot 选择
 - “跨路径同内容归并”目前仍是防御性增强项，不是已验证主需求
 
 ### F5. 项目边界治理
