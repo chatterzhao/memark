@@ -830,6 +830,114 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue(second_payload[0]["pending_mine"])
         self.assertEqual(counter_file.read_text(encoding="utf-8"), "1")
 
+    def test_projects_run_persists_pending_state_before_failed_mine(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        sessions_root = self.workspace / "codex-sessions"
+        session_file = sessions_root / "2026" / "04" / "09" / "rollout-a.jsonl"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": "sess-a",
+                        "cwd": str(ROOT),
+                        "timestamp": "2026-04-09T12:00:00Z",
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--root",
+            str(ROOT),
+            "--sessions-root",
+            str(sessions_root),
+            cwd=ROOT,
+        )
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                echo "simulated mine failure" >&2
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("projects-run", "--workspace", str(self.workspace), cwd=ROOT, env=env)
+        self.assertNotEqual(result.returncode, 0)
+        state = json.loads((self.workspace / ".memark" / "state" / "projects-run.json").read_text(encoding="utf-8"))
+        self.assertTrue(state["memark"]["pending_mine"])
+        self.assertIsNone(state["memark"]["last_mined_at"])
+        self.assertIsInstance(state["memark"]["last_run_at"], str)
+
+    def test_projects_run_non_json_reports_phase_progress(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        sessions_root = self.workspace / "codex-sessions"
+        session_file = sessions_root / "2026" / "04" / "09" / "rollout-a.jsonl"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": "sess-a",
+                        "cwd": str(ROOT),
+                        "timestamp": "2026-04-09T12:00:00Z",
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--root",
+            str(ROOT),
+            "--sessions-root",
+            str(sessions_root),
+            cwd=ROOT,
+        )
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("projects-run", "--workspace", str(self.workspace), cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Running project: memark", result.stdout)
+        self.assertIn("Mine: starting", result.stdout)
+        self.assertIn("Mine: completed attempts=1", result.stdout)
+
     def test_mempalace_mine_runs_against_project_staging(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
