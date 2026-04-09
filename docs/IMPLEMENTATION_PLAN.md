@@ -188,5 +188,5 @@ workspace/
 - 还没有对 `Graphify` 输出结果做二次验证
 - `Graphify` 的直接构建 CLI 契约在不同版本/入口之间并不稳定
 - 还没有 Windows CI
-- `Codex session` 去重还不是跨路径内容归并
-- 还没有项目级增量策略，当前仍是“读当前 palace 并重新分组生成”
+- 还没有后台守护进程；当前推荐是外部定时器重复调用 `projects-run`
+- 还没有稳定公开的 `MemPalace` 增量读取契约，当前项目级增量仍以 `Codex session` 文件变化和 `pending_mine` 状态为主

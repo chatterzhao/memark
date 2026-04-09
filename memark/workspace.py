@@ -10,6 +10,7 @@ from pathlib import Path
 
 CONFIG_DIR_NAME = ".memark"
 CONFIG_FILE_NAME = "config.json"
+PROJECTS_FILE_NAME = "projects.toml"
 
 
 def slugify(value: str) -> str:
@@ -32,6 +33,10 @@ class WorkspaceConfig:
     @property
     def config_file(self) -> Path:
         return self.config_dir / CONFIG_FILE_NAME
+
+    @property
+    def projects_file(self) -> Path:
+        return self.config_dir / PROJECTS_FILE_NAME
 
     @property
     def inbox_dir(self) -> Path:
@@ -78,6 +83,10 @@ class WorkspaceConfig:
 
     def codex_ledger_file(self, project: str | None = None) -> Path:
         return self.state_dir / f"{slugify(project or self.default_project)}-codex-sessions.json"
+
+    @property
+    def project_cycle_state_file(self) -> Path:
+        return self.state_dir / "projects-run.json"
 
     def palace_dir(self, project: str | None = None) -> Path:
         return self.config_dir / "palaces" / slugify(project or self.default_project)
@@ -131,6 +140,8 @@ def create_workspace(
         + "\n",
         encoding="utf-8",
     )
+    if not config.projects_file.exists():
+        config.projects_file.write_text("version = 1\n", encoding="utf-8")
     return config
 
 

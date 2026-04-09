@@ -92,7 +92,6 @@
 - [x] 能从 `session_meta.payload.cwd` 判断项目归属
 - [x] 能把一个项目的 session 文件同步到独立 staging 目录
 - [x] 能识别同一路径 session 文件增长后的新增内容
-- [ ] 还能避免“同内容异路径”导致的重复 ingest
 - [x] 能以项目 staging 为输入执行 `mempalace mine --mode convos`
 - [x] 能对混合项目 session 做正确隔离，不再让它们落成同一个 ingest 输入目录
 - [x] 能在失败时报告具体是 session 解析失败、staging 失败，还是 `MemPalace` mine 失败
@@ -100,6 +99,10 @@
 - [x] 能从项目 palace 生成确定性的候选 room package
 - [x] 能把候选 room package 直接落盘并立即晋升为 Markdown
 - [x] 能提供项目级 clean / rebuild / retry 操作
+- [x] 能维护项目级 `projects.toml` 配置
+- [x] 能执行单次 `projects-run` cycle，把 `codex-sync` 与 `mempalace mine` 按项目配置串起来
+- [x] 能在 `projects-run` 中对 `resume` 后同一路径 session 增长维持正确同步
+- [x] 能在 `projects-run` 中对项目级 `mine_interval_seconds` 做最小间隔控制
 - [x] 文档明确说明当前 Graphify fallback 只保证 code graph 重建，不保证 mixed-corpus 完整编译
 
 ## 当前结论
@@ -114,5 +117,5 @@
 
 下一阶段的核心验收重点，不再是继续补主链命令，而是处理两类剩余问题：
 
-- `session` 去重目前仍是“同路径文件增量”，还不是跨路径内容归并
-- 还没有项目级增量策略
+- 还没有后台守护进程；当前是 `CLI-first` 的单次 cycle，由外部定时器负责重复触发
+- 还没有稳定公开的 `MemPalace` 增量读取契约；当前增量策略仍以 `Codex session file` 变化为主

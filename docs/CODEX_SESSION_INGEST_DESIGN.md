@@ -45,16 +45,17 @@
 - 项目隔离必须发生在 `MemPalace` ingest 之前
 - 这层责任属于 `MemArk`
 
-### 4. `MemPalace` convo 去重不是内容级去重
+### 4. `resume` 后会继续追加到原 session 文件
 
 实测可确认：
 
-- 同一路径重跑会被跳过
-- 同内容换路径重喂会再次 ingest
+- `Codex resume` 之后，原 `rollout-*.jsonl` 会继续增长
+- 同一路径文件的 `mtime` 和内容会继续变化
 
 因此：
 
-- `MemArk` 必须自己拥有内容级增量治理能力
+- `MemArk` 必须先把“同一路径 session 增长后的增量同步”做对
+- 当前主增量入口应围绕 `source_path + size + mtime_ns + sha256`
 
 ## 设计目标
 
@@ -64,7 +65,7 @@
 2. 把 session 稳定地映射到具体项目
 3. 为每个项目维护独立 staging
 4. 把 staging 目录作为 `MemPalace convo mine` 的唯一输入
-5. 避免重复 ingest
+5. 让同一路径 resume 增量能稳定进入后续 mine
 6. 为后续晋升到 `Graphify` 保留 provenance
 
 ## 处理流水线
@@ -171,6 +172,12 @@
 - hash 未变化：不重写 staging
 - hash 变化：更新 staging，并标记需要重新 mine
 
+当前真实优先级：
+
+- 先保证“同一路径 session 追加”可持续进入项目 staging
+- 再由单次 cycle 或外部定时器决定何时触发 `mempalace mine`
+- “同内容异路径”仍可作为后续 hardening，但不是目前已验证主链需求
+
 ## 四、MemPalace ingest
 
 ### 输入面
@@ -233,11 +240,13 @@ mempalace --palace <project-palace> mine <project-staging-dir> --mode convos
 
 ### 当前推荐
 
-`CLI-first + polling`
+`CLI-first + single-cycle polling`
 
 例如：
 
 - 每 2 分钟扫描一次 session 文件
+- 每次执行一轮 `projects-run`
+- 由系统定时器而不是 `MemArk` 常驻 daemon 负责重复调用
 - 更新项目 staging
 - 如果检测到新增内容，再执行一次项目级 `mine`
 

@@ -164,6 +164,9 @@
 - `memark build`
 - `memark run`
 - `memark codex-sync`
+- `memark project-set`
+- `memark projects-list`
+- `memark projects-run`
 - `memark mempalace-mine`
 - `memark palace-status`
 - `memark palace-clean`
@@ -213,6 +216,11 @@ python3 -m venv .venv
 python3 -m memark init ./memark-work --project myproject
 ```
 
+这会同时创建：
+
+- `./memark-work/.memark/config.json`
+- `./memark-work/.memark/projects.toml`
+
 仓库里自带一个可直接试跑的样例：
 
 [`examples/sample_room_package.json`](/Users/zhaoyu/Downloads/code/my-memark/memark/examples/sample_room_package.json)
@@ -238,6 +246,36 @@ python3 -m memark codex-sync \
 python3 -m memark mempalace-mine \
   --workspace ./memark-work
 ```
+
+如果要把这条链路变成“配置一次，之后反复执行的单次调度 cycle”，可以先登记项目：
+
+```bash
+python3 -m memark project-set \
+  --workspace ./memark-work \
+  --project myproject \
+  --root /abs/path/to/project \
+  --sessions-root ~/.codex/sessions \
+  --mine-interval-seconds 120
+```
+
+然后执行一次配置化 cycle：
+
+```bash
+python3 -m memark projects-run --workspace ./memark-work
+```
+
+`projects-run` 的行为是：
+
+- 先按 `projects.toml` 执行项目级 `codex-sync`
+- 如果该项目 staging 有新增或更新，会记为 `pending_mine`
+- 当达到项目的 `mine_interval_seconds` 后，自动执行一次 `mempalace mine --mode convos`
+
+这不是后台守护进程。
+
+更推荐的用法是：
+
+- 用 `cron`、`launchd`、Windows Task Scheduler 或 CI 定时调用 `projects-run`
+- 把常驻调度交给系统层，`MemArk` 只负责单次可重复执行的 cycle
 
 默认情况下，第二条命令会执行：
 
