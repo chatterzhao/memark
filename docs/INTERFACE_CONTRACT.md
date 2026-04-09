@@ -2,12 +2,14 @@
 
 本文件只定义一件事：
 
-`MemArk` 作为桥接层，应该从 `MemPalace` 取什么，落成什么，再交给 `Graphify`。
+`MemArk` 作为桥接层，应该从哪里取输入，怎样落成项目 corpus，再交给 `Graphify`。
 
-当前已经有一个最小实现：它消费 room package JSON，并把它们写入 workspace corpus。
+这里要明确区分两层契约：
 
-这里仍然不假装 `MemPalace` 的自动增量抽取接口已经验证存在。
-本文件定义的是当前实现已采用的输入契约与目录契约。
+- 当前已经实现的最小契约：`room package JSON -> corpus`
+- 当前已经验证、但尚未完整实现的上游现实契约：`Codex session files -> project staging -> MemPalace convos ingest -> metadata + text`
+
+本文件定义的是这两层之间的关系，而不是假装 `MemPalace` 已经提供稳定的自动增量导出 API。
 
 ## 目标
 
@@ -17,25 +19,27 @@
 
 默认主路径：
 
-1. 从 `project wing` 读取增量
-2. 以 `room` 为晋升单位
-3. 优先抽取 `closet`
-4. 附带必要 `drawer` 引用
-5. 落成稳定 Markdown 文件
-6. 交给 `Graphify` 对项目语料目录做增量编译
+1. 扫描 `~/.codex/sessions/**/*.jsonl`
+2. 按 `session_meta.payload.cwd` 匹配项目
+3. 复制到项目级 staging
+4. 对 staging 执行 `MemPalace` 的 `mine --mode convos`
+5. 从 `metadata + chroma:document` 整理候选内容
+6. 落成稳定 Markdown 文件
+7. 交给 `Graphify` 对项目语料目录做编译
 
-## 上游输入契约
-
-`MemArk` 不需要一次拿到整个宫殿。
-
-最小可用输入单位应为一个 `room package`。
+## 已实现输入契约
 
 当前实现中的默认入口是：
 
-- `workspace/inbox/*.json`
+- `workspace/inbox/promoted/*.json`
 - `memark validate <file>`
 - `memark promote --workspace <workspace>`
 - `memark run --workspace <workspace>`
+
+这层契约的作用是：
+
+- 先让 `MemArk` 具备一个稳定可测的最小闭环
+- 不依赖尚未固化的 `MemPalace` 读取接口
 
 推荐字段如下：
 
@@ -86,7 +90,7 @@
 `closets`
 
 - 一个或多个摘要对象
-- 这是默认正文来源
+- 这是当前最小实现的默认正文来源
 
 `drawer_refs`
 
@@ -108,6 +112,30 @@
 `updated_at`
 
 - 本 `room` 最后更新时间
+
+## 已验证上游现实契约
+
+对于 `Codex`，当前实测成立的上游现实契约不是 `room package JSON`，而是：
+
+- 输入源：`~/.codex/sessions/**/*.jsonl`
+- 项目识别字段：`session_meta.payload.cwd`
+- `MemPalace` ingest 命令：`mine <staging-dir> --mode convos`
+- 可读 bridge 表面：`chroma metadata + chroma:document`
+
+当前已知的重要限制：
+
+- `~/.codex/history.jsonl` 不能作为项目主输入
+- `MemPalace` 不会自动按项目拆分混合 session 目录
+- `MemPalace` convo 去重主要按 `source_file` 路径，而不是内容
+
+因此，`MemArk` 必须自己拥有：
+
+- 项目匹配
+- staging
+- ledger
+- 内容级去重
+
+更完整设计见 [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)。
 
 ## `closet` 推荐最小字段
 
@@ -144,7 +172,7 @@
 
 ## 晋升准入规则
 
-只有满足下面任一条件的 `room`，才建议晋升：
+只有满足下面任一条件的内容，才建议晋升：
 
 - 包含明确决策
 - 包含设计取舍
@@ -180,7 +208,7 @@ corpus/
 
 说明：
 
-- `promoted/` 放从 `MemPalace` 晋升来的 `room` 包
+- `promoted/` 放从 `MemPalace` 晋升来的项目主题包
 - `documents/` 放已落盘的项目文档
 - `imports/` 放其他预处理输入
 
@@ -255,51 +283,16 @@ drawer_refs:
 
 `MemArk` 负责：
 
-- 选择哪些 `room` 值得晋升
-- 把结构化记忆转成稳定语料文件
-- 保留追溯信息
+- 选择哪些项目会话内容值得晋升
+- 把它们整理为稳定 corpus
+- 保留 provenance
 
 `Graphify` 负责：
 
-- 读取项目 corpus
-- 生成知识图谱
-- 生成报告、Wiki、Obsidian 输出
+- 对这些 corpus 做图谱、报告、查询和导出
 
-因此 `MemArk` 不应该：
+当前还不应声称：
 
-- 试图替代 `Graphify` 的图谱构建
-- 试图在桥接层做过重的知识编译
-- 直接把所有原始聊天灌给 `Graphify`
+- 任何当前生成的 `promoted/*.md` 都已经通过完整 semantic Graphify pipeline 进入最终图谱
 
-## 当前实现对应关系
-
-当前 CLI 已经把这份契约落成了如下命令面：
-
-- `memark validate`：校验 room package JSON 是否符合最小契约
-- `memark promote`：把 room package 写成 `promoted/room-*.md`
-- `memark add-documents`：把已落盘文档复制进 `documents/`
-- `memark build`：调用 `graphify <project_dir>`
-- `memark run`：先 promote，再 build
-
-它仍然没有实现：
-
-- 直接从 `MemPalace` 自动拉取增量
-- 对 `imports/` 的专门处理逻辑
-- 后台监控与守护进程式同步
-
-- 试图替代 `Graphify` 的图谱构建
-- 试图在桥接层做过重的知识编译
-- 直接把所有原始聊天灌给 `Graphify`
-
-## 最小实现建议
-
-如果以后开始做代码实现，推荐先实现最小路径：
-
-1. 只处理 `wing_kind=project`
-2. 只处理 `room` 级增量
-3. 每个 `room` 只取一份主 `closet.summary`
-4. 每个 `room` 最多附带少量 `drawer_refs`
-5. 输出到单项目 corpus
-6. 再由 `Graphify` 做增量更新
-
-这样可以先验证主链路，而不是一开始就做成“全宫殿同步器”。
+因为当前仓库里已经验证的 fallback 仍是 code-only 路径。

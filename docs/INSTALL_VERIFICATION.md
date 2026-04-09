@@ -2,7 +2,7 @@
 
 本文件只记录已经真实执行过的安装与验证结果。
 
-它不描述未来设想，只记录当前仓库已经核对到的事实。
+它不描述未来设想，只记录已经核对到的事实。
 
 ## 验证时间
 
@@ -30,7 +30,7 @@ python3 -m pip install graphifyy
 - 说明系统 Python 受 PEP 668 保护
 - 因此正式安装路径不能默认写成“直接全局 `pip install` 一定成功”
 
-随后改用仓库内虚拟环境：
+随后改用仓库内虚拟环境 `.venv-skill-check`：
 
 ```bash
 python3 -m venv .venv-skill-check
@@ -72,6 +72,14 @@ python3 -m venv .venv-skill-check
 结果：
 
 - CLI 可运行
+- 当前验证到的安装版本是 `graphifyy 0.3.12`
+- 顶层 `graphify --help` 暴露的是 `install`、`query`、`benchmark`、`hook`、`claude/codex install` 等入口
+- 直接执行 `graphify . --update` 会报 `unknown command '.'`
+
+这意味着：
+
+- `Graphify` 的“目录构建入口”不能在 `MemArk` 中被表述成一个对所有安装版本都稳定成立的顶层 CLI 契约
+- `MemArk` 当前只能把这一步定义为“调用兼容的 Graphify 构建入口”
 
 另一个重要发现：
 
@@ -87,6 +95,19 @@ python3 -m venv .venv-skill-check
 
 - 不能把 `graphify install --help` 当成无副作用验证命令
 - 安装 Skill 时必须把 `graphify install` 视为真正的写入动作
+
+另外，根据上游 `graphify` 源码已核对到：
+
+- skill 安装目标是用户家目录下的平台目录，不是当前项目仓库
+- 对 Codex 而言，上游还会把 always-on 注册写到当前项目的 `AGENTS.md`
+- 对 Codex 而言，上游还会把 PreToolUse hook 写到当前项目的 `.codex/hooks.json`
+- `graphify-out/` 则是运行时输出目录，落在你执行 `graphify` 的项目目录中
+
+这几个层次必须分开理解：
+
+- `~/.agents/skills/graphify` / `~/.claude/skills/graphify`：全局 skill 安装
+- `AGENTS.md` / `.codex/hooks.json`：当前项目对 AI 工具的接入注册
+- `graphify-out/`：当前项目被 graphify 分析后生成的图谱产物
 
 ## 已核对到的上游接口事实
 
@@ -112,7 +133,8 @@ python3 -m venv .venv-skill-check
 - PyPI 包名：`graphifyy`
 - CLI 名称：`graphify`
 - 支持 `graphify install`
-- 支持 `--update`、`--watch`、`--wiki`、`--obsidian`、`--mcp`
+- 上游 README 明确描述了 `--update`、`--watch`、`--wiki`、`--obsidian`、`--mcp`
+- 当前安装版顶层 help 还明确暴露了 `query`、`benchmark`、`hook`、`claude/codex install`
 
 ## 对 `SKILL.md` 的直接影响
 
@@ -123,3 +145,95 @@ python3 -m venv .venv-skill-check
 - 不要默认全局安装一定成功
 - 不要把 `graphify install --help` 当成安全验证
 - 不要伪造 `MemPalace` 已存在的增量接口
+
+## 当前仓库上的真实联调结果
+
+以下结果是在当前 `memark` 仓库里直接实测得到的，不是推测。
+
+### 清理治理后的 `MemPalace`
+
+先为当前仓库手写 `mempalace.yaml`，并让仓库级忽略规则排除派生产物后，执行：
+
+```bash
+PYTHONPATH=/Users/zhaoyu/Downloads/code/my-memark/mempalace \
+  .venv-skill-check/bin/python -m mempalace \
+  --palace /tmp/memark-palace-clean mine .
+```
+
+结果：
+
+- `Files: 35`
+- `Files processed: 34`
+- `Drawers filed: 258`
+- room 分布：
+  - `documentation`: `140`
+  - `implementation`: `92`
+  - `testing`: `24`
+  - `examples`: `2`
+
+同一仓库在未清理治理时，之前实测曾达到 `823` drawers。
+
+这说明：
+
+- `MemPalace` 默认会受项目忽略规则影响
+- 如果不先隔离 `graphify-out/`、实验目录和工作目录，结果会明显污染
+
+随后在同一个干净 palace 上执行：
+
+```bash
+PYTHONPATH=/Users/zhaoyu/Downloads/code/my-memark/mempalace \
+  .venv-skill-check/bin/python -m mempalace \
+  --palace /tmp/memark-palace-clean search "graphify cli contract mismatch"
+```
+
+结果：
+
+- 能准确命中 [`tests/test_cli.py`](/Users/zhaoyu/Downloads/code/my-memark/memark/tests/test_cli.py)
+- 对当前仓库这类中小型项目，`MemPalace` 的“精确找回”已经很有用
+
+### 清理治理后的 `Graphify`
+
+对当前仓库执行 `detect()` 后，结果为：
+
+- `total_files`: `32`
+- `total_words`: `15,186`
+- `needs_graph`: `False`
+- warning：`Corpus is ~15,186 words - fits in a single context window. You may not need a graph.`
+
+这说明：
+
+- 在当前仓库规模下，`Graphify` 不应被写成强制必需层
+- 它更适合作为“当 corpus 继续增长后再开启”的知识编译层
+- 当前桥接层最先该做好的，是治理与晋升，而不是盲目全量编图
+
+### `MemArk build` 的真实 fallback 联调
+
+在单独工作区里，用当前 `MemArk` CLI：
+
+1. 初始化 workspace
+2. 晋升一个 room package
+3. 复制当前仓库的 `memark/cli.py`、`memark/graphify.py`、[`tests/test_cli.py`](/Users/zhaoyu/Downloads/code/my-memark/memark/tests/test_cli.py) 等文件进入 corpus
+4. 让 `PATH` 指向已安装 `graphify` 的 `.venv-skill-check/bin/graphify`
+5. 从 `memark` 自己的 `.venv` 执行 `memark build`
+
+结果：
+
+- 顶层 `graphify <folder>` 仍然不可用
+- `MemArk` 成功退回到 `graphify.watch._rebuild_code`
+- 退回时使用的是当前执行 `memark` 的 Python 解释器，因此该解释器环境里也必须能导入 `graphify`
+- 成功生成：
+  - `graphify-out/graph.json`
+  - `graphify-out/GRAPH_REPORT.md`
+- 本次实测输出为：
+  - `82 nodes`
+  - `140 edges`
+  - `7 communities`
+- 继续用 `graphify query` 检查时，命中的是 `memark/` 代码节点和函数关系
+- 手写晋升进去的 Markdown room 与 `documents/` 文档没有出现在图输出里
+
+这也再次说明：
+
+- 当前 fallback 是真实可用的
+- 但它是 code-only rebuild
+- 它不能被写成“任意 corpus 都能完整 semantic build”
+- 当前真正成立的是“MemArk 已能整理语料并构建代码图”，还不是“MemPalace 晋升记忆已完整进入 Graphify 图谱”

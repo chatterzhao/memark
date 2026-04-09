@@ -7,6 +7,14 @@ __pycache__/
 .venv-*/
 .venv-dev/
 .venv-skill-check/
+.experiments/
+graphify-out/
+memark-work/
+.mempalace/
+.graphify_python
+.graphify_detect.json
+entities.json
+docs/raw/
 dist/
 build/
 *.egg-info/

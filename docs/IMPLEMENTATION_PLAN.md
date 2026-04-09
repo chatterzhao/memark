@@ -18,17 +18,26 @@
 4. `memark add-documents`
 5. `memark build`
 6. `memark run`
-7. `memark status`
+7. `memark codex-sync`
+8. `memark mempalace-mine`
+9. `memark status`
 
 ## 为什么第一版这样切
 
 当前没有核对到 `MemPalace` 官方公开的“按时间戳取增量”接口。
 
-因此第一版不能把下面这种能力写成已实现：
+同时，这次又多验证到了三件关键事实：
+
+- `Codex` 的项目主输入应是 `~/.codex/sessions/**/*.jsonl`
+- 项目归属要靠 `session_meta.payload.cwd`
+- `MemPalace` convo ingest 不会替我们自动拆项目
+
+因此当前实现不能把下面这些能力写成已完成：
 
 - 直接查询某个时间戳后的更新
-- 直接读取 `MemPalace` 数据库并承诺兼容
+- 直接读取 live palace 并承诺长期兼容
 - 直接依赖不存在的 `mempalace list-rooms --since`
+- 直接把 `history.jsonl` 当项目主输入
 
 第一版采用的真实边界是：
 
@@ -37,6 +46,14 @@
 3. `MemArk` 负责把 package 稳定晋升为 corpus Markdown
 4. `MemArk` 负责把正式文档一起纳入 corpus
 5. `MemArk` 负责触发 `Graphify`
+
+这一段现在已经有了第一版正式能力：
+
+1. `memark codex-sync`
+2. `session_meta.payload.cwd` 项目匹配
+3. 项目级 staging
+4. 项目级 session ledger
+5. `memark mempalace-mine`
 
 ## 当前工作区布局
 
@@ -47,6 +64,11 @@ workspace/
     archive/
     state/
       <project>-ledger.json
+      <project>-codex-sessions.json
+    staging/
+      <project>/sessions/
+    palaces/
+      <project>/
   inbox/
     promoted/
     documents/
@@ -65,6 +87,9 @@ workspace/
 - `documents/`：已落盘项目文档
 - `imports/`：预留给后续其他输入源
 - `<project>-ledger.json`：记录每个 room 的内容指纹，避免重复写入
+- `<project>-codex-sessions.json`：记录每个同步过的 `Codex` session 文件指纹
+- `staging/<project>/sessions/`：项目隔离后的会话输入目录
+- `palaces/<project>/`：项目隔离后的 `MemPalace` 宫殿目录
 
 ## 当前实现原则
 
@@ -78,23 +103,50 @@ workspace/
 
 ## 下一阶段建议
 
-### Phase 2: 上游抽取器
+### Phase 2: Codex session intake
 
-目标：
-
-- 增加一个单独的 extractor 层，而不是把数据库读取硬塞进当前 CLI
+状态：已完成第一版。
 
 建议形式：
 
-- `memark extract-*` 子命令
-- 或单独的 `memark-mempalace-adapter`
+- `memark codex-sync`
 
 前提：
 
-- 必须先核对 `MemPalace` 是否提供稳定可依赖的数据访问面
-- 如果没有，就只能把读取数据库定义为“best effort adapter”，不能写成稳定契约
+- 只能基于 `sessions/**/*.jsonl`
+- 不能退回到 `history.jsonl` 作为默认主路径
 
-### Phase 3: 自动化编译
+### Phase 3: 项目级 MemPalace 编排
+
+状态：已完成第一版主链，剩余管理能力未完成。
+
+已完成：
+
+- 在项目 staging 上执行 `mempalace mine --mode convos`
+- 支持 `--dry-run`
+- 支持项目级 `palace_dir` / `staging_dir` / `mempalace_bin` 覆盖
+
+未完成：
+
+- 项目级 clean / rebuild / retry
+
+注意：
+
+- 应把 palace 当并发存储看待
+- 要预期数据库锁冲突和重试
+
+### Phase 4: Palace 读取适配器
+
+目标：
+
+- 从 `chroma.sqlite3` 提取 metadata 与 `chroma:document`
+- 生成候选晋升单元
+
+注意：
+
+- 这是 best-effort adapter，不是官方稳定 API 契约
+
+### Phase 5: 自动化编译
 
 目标：
 
@@ -103,19 +155,22 @@ workspace/
 
 注意：
 
-- 仍不建议在主产品路径里直接做“后台守护进程”
+- 仍不建议在主产品路径里直接做后台守护进程
 - 先把可重入、可脚本化的 CLI 做稳
 
-### Phase 4: 平台集成
+### Phase 6: 平台集成
 
 目标：
 
 - 为 Claude Code / Codex / Cloud Code 一类环境补充调用说明
-- 但不把安装 Skill 和运行期桥接器混成同一层
+- 但不把安装 skill 和运行期桥接器混成同一层
 
 ## 当前不足
 
-- 还没有直接抽取 `MemPalace` room package 的适配器
+- 还没有直接抽取 `MemPalace metadata + chroma:document` 的适配器
 - 还没有 `imports/` 的实际处理命令
 - 还没有对 `Graphify` 输出结果做二次验证
+- `Graphify` 的直接构建 CLI 契约在不同版本/入口之间并不稳定
 - 还没有 Windows CI
+- `Codex session` 去重还不是跨路径内容归并
+- 还没有项目级 palace clean / rebuild / retry 管理命令

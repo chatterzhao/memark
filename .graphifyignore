@@ -1,0 +1,6 @@
+graphify-out/
+memark-work/
+docs/raw/
+entities.json
+.graphify_python
+.graphify_detect.json
