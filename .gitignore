@@ -10,6 +10,7 @@ __pycache__/
 .experiments/
 graphify-out/
 memark-work/
+.memark/
 .mempalace/
 .graphify_python
 .graphify_detect.json
