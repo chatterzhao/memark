@@ -124,6 +124,11 @@
 - 生成 `Graphify-ready` Markdown
 - 默认保留来源、会话、文件、时间等 provenance
 
+前置状态：
+
+- 已实现 `memark palace-export` 作为只读 adapter
+- 还未实现从这些 drawer 自动整理 room package
+
 ### F8. 语料分层落盘
 
 说明：

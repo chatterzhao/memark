@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -698,6 +699,123 @@ class MemArkCliTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not found in PATH", result.stderr)
+
+    def test_palace_export_reads_convo_drawers_from_sqlite_fallback(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (1, 'seg-a', 'drawer_demo', X'01')"
+            )
+            rows = [
+                (1, "chroma:document", "Decision: adopt Clerk for auth.", None, None, None),
+                (1, "wing", "codex_project", None, None, None),
+                (1, "room", "decisions", None, None, None),
+                (1, "source_file", "/tmp/demo/rollout-a.jsonl", None, None, None),
+                (1, "filed_at", "2026-04-09T02:10:00Z", None, None, None),
+                (1, "ingest_mode", "convos", None, None, None),
+                (1, "extract_mode", "exchange", None, None, None),
+                (1, "added_by", "mempalace", None, None, None),
+                (1, "chunk_index", None, 0, None, None),
+            ]
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli("palace-export", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["drawers"][0]["drawer_id"], "drawer_demo")
+        self.assertEqual(payload["drawers"][0]["room"], "decisions")
+        self.assertEqual(payload["drawers"][0]["ingest_mode"], "convos")
+
+    def test_palace_export_filters_by_room(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (?, ?, ?, X'01')",
+                [
+                    (1, "seg-a", "drawer_a"),
+                    (2, "seg-b", "drawer_b"),
+                ],
+            )
+            metadata_rows = [
+                (1, "chroma:document", "Decision drawer", None, None, None),
+                (1, "room", "decisions", None, None, None),
+                (1, "ingest_mode", "convos", None, None, None),
+                (2, "chroma:document", "Debug drawer", None, None, None),
+                (2, "room", "debugging", None, None, None),
+                (2, "ingest_mode", "convos", None, None, None),
+            ]
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                metadata_rows,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli(
+            "palace-export",
+            "--workspace",
+            str(self.workspace),
+            "--room",
+            "debugging",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["count"], 1)
+        self.assertEqual(payload["drawers"][0]["drawer_id"], "drawer_b")
 
 
 if __name__ == "__main__":

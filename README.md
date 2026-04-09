@@ -165,6 +165,7 @@
 - `memark run`
 - `memark codex-sync`
 - `memark mempalace-mine`
+- `memark palace-export`
 - `memark status`
 
 仍然没有提供：
@@ -239,6 +240,25 @@ mempalace --palace ./memark-work/.memark/palaces/<project> \
   mine ./memark-work/.memark/staging/<project>/sessions \
   --mode convos
 ```
+
+如果要把项目 palace 里已经 ingest 的 drawer 原样读出来做后续适配，可以执行：
+
+```bash
+python3 -m memark palace-export \
+  --workspace ./memark-work \
+  --json
+```
+
+当前返回的是只读 adapter 结果，包含：
+
+- `drawer_id`
+- `document`
+- `wing`
+- `room`
+- `source_file`
+- `filed_at`
+- `ingest_mode`
+- `extract_mode`
 
 `promote` 会把输入写成下面这种 Graphify corpus：
 
