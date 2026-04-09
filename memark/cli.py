@@ -147,6 +147,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--staging-dir",
         help="Override staging directory. Defaults to .memark/staging/<project>/sessions",
     )
+    mempalace_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
+    mempalace_parser.add_argument(
+        "--retry-delay-seconds",
+        type=float,
+        default=0.2,
+        help="Initial retry delay for lock errors; doubles after each retry",
+    )
     mempalace_parser.add_argument("--dry-run", action="store_true", help="Print the MemPalace command without executing it")
     mempalace_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     mempalace_parser.set_defaults(func=cmd_mempalace_mine)
@@ -181,6 +188,13 @@ def _build_parser() -> argparse.ArgumentParser:
     palace_rebuild_parser.add_argument("--mempalace-bin", help="Override mempalace executable name")
     palace_rebuild_parser.add_argument("--palace-dir", help="Override palace directory")
     palace_rebuild_parser.add_argument("--staging-dir", help="Override staging directory")
+    palace_rebuild_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
+    palace_rebuild_parser.add_argument(
+        "--retry-delay-seconds",
+        type=float,
+        default=0.2,
+        help="Initial retry delay for lock errors; doubles after each retry",
+    )
     palace_rebuild_parser.add_argument("--dry-run", action="store_true", help="Render actions without deleting or mining")
     palace_rebuild_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     palace_rebuild_parser.set_defaults(func=cmd_palace_rebuild)
@@ -194,6 +208,13 @@ def _build_parser() -> argparse.ArgumentParser:
     palace_retry_parser.add_argument("--mempalace-bin", help="Override mempalace executable name")
     palace_retry_parser.add_argument("--palace-dir", help="Override palace directory")
     palace_retry_parser.add_argument("--staging-dir", help="Override staging directory")
+    palace_retry_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
+    palace_retry_parser.add_argument(
+        "--retry-delay-seconds",
+        type=float,
+        default=0.2,
+        help="Initial retry delay for lock errors; doubles after each retry",
+    )
     palace_retry_parser.add_argument("--dry-run", action="store_true", help="Render the MemPalace command without executing it")
     palace_retry_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     palace_retry_parser.set_defaults(func=cmd_palace_retry)
@@ -501,6 +522,8 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
                         "palace_dir": str(palace_dir),
                         "staging_dir": str(staging_dir),
                         "command": command,
+                        "retry_attempts": max(args.retry_attempts, 1),
+                        "retry_delay_seconds": max(args.retry_delay_seconds, 0.0),
                         "dry_run": True,
                     },
                     indent=2,
@@ -515,6 +538,8 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
         mempalace_bin=mempalace_bin,
         palace_dir=palace_dir,
         staging_dir=staging_dir,
+        retry_attempts=args.retry_attempts,
+        retry_delay_seconds=args.retry_delay_seconds,
     )
     if args.json:
         print(
@@ -526,6 +551,7 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
                     "command": result.command,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
+                    "attempts": result.attempts,
                 },
                 indent=2,
                 ensure_ascii=True,
@@ -536,6 +562,7 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
     print(f"Project: {project}")
     print(f"Palace dir: {result.palace_dir}")
     print(f"Staging dir: {result.staging_dir}")
+    print(f"Attempts: {result.attempts}")
     print("Command:", " ".join(result.command))
     if result.stdout.strip():
         print(result.stdout.rstrip())
@@ -633,6 +660,8 @@ def cmd_palace_rebuild(args: argparse.Namespace) -> int:
             "command": command,
             "dry_run": True,
             "clean_first": True,
+            "retry_attempts": max(args.retry_attempts, 1),
+            "retry_delay_seconds": max(args.retry_delay_seconds, 0.0),
         }
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=True))
@@ -646,6 +675,8 @@ def cmd_palace_rebuild(args: argparse.Namespace) -> int:
         mempalace_bin=mempalace_bin,
         palace_dir=palace_dir,
         staging_dir=staging_dir,
+        retry_attempts=args.retry_attempts,
+        retry_delay_seconds=args.retry_delay_seconds,
     )
     payload = {
         "project": project,
@@ -654,6 +685,7 @@ def cmd_palace_rebuild(args: argparse.Namespace) -> int:
         "command": result.command,
         "stdout": result.stdout,
         "stderr": result.stderr,
+        "attempts": result.attempts,
         "clean_first": True,
     }
     if args.json:
@@ -663,6 +695,7 @@ def cmd_palace_rebuild(args: argparse.Namespace) -> int:
     print(f"Project: {project}")
     print(f"Rebuilt palace: {result.palace_dir}")
     print(f"Staging dir: {result.staging_dir}")
+    print(f"Attempts: {result.attempts}")
     print("Command:", " ".join(result.command))
     if result.stdout.strip():
         print(result.stdout.rstrip())
@@ -694,6 +727,8 @@ def cmd_palace_retry(args: argparse.Namespace) -> int:
             "command": command,
             "dry_run": True,
             "clean_first": False,
+            "retry_attempts": max(args.retry_attempts, 1),
+            "retry_delay_seconds": max(args.retry_delay_seconds, 0.0),
         }
         if args.json:
             print(json.dumps(payload, indent=2, ensure_ascii=True))
@@ -705,6 +740,8 @@ def cmd_palace_retry(args: argparse.Namespace) -> int:
         mempalace_bin=mempalace_bin,
         palace_dir=palace_dir,
         staging_dir=staging_dir,
+        retry_attempts=args.retry_attempts,
+        retry_delay_seconds=args.retry_delay_seconds,
     )
     payload = {
         "project": project,
@@ -713,6 +750,7 @@ def cmd_palace_retry(args: argparse.Namespace) -> int:
         "command": result.command,
         "stdout": result.stdout,
         "stderr": result.stderr,
+        "attempts": result.attempts,
         "clean_first": False,
     }
     if args.json:
@@ -722,6 +760,7 @@ def cmd_palace_retry(args: argparse.Namespace) -> int:
     print(f"Project: {project}")
     print(f"Retried palace mine: {result.palace_dir}")
     print(f"Staging dir: {result.staging_dir}")
+    print(f"Attempts: {result.attempts}")
     print("Command:", " ".join(result.command))
     if result.stdout.strip():
         print(result.stdout.rstrip())
