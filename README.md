@@ -270,6 +270,7 @@ python3 -m memark projects-run --workspace ./memark-work
 - `codex-sync` 会把每次检测到的新版本 session 写成不可变 snapshot 路径
 - 如果该项目 staging 有新增或更新，会记为 `pending_mine`
 - 当达到项目的 `mine_interval_seconds` 后，自动执行一次 `mempalace mine --mode convos`
+- 非 `--json` 模式下会输出项目级阶段提示；JSON 输出也会带 `mine_started_at`、`mine_finished_at`、`mine_elapsed_seconds`
 
 这样做不是多此一举，而是为了绕开 `mempalace 3.0.0` 当前 `convos` ingest 的一个实测限制：
 
@@ -322,6 +323,7 @@ python3 -m memark palace-rebuild --workspace ./memark-work
 - `palace-rebuild` 先 clean，再对当前 staging 重新执行 `mempalace mine --mode convos`
 - `palace-retry` 不清空 palace，只重试一次当前 mine
 - `mempalace-mine`、`palace-rebuild`、`palace-retry` 现在会在遇到明确的 SQLite 锁冲突时自动 backoff 重试
+- `mempalace-mine` 的 JSON / 文本输出会带开始时间、结束时间和耗时秒数
 
 如果要把项目 palace 里已经 ingest 的 drawer 原样读出来做后续适配，可以执行：
 

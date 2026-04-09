@@ -730,6 +730,9 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(len(payload), 1)
         self.assertEqual(payload[0]["sync"]["copied"], 1)
         self.assertTrue(payload[0]["mined"])
+        self.assertIsInstance(payload[0]["mine_started_at"], str)
+        self.assertIsInstance(payload[0]["mine_finished_at"], str)
+        self.assertGreaterEqual(payload[0]["mine_elapsed_seconds"], 0)
         self.assertEqual(counter_file.read_text(encoding="utf-8"), "1")
         staged_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09"
         self.assertEqual(len(list(staged_dir.glob("rollout-a--*.jsonl"))), 1)
@@ -937,6 +940,8 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("Running project: memark", result.stdout)
         self.assertIn("Mine: starting", result.stdout)
         self.assertIn("Mine: completed attempts=1", result.stdout)
+        self.assertIn("Mine started at:", result.stdout)
+        self.assertIn("Mine elapsed seconds:", result.stdout)
 
     def test_mempalace_mine_runs_against_project_staging(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -1016,7 +1021,37 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["attempts"], 2)
+        self.assertIsInstance(payload["started_at"], str)
+        self.assertIsInstance(payload["finished_at"], str)
+        self.assertGreaterEqual(payload["elapsed_seconds"], 0)
         self.assertEqual(counter_file.read_text(encoding="utf-8"), "2")
+
+    def test_mempalace_mine_text_output_includes_timing(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("mempalace-mine", "--workspace", str(self.workspace), cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Started at:", result.stdout)
+        self.assertIn("Finished at:", result.stdout)
+        self.assertIn("Elapsed seconds:", result.stdout)
 
     def test_mempalace_mine_dry_run_renders_json(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)

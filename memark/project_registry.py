@@ -57,6 +57,9 @@ class ProjectCycleResult:
     mine_skipped_reason: str | None
     mine_command: list[str] | None = None
     mine_attempts: int | None = None
+    mine_started_at: str | None = None
+    mine_finished_at: str | None = None
+    mine_elapsed_seconds: float | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -67,6 +70,9 @@ class ProjectCycleResult:
             "mine_skipped_reason": self.mine_skipped_reason,
             "mine_command": self.mine_command,
             "mine_attempts": self.mine_attempts,
+            "mine_started_at": self.mine_started_at,
+            "mine_finished_at": self.mine_finished_at,
+            "mine_elapsed_seconds": self.mine_elapsed_seconds,
         }
 
 
@@ -304,6 +310,9 @@ def run_projects_cycle(
                 mine_skipped_reason=None if mined else mine_skipped_reason,
                 mine_command=mine_result.command if mine_result is not None else None,
                 mine_attempts=mine_result.attempts if mine_result is not None else None,
+                mine_started_at=mine_result.started_at if mine_result is not None else None,
+                mine_finished_at=mine_result.finished_at if mine_result is not None else None,
+                mine_elapsed_seconds=mine_result.elapsed_seconds if mine_result is not None else None,
             )
         )
 
