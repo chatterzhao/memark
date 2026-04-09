@@ -197,6 +197,10 @@ def _load_cycle_state(path: Path) -> dict[str, ProjectCycleState]:
     return states
 
 
+def load_cycle_state(path: Path) -> dict[str, ProjectCycleState]:
+    return _load_cycle_state(path)
+
+
 def _save_cycle_state(path: Path, states: dict[str, ProjectCycleState]) -> None:
     dump_json_file(path, {key: asdict(value) for key, value in sorted(states.items())})
 

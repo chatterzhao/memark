@@ -20,7 +20,13 @@ from .package_builder import (
     write_package_payloads,
 )
 from .palace import PalaceReadError, read_palace_drawers
-from .project_registry import ProjectProfile, load_project_profiles, run_projects_cycle, upsert_project_profile
+from .project_registry import (
+    ProjectProfile,
+    load_cycle_state,
+    load_project_profiles,
+    run_projects_cycle,
+    upsert_project_profile,
+)
 from .promote import load_room_packages, promote_file, promote_path
 from .version import __version__
 from .workspace import create_workspace, load_workspace, resolve_workspace, slugify
@@ -588,6 +594,7 @@ def cmd_project_set(args: argparse.Namespace) -> int:
 def cmd_projects_list(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
     profiles = load_project_profiles(config.projects_file)
+    states = load_cycle_state(config.project_cycle_state_file)
     payload = [
         {
             "project": profile.normalized_name(),
@@ -597,6 +604,9 @@ def cmd_projects_list(args: argparse.Namespace) -> int:
             "mine_interval_seconds": profile.mine_interval_seconds,
             "auto_mine": profile.auto_mine,
             "enabled": profile.enabled,
+            "pending_mine": states.get(profile.normalized_name()).pending_mine if states.get(profile.normalized_name()) else False,
+            "last_run_at": states.get(profile.normalized_name()).last_run_at if states.get(profile.normalized_name()) else None,
+            "last_mined_at": states.get(profile.normalized_name()).last_mined_at if states.get(profile.normalized_name()) else None,
         }
         for profile in profiles
     ]
@@ -607,7 +617,14 @@ def cmd_projects_list(args: argparse.Namespace) -> int:
         print(f"No configured projects in {config.projects_file}")
         return 0
     for item in payload:
-        print(f"{item['project']}: root={item['root']} sessions_root={item['sessions_root']} enabled={item['enabled']}")
+        print(
+            f"{item['project']}: root={item['root']} sessions_root={item['sessions_root']} "
+            f"enabled={item['enabled']} pending_mine={item['pending_mine']}"
+        )
+        if item["last_run_at"] is not None:
+            print(f"  last_run_at={item['last_run_at']}")
+        if item["last_mined_at"] is not None:
+            print(f"  last_mined_at={item['last_mined_at']}")
     return 0
 
 
