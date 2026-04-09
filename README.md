@@ -167,6 +167,7 @@
 - `memark mempalace-mine`
 - `memark palace-export`
 - `memark palace-package`
+- `memark palace-run`
 - `memark status`
 
 仍然没有提供：
@@ -285,6 +286,23 @@ python3 -m memark palace-package \
 - 保留 `drawer_id`、`source_file`、`filed_at` 等 provenance
 - 不伪装成 AI 摘要器，只做保守整理
 
+如果希望直接串起来执行：
+
+```bash
+python3 -m memark palace-run \
+  --workspace ./memark-work \
+  --no-build
+```
+
+这条命令会：
+
+- 从 palace 读取 drawer
+- 生成候选 room package JSON
+- 写入 `inbox/promoted/`
+- 立即执行 `promote`
+
+如果不加 `--no-build`，它还会继续触发 `Graphify`。
+
 `promote` 会把输入写成下面这种 Graphify corpus：
 
 ```bash
@@ -325,6 +343,7 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 
 - 当前版本不会伪造 `MemPalace` 的 `since` 接口
 - 当前版本已经能从 palace 读 drawer，并生成候选 room package
+- 当前版本已经能把 `palace-package -> promote -> 可选 build` 串成一条 CLI
 - 但“哪些 drawer 值得晋升、哪些只该停留在原始记忆层”仍是治理问题，不是上游自动保证
 - `MemArk` 当前负责的是稳定消费这些 package，并落成 `Graphify` 能直接吃的 corpus
 - 如果当前走的是 `_rebuild_code` fallback，真正进入图谱的主要还是代码树；`promoted/` 与 `documents/` 仍更像是已整理好的待编译语料

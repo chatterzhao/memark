@@ -212,6 +212,7 @@
 
 - 已实现 `palace-export`
 - 已实现 `palace-package`
+- 已实现 `palace-run`
 - 当前主要面向 `convos` palace 读取
 
 ### F14. 更细的治理规则
