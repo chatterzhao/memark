@@ -20,6 +20,7 @@ from .package_builder import (
     write_package_payloads,
 )
 from .palace import PalaceReadError, read_palace_drawers
+from .project_registry import ProjectProfile, load_project_profiles, run_projects_cycle, upsert_project_profile
 from .promote import load_room_packages, promote_file, promote_path
 from .version import __version__
 from .workspace import create_workspace, load_workspace, resolve_workspace, slugify
@@ -131,6 +132,57 @@ def _build_parser() -> argparse.ArgumentParser:
     codex_parser.add_argument("--dry-run", action="store_true", help="Scan and report without writing staging or ledger")
     codex_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     codex_parser.set_defaults(func=cmd_codex_sync)
+
+    project_set_parser = subparsers.add_parser(
+        "project-set",
+        help="Create or update a project registry entry for single-cycle sync and mine orchestration",
+    )
+    project_set_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    project_set_parser.add_argument("--project", required=True, help="Project slug")
+    project_set_parser.add_argument("--root", required=True, help="Project root used to match session_meta.payload.cwd")
+    project_set_parser.add_argument(
+        "--sessions-root",
+        default="~/.codex/sessions",
+        help="Root directory that contains Codex rollout JSONL files",
+    )
+    project_set_parser.add_argument(
+        "--cwd-prefix",
+        action="append",
+        default=[],
+        help="Additional cwd prefixes that should map into the same project",
+    )
+    project_set_parser.add_argument(
+        "--mine-interval-seconds",
+        type=int,
+        default=120,
+        help="Minimum interval between automatic mempalace mine runs for this project",
+    )
+    project_set_parser.add_argument("--no-auto-mine", action="store_true", help="Record pending changes without auto-running mine")
+    project_set_parser.add_argument("--disabled", action="store_true", help="Keep the project in config but skip it during projects-run")
+    project_set_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    project_set_parser.set_defaults(func=cmd_project_set)
+
+    projects_list_parser = subparsers.add_parser("projects-list", help="List configured project registry entries")
+    projects_list_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    projects_list_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    projects_list_parser.set_defaults(func=cmd_projects_list)
+
+    projects_run_parser = subparsers.add_parser(
+        "projects-run",
+        help="Run one configured Codex sync + optional MemPalace mine cycle across enabled projects",
+    )
+    projects_run_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    projects_run_parser.add_argument("--project", help="Only run one configured project")
+    projects_run_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
+    projects_run_parser.add_argument(
+        "--retry-delay-seconds",
+        type=float,
+        default=0.2,
+        help="Initial retry delay for lock errors; doubles after each retry",
+    )
+    projects_run_parser.add_argument("--dry-run", action="store_true", help="Render what would happen without writing state or mining")
+    projects_run_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    projects_run_parser.set_defaults(func=cmd_projects_run)
 
     mempalace_parser = subparsers.add_parser(
         "mempalace-mine",
@@ -493,6 +545,96 @@ def cmd_codex_sync(args: argparse.Namespace) -> int:
     print(f"Updated: {result.updated}")
     print(f"Unchanged: {result.unchanged}")
     print(f"Invalid: {result.invalid}")
+    return 0
+
+
+def cmd_project_set(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    profiles = upsert_project_profile(
+        config.projects_file,
+        ProjectProfile(
+            name=args.project,
+            root=args.root,
+            sessions_root=args.sessions_root,
+            cwd_prefixes=args.cwd_prefix,
+            mine_interval_seconds=max(args.mine_interval_seconds, 0),
+            auto_mine=not args.no_auto_mine,
+            enabled=not args.disabled,
+        ),
+    )
+    current = next(profile for profile in profiles if profile.normalized_name() == slugify(args.project))
+    payload = {
+        "project": current.normalized_name(),
+        "root": str(current.normalized_root()),
+        "sessions_root": current.sessions_root,
+        "cwd_prefixes": [str(value) for value in current.normalized_cwd_prefixes()],
+        "mine_interval_seconds": current.mine_interval_seconds,
+        "auto_mine": current.auto_mine,
+        "enabled": current.enabled,
+        "projects_file": str(config.projects_file),
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+    print(f"Project registry updated: {payload['project']}")
+    print(f"Root: {payload['root']}")
+    print(f"Sessions root: {payload['sessions_root']}")
+    print(f"Auto mine: {payload['auto_mine']}")
+    print(f"Enabled: {payload['enabled']}")
+    print(f"Projects file: {payload['projects_file']}")
+    return 0
+
+
+def cmd_projects_list(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    profiles = load_project_profiles(config.projects_file)
+    payload = [
+        {
+            "project": profile.normalized_name(),
+            "root": str(profile.normalized_root()),
+            "sessions_root": profile.sessions_root,
+            "cwd_prefixes": [str(value) for value in profile.normalized_cwd_prefixes()],
+            "mine_interval_seconds": profile.mine_interval_seconds,
+            "auto_mine": profile.auto_mine,
+            "enabled": profile.enabled,
+        }
+        for profile in profiles
+    ]
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+    if not payload:
+        print(f"No configured projects in {config.projects_file}")
+        return 0
+    for item in payload:
+        print(f"{item['project']}: root={item['root']} sessions_root={item['sessions_root']} enabled={item['enabled']}")
+    return 0
+
+
+def cmd_projects_run(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    results = run_projects_cycle(
+        config=config,
+        project_filter=args.project,
+        dry_run=args.dry_run,
+        retry_attempts=args.retry_attempts,
+        retry_delay_seconds=args.retry_delay_seconds,
+    )
+    payload = [item.to_dict() for item in results]
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+    if not results:
+        print(f"No enabled projects configured in {config.projects_file}")
+        return 0
+    for item in results:
+        print(f"Project: {item.project}")
+        print(f"  Sync copied={item.sync.copied} updated={item.sync.updated} unchanged={item.sync.unchanged}")
+        print(f"  Pending mine: {item.pending_mine}")
+        if item.mined:
+            print("  Mine: executed")
+        else:
+            print(f"  Mine: skipped ({item.mine_skipped_reason})")
     return 0
 
 

@@ -72,17 +72,17 @@
 - 记录已处理 session 文件
 - 至少跟踪 `path`、`mtime`、`size`
 - 需要准备扩展到 `content hash` 或 `offset`
-- 对同内容异路径要能识别重复
 
 为什么必须有：
 
-- 实测证明 `MemPalace` convo dedupe 主要按 `source_file` 路径
-- 同内容换一个路径重新喂，会再次 ingest
+- 实测确认 `resume` 后会继续往原 JSONL 追加内容
+- 当前真实刚需是“同一路径 session 增长后，staging 和后续 mine 继续正确更新”
 
 当前状态：
 
 - 已实现“同路径增量检测”
-- 还未实现“跨路径同内容归并”
+- 已实现 `projects-run` 对“新增/更新 -> pending_mine -> 自动 mine”的单次 cycle
+- “跨路径同内容归并”目前仍是防御性增强项，不是已验证主需求
 
 ### F5. 项目边界治理
 
@@ -191,6 +191,12 @@
 
 - 优先 `TOML`
 
+当前状态：
+
+- 已实现 `.memark/projects.toml`
+- 已实现 `memark project-set`
+- 已实现 `memark projects-list`
+
 ### F12. 定时扫描
 
 说明：
@@ -203,6 +209,12 @@
 
 - 这是轮询，不是假装文件系统事件流
 - 不应默认同时自动触发晋升和编图
+
+当前状态：
+
+- 已实现 `memark projects-run` 作为单次 cycle
+- 推荐由 `cron`、`launchd`、Windows Task Scheduler 或 CI 重复调用
+- 尚未实现常驻 daemon
 
 ### F13. MemPalace 读取适配器
 

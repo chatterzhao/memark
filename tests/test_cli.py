@@ -43,6 +43,7 @@ class MemArkCliTests(unittest.TestCase):
         result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
+        self.assertTrue((self.workspace / ".memark" / "projects.toml").exists())
         self.assertTrue((self.workspace / "inbox" / "promoted").exists())
         self.assertTrue((self.workspace / "inbox" / "documents").exists())
         self.assertTrue((self.workspace / "corpus" / "memark" / "promoted").exists())
@@ -633,6 +634,201 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["matched"], 1)
+
+    def test_project_set_writes_project_registry_entry(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+
+        result = run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--root",
+            str(ROOT),
+            "--sessions-root",
+            str(self.workspace / "codex-sessions"),
+            "--cwd-prefix",
+            str(self.workspace / "worktrees"),
+            "--mine-interval-seconds",
+            "180",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["project"], "memark")
+        self.assertEqual(payload["root"], str(ROOT))
+        self.assertEqual(payload["mine_interval_seconds"], 180)
+        registry = (self.workspace / ".memark" / "projects.toml").read_text(encoding="utf-8")
+        self.assertIn('name = "memark"', registry)
+        self.assertIn(f'root = "{ROOT}"', registry)
+
+    def test_projects_run_syncs_and_mines_configured_project(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        sessions_root = self.workspace / "codex-sessions"
+        session_file = sessions_root / "2026" / "04" / "09" / "rollout-a.jsonl"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "session_meta",
+                            "payload": {
+                                "id": "sess-a",
+                                "cwd": str(ROOT),
+                                "timestamp": "2026-04-09T12:00:00Z",
+                            },
+                        }
+                    ),
+                    json.dumps({"type": "message", "payload": {"text": "hello"}}),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--root",
+            str(ROOT),
+            "--sessions-root",
+            str(sessions_root),
+            cwd=ROOT,
+        )
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        counter_file = self.workspace / "mine-count.txt"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                COUNT_FILE="{counter_file}"
+                count=0
+                if [ -f "$COUNT_FILE" ]; then
+                  count=$(cat "$COUNT_FILE")
+                fi
+                count=$((count + 1))
+                printf '%s' "$count" > "$COUNT_FILE"
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("projects-run", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["sync"]["copied"], 1)
+        self.assertTrue(payload[0]["mined"])
+        self.assertEqual(counter_file.read_text(encoding="utf-8"), "1")
+        staged = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        self.assertTrue(staged.exists())
+
+        second = run_cli("projects-run", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        second_payload = json.loads(second.stdout)
+        self.assertFalse(second_payload[0]["mined"])
+        self.assertEqual(second_payload[0]["mine_skipped_reason"], "no_pending_changes")
+        self.assertEqual(counter_file.read_text(encoding="utf-8"), "1")
+
+    def test_projects_run_defers_mine_until_interval_elapses(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        sessions_root = self.workspace / "codex-sessions"
+        session_file = sessions_root / "2026" / "04" / "09" / "rollout-a.jsonl"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": "sess-a",
+                        "cwd": str(ROOT),
+                        "timestamp": "2026-04-09T12:00:00Z",
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--root",
+            str(ROOT),
+            "--sessions-root",
+            str(sessions_root),
+            "--mine-interval-seconds",
+            "3600",
+            cwd=ROOT,
+        )
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        counter_file = self.workspace / "mine-count.txt"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                COUNT_FILE="{counter_file}"
+                count=0
+                if [ -f "$COUNT_FILE" ]; then
+                  count=$(cat "$COUNT_FILE")
+                fi
+                count=$((count + 1))
+                printf '%s' "$count" > "$COUNT_FILE"
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        first = run_cli("projects-run", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(counter_file.read_text(encoding="utf-8"), "1")
+
+        session_file.write_text(
+            "\n".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "session_meta",
+                            "payload": {
+                                "id": "sess-a",
+                                "cwd": str(ROOT),
+                                "timestamp": "2026-04-09T12:00:00Z",
+                            },
+                        }
+                    ),
+                    json.dumps({"type": "message", "payload": {"text": "updated"}}),
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        second = run_cli("projects-run", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        second_payload = json.loads(second.stdout)
+        self.assertFalse(second_payload[0]["mined"])
+        self.assertEqual(second_payload[0]["mine_skipped_reason"], "mine_interval_not_elapsed")
+        self.assertTrue(second_payload[0]["pending_mine"])
+        self.assertEqual(counter_file.read_text(encoding="utf-8"), "1")
 
     def test_mempalace_mine_runs_against_project_staging(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
