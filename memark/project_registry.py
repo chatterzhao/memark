@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -221,6 +222,7 @@ def run_projects_cycle(
     dry_run: bool = False,
     retry_attempts: int = 3,
     retry_delay_seconds: float = 0.2,
+    progress: Callable[[str], None] | None = None,
 ) -> list[ProjectCycleResult]:
     profiles = load_project_profiles(config.projects_file)
     if project_filter is not None:
@@ -235,6 +237,8 @@ def run_projects_cycle(
     now_iso = now.isoformat()
     for profile in profiles:
         project = profile.normalized_name()
+        if progress is not None:
+            progress(f"Running project: {project}")
         sync = sync_codex_sessions(
             config=config,
             project=project,
@@ -243,20 +247,36 @@ def run_projects_cycle(
             cwd_prefixes=profile.normalized_cwd_prefixes(),
             dry_run=dry_run,
         )
+        if progress is not None:
+            progress(
+                f"  Sync: copied={sync.copied} updated={sync.updated} unchanged={sync.unchanged} invalid={sync.invalid}"
+            )
         state = next_states.get(project, ProjectCycleState())
         if sync.copied or sync.updated:
             state.pending_mine = True
+        state.last_run_at = now_iso
+        next_states[project] = state
+        if not dry_run:
+            _save_cycle_state(config.project_cycle_state_file, next_states)
         mined = False
         mine_skipped_reason: str | None = None
         mine_result: MemPalaceMineResult | None = None
         if state.pending_mine:
             if not profile.auto_mine:
                 mine_skipped_reason = "auto_mine_disabled"
+                if progress is not None:
+                    progress(f"  Mine: skipped ({mine_skipped_reason})")
             elif not _should_mine(state, profile, now):
                 mine_skipped_reason = "mine_interval_not_elapsed"
+                if progress is not None:
+                    progress(f"  Mine: skipped ({mine_skipped_reason})")
             elif dry_run:
                 mined = True
+                if progress is not None:
+                    progress("  Mine: dry-run")
             else:
+                if progress is not None:
+                    progress(f"  Mine: starting {config.codex_sessions_dir(project)}")
                 mine_result = run_mempalace_convo_mine(
                     mempalace_bin=config.mempalace_bin,
                     palace_dir=config.palace_dir(project),
@@ -267,10 +287,14 @@ def run_projects_cycle(
                 mined = True
                 state.pending_mine = False
                 state.last_mined_at = now_iso
+                next_states[project] = state
+                _save_cycle_state(config.project_cycle_state_file, next_states)
+                if progress is not None:
+                    progress(f"  Mine: completed attempts={mine_result.attempts}")
         else:
             mine_skipped_reason = "no_pending_changes"
-        state.last_run_at = now_iso
-        next_states[project] = state
+            if progress is not None:
+                progress(f"  Mine: skipped ({mine_skipped_reason})")
         results.append(
             ProjectCycleResult(
                 project=project,
@@ -283,6 +307,6 @@ def run_projects_cycle(
             )
         )
 
-    if not dry_run:
+    if not dry_run and profiles:
         _save_cycle_state(config.project_cycle_state_file, next_states)
     return results

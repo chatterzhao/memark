@@ -613,12 +613,14 @@ def cmd_projects_list(args: argparse.Namespace) -> int:
 
 def cmd_projects_run(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
+    progress = None if args.json else print
     results = run_projects_cycle(
         config=config,
         project_filter=args.project,
         dry_run=args.dry_run,
         retry_attempts=args.retry_attempts,
         retry_delay_seconds=args.retry_delay_seconds,
+        progress=progress,
     )
     payload = [item.to_dict() for item in results]
     if args.json:
