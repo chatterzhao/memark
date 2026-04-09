@@ -124,17 +124,17 @@ workspace/
 
 ### Phase 3: 项目级 MemPalace 编排
 
-状态：已完成第一版主链，剩余管理能力未完成。
+状态：已完成第一版主链和基础运维命令。
 
 已完成：
 
 - 在项目 staging 上执行 `mempalace mine --mode convos`
 - 支持 `--dry-run`
 - 支持项目级 `palace_dir` / `staging_dir` / `mempalace_bin` 覆盖
-
-未完成：
-
-- 项目级 clean / rebuild / retry
+- `memark palace-status`
+- `memark palace-clean`
+- `memark palace-rebuild`
+- `memark palace-retry`
 
 注意：
 
@@ -188,5 +188,5 @@ workspace/
 - `Graphify` 的直接构建 CLI 契约在不同版本/入口之间并不稳定
 - 还没有 Windows CI
 - `Codex session` 去重还不是跨路径内容归并
-- 还没有项目级 palace clean / rebuild / retry 管理命令
 - 还没有项目级增量策略，当前仍是“读当前 palace 并重新分组生成”
+- 还没有数据库锁冲突后的自动重试 / backoff 策略

@@ -165,6 +165,10 @@
 - `memark run`
 - `memark codex-sync`
 - `memark mempalace-mine`
+- `memark palace-status`
+- `memark palace-clean`
+- `memark palace-rebuild`
+- `memark palace-retry`
 - `memark palace-export`
 - `memark palace-package`
 - `memark palace-run`
@@ -242,6 +246,21 @@ mempalace --palace ./memark-work/.memark/palaces/<project> \
   mine ./memark-work/.memark/staging/<project>/sessions \
   --mode convos
 ```
+
+如果要查看、清空或重建项目 palace，可以直接执行：
+
+```bash
+python3 -m memark palace-status --workspace ./memark-work --json
+python3 -m memark palace-clean --workspace ./memark-work
+python3 -m memark palace-rebuild --workspace ./memark-work
+```
+
+其中：
+
+- `palace-status` 统计 palace 文件数、drawer 数、wing 数、room 数
+- `palace-clean` 删除当前项目 palace 内容后重建空目录
+- `palace-rebuild` 先 clean，再对当前 staging 重新执行 `mempalace mine --mode convos`
+- `palace-retry` 不清空 palace，只重试一次当前 mine
 
 如果要把项目 palace 里已经 ingest 的 drawer 原样读出来做后续适配，可以执行：
 

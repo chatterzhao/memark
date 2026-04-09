@@ -114,7 +114,10 @@
 当前状态：
 
 - 已实现 `memark mempalace-mine`
-- 还未实现 clean / rebuild / retry
+- 已实现 `memark palace-status`
+- 已实现 `memark palace-clean`
+- 已实现 `memark palace-rebuild`
+- 已实现 `memark palace-retry`
 
 ### F7. 项目知识晋升
 
