@@ -700,6 +700,138 @@ class MemArkCliTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not found in PATH", result.stderr)
 
+    def test_palace_status_reports_files_and_drawers(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (1, 'seg-a', 'drawer_status', X'01')"
+            )
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (1, "chroma:document", "Status: palace has one tracked drawer.", None, None, None),
+                    (1, "wing", "codex_project", None, None, None),
+                    (1, "room", "status_room", None, None, None),
+                    (1, "ingest_mode", "convos", None, None, None),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli("palace-status", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["exists"])
+        self.assertEqual(payload["files"], 1)
+        self.assertEqual(payload["drawers"], 1)
+        self.assertEqual(payload["wings"], 1)
+        self.assertEqual(payload["rooms"], 1)
+
+    def test_palace_clean_resets_directory(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        nested = palace_dir / "subdir" / "note.txt"
+        nested.parent.mkdir(parents=True, exist_ok=True)
+        nested.write_text("stale\n", encoding="utf-8")
+
+        result = run_cli("palace-clean", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["cleaned"])
+        self.assertTrue(palace_dir.exists())
+        self.assertEqual(list(palace_dir.iterdir()), [])
+
+    def test_palace_rebuild_cleans_then_mines(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        stale = palace_dir / "old.txt"
+        stale.write_text("old\n", encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        log_file = self.workspace / "palace-rebuild.log"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                echo "$@" > "{log_file}"
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("palace-rebuild", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["clean_first"])
+        self.assertFalse(stale.exists())
+        self.assertIn("--mode", log_file.read_text(encoding="utf-8"))
+
+    def test_palace_retry_runs_without_cleaning(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        keep_file = palace_dir / "keep.txt"
+        keep_file.write_text("keep\n", encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        log_file = self.workspace / "palace-retry.log"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                echo "$@" > "{log_file}"
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("palace-retry", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload["clean_first"])
+        self.assertTrue(keep_file.exists())
+        self.assertIn(str(palace_dir), log_file.read_text(encoding="utf-8"))
+
     def test_palace_export_reads_convo_drawers_from_sqlite_fallback(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         palace_dir = self.workspace / ".memark" / "palaces" / "memark"

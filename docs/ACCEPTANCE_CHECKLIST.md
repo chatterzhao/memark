@@ -58,6 +58,10 @@
 - [x] `memark mempalace-mine` 能调用 `mempalace mine --mode convos`
 - [x] `memark mempalace-mine` 支持 `--dry-run`
 - [x] `memark mempalace-mine` 在 `mempalace` 不存在时会明确报错
+- [x] `memark palace-status` 能输出项目级 palace 文件与 drawer 统计
+- [x] `memark palace-clean` 能清空项目 palace 并重建空目录
+- [x] `memark palace-rebuild` 能先 clean 再重跑 convo mine
+- [x] `memark palace-retry` 能在不 clean 的情况下重试 convo mine
 - [x] `memark palace-export` 能只读导出项目 palace 中的 drawer
 - [x] `memark palace-package` 能把 palace drawer 按 room 整理成候选 room package
 - [x] `memark palace-package --write-inbox` 能把候选 package 写回 `inbox/promoted`
@@ -94,7 +98,7 @@
 - [x] 能从项目 palace 读出 `document + metadata`
 - [x] 能从项目 palace 生成确定性的候选 room package
 - [x] 能把候选 room package 直接落盘并立即晋升为 Markdown
-- [ ] 还能提供项目级 rebuild 操作
+- [x] 能提供项目级 clean / rebuild / retry 操作
 - [x] 文档明确说明当前 Graphify fallback 只保证 code graph 重建，不保证 mixed-corpus 完整编译
 
 ## 当前结论
@@ -110,4 +114,4 @@
 下一阶段的核心验收重点，不再是继续补主链命令，而是处理两类剩余问题：
 
 - `session` 去重目前仍是“同路径文件增量”，还不是跨路径内容归并
-- 还没有项目级 `clean / rebuild / retry` 管理命令
+- 还没有项目级增量策略与锁冲突恢复策略

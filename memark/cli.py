@@ -11,7 +11,7 @@ from pathlib import Path
 from .codex import sync_codex_sessions
 from .graphify import GraphifyError, run_graphify
 from .io import copy_document
-from .mempalace import MemPalaceError, run_mempalace_convo_mine
+from .mempalace import MemPalaceError, reset_palace_dir, run_mempalace_convo_mine
 from .models import ValidationError
 from .package_builder import (
     build_room_package_from_drawers,
@@ -150,6 +150,53 @@ def _build_parser() -> argparse.ArgumentParser:
     mempalace_parser.add_argument("--dry-run", action="store_true", help="Print the MemPalace command without executing it")
     mempalace_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     mempalace_parser.set_defaults(func=cmd_mempalace_mine)
+
+    palace_status_parser = subparsers.add_parser(
+        "palace-status",
+        help="Show filesystem and drawer counts for a project's palace",
+    )
+    palace_status_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    palace_status_parser.add_argument("--project", help="Target project slug")
+    palace_status_parser.add_argument("--palace-dir", help="Override palace directory")
+    palace_status_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    palace_status_parser.set_defaults(func=cmd_palace_status)
+
+    palace_clean_parser = subparsers.add_parser(
+        "palace-clean",
+        help="Remove a project's palace contents and recreate the empty directory",
+    )
+    palace_clean_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    palace_clean_parser.add_argument("--project", help="Target project slug")
+    palace_clean_parser.add_argument("--palace-dir", help="Override palace directory")
+    palace_clean_parser.add_argument("--dry-run", action="store_true", help="Render the target directory without deleting it")
+    palace_clean_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    palace_clean_parser.set_defaults(func=cmd_palace_clean)
+
+    palace_rebuild_parser = subparsers.add_parser(
+        "palace-rebuild",
+        help="Clean a project's palace, then rerun MemPalace convo mine from staging",
+    )
+    palace_rebuild_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    palace_rebuild_parser.add_argument("--project", help="Target project slug")
+    palace_rebuild_parser.add_argument("--mempalace-bin", help="Override mempalace executable name")
+    palace_rebuild_parser.add_argument("--palace-dir", help="Override palace directory")
+    palace_rebuild_parser.add_argument("--staging-dir", help="Override staging directory")
+    palace_rebuild_parser.add_argument("--dry-run", action="store_true", help="Render actions without deleting or mining")
+    palace_rebuild_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    palace_rebuild_parser.set_defaults(func=cmd_palace_rebuild)
+
+    palace_retry_parser = subparsers.add_parser(
+        "palace-retry",
+        help="Retry MemPalace convo mine against the current project staging without cleaning",
+    )
+    palace_retry_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    palace_retry_parser.add_argument("--project", help="Target project slug")
+    palace_retry_parser.add_argument("--mempalace-bin", help="Override mempalace executable name")
+    palace_retry_parser.add_argument("--palace-dir", help="Override palace directory")
+    palace_retry_parser.add_argument("--staging-dir", help="Override staging directory")
+    palace_retry_parser.add_argument("--dry-run", action="store_true", help="Render the MemPalace command without executing it")
+    palace_retry_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    palace_retry_parser.set_defaults(func=cmd_palace_retry)
 
     palace_parser = subparsers.add_parser(
         "palace-export",
@@ -488,6 +535,192 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
 
     print(f"Project: {project}")
     print(f"Palace dir: {result.palace_dir}")
+    print(f"Staging dir: {result.staging_dir}")
+    print("Command:", " ".join(result.command))
+    if result.stdout.strip():
+        print(result.stdout.rstrip())
+    if result.stderr.strip():
+        print(result.stderr.rstrip(), file=sys.stderr)
+    return 0
+
+
+def cmd_palace_status(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    palace_dir = Path(args.palace_dir).expanduser().resolve() if args.palace_dir else config.palace_dir(project)
+    exists = palace_dir.exists()
+    files = [item for item in palace_dir.rglob("*") if item.is_file()] if exists else []
+    drawers = read_palace_drawers(palace_dir, ingest_mode=None) if exists else []
+    wings = sorted({drawer.wing for drawer in drawers if drawer.wing})
+    rooms = sorted({f"{drawer.wing}/{drawer.room}" for drawer in drawers if drawer.wing and drawer.room})
+    payload = {
+        "project": project,
+        "palace_dir": str(palace_dir),
+        "exists": exists,
+        "files": len(files),
+        "drawers": len(drawers),
+        "wings": len(wings),
+        "rooms": len(rooms),
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+
+    print(f"Project: {project}")
+    print(f"Palace dir: {palace_dir}")
+    print(f"Exists: {'yes' if exists else 'no'}")
+    print(f"Files: {len(files)}")
+    print(f"Drawers: {len(drawers)}")
+    print(f"Wings: {len(wings)}")
+    print(f"Rooms: {len(rooms)}")
+    return 0
+
+
+def cmd_palace_clean(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    palace_dir = Path(args.palace_dir).expanduser().resolve() if args.palace_dir else config.palace_dir(project)
+    existed = palace_dir.exists()
+    if args.dry_run:
+        payload = {
+            "project": project,
+            "palace_dir": str(palace_dir),
+            "existed": existed,
+            "dry_run": True,
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=True))
+            return 0
+        print(f"would clean: {palace_dir}")
+        return 0
+
+    cleaned_dir = reset_palace_dir(palace_dir)
+    payload = {
+        "project": project,
+        "palace_dir": str(cleaned_dir),
+        "existed": existed,
+        "cleaned": True,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+
+    print(f"Project: {project}")
+    print(f"Cleaned palace: {cleaned_dir}")
+    return 0
+
+
+def cmd_palace_rebuild(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    mempalace_bin = args.mempalace_bin or config.mempalace_bin
+    palace_dir = Path(args.palace_dir).expanduser().resolve() if args.palace_dir else config.palace_dir(project)
+    staging_dir = Path(args.staging_dir).expanduser().resolve() if args.staging_dir else config.codex_sessions_dir(project)
+    command = [
+        mempalace_bin,
+        "--palace",
+        str(palace_dir),
+        "mine",
+        str(staging_dir),
+        "--mode",
+        "convos",
+    ]
+    if args.dry_run:
+        payload = {
+            "project": project,
+            "palace_dir": str(palace_dir),
+            "staging_dir": str(staging_dir),
+            "command": command,
+            "dry_run": True,
+            "clean_first": True,
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=True))
+            return 0
+        print(f"would clean: {palace_dir}")
+        print("would run:", " ".join(command))
+        return 0
+
+    reset_palace_dir(palace_dir)
+    result = run_mempalace_convo_mine(
+        mempalace_bin=mempalace_bin,
+        palace_dir=palace_dir,
+        staging_dir=staging_dir,
+    )
+    payload = {
+        "project": project,
+        "palace_dir": str(result.palace_dir),
+        "staging_dir": str(result.staging_dir),
+        "command": result.command,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "clean_first": True,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+
+    print(f"Project: {project}")
+    print(f"Rebuilt palace: {result.palace_dir}")
+    print(f"Staging dir: {result.staging_dir}")
+    print("Command:", " ".join(result.command))
+    if result.stdout.strip():
+        print(result.stdout.rstrip())
+    if result.stderr.strip():
+        print(result.stderr.rstrip(), file=sys.stderr)
+    return 0
+
+
+def cmd_palace_retry(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    mempalace_bin = args.mempalace_bin or config.mempalace_bin
+    palace_dir = Path(args.palace_dir).expanduser().resolve() if args.palace_dir else config.palace_dir(project)
+    staging_dir = Path(args.staging_dir).expanduser().resolve() if args.staging_dir else config.codex_sessions_dir(project)
+    command = [
+        mempalace_bin,
+        "--palace",
+        str(palace_dir),
+        "mine",
+        str(staging_dir),
+        "--mode",
+        "convos",
+    ]
+    if args.dry_run:
+        payload = {
+            "project": project,
+            "palace_dir": str(palace_dir),
+            "staging_dir": str(staging_dir),
+            "command": command,
+            "dry_run": True,
+            "clean_first": False,
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=True))
+            return 0
+        print("would run:", " ".join(command))
+        return 0
+
+    result = run_mempalace_convo_mine(
+        mempalace_bin=mempalace_bin,
+        palace_dir=palace_dir,
+        staging_dir=staging_dir,
+    )
+    payload = {
+        "project": project,
+        "palace_dir": str(result.palace_dir),
+        "staging_dir": str(result.staging_dir),
+        "command": result.command,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "clean_first": False,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+
+    print(f"Project: {project}")
+    print(f"Retried palace mine: {result.palace_dir}")
     print(f"Staging dir: {result.staging_dir}")
     print("Command:", " ".join(result.command))
     if result.stdout.strip():
