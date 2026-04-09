@@ -635,6 +635,12 @@ def cmd_projects_run(args: argparse.Namespace) -> int:
         print(f"  Pending mine: {item.pending_mine}")
         if item.mined:
             print("  Mine: executed")
+            if item.mine_started_at is not None:
+                print(f"  Mine started at: {item.mine_started_at}")
+            if item.mine_finished_at is not None:
+                print(f"  Mine finished at: {item.mine_finished_at}")
+            if item.mine_elapsed_seconds is not None:
+                print(f"  Mine elapsed seconds: {item.mine_elapsed_seconds}")
         else:
             print(f"  Mine: skipped ({item.mine_skipped_reason})")
     return 0
@@ -696,6 +702,9 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
                     "stdout": result.stdout,
                     "stderr": result.stderr,
                     "attempts": result.attempts,
+                    "started_at": result.started_at,
+                    "finished_at": result.finished_at,
+                    "elapsed_seconds": result.elapsed_seconds,
                 },
                 indent=2,
                 ensure_ascii=True,
@@ -707,6 +716,9 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
     print(f"Palace dir: {result.palace_dir}")
     print(f"Staging dir: {result.staging_dir}")
     print(f"Attempts: {result.attempts}")
+    print(f"Started at: {result.started_at}")
+    print(f"Finished at: {result.finished_at}")
+    print(f"Elapsed seconds: {result.elapsed_seconds}")
     print("Command:", " ".join(result.command))
     if result.stdout.strip():
         print(result.stdout.rstrip())

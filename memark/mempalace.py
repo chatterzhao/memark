@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -21,6 +22,9 @@ class MemPalaceMineResult:
     stdout: str
     stderr: str
     attempts: int
+    started_at: str
+    finished_at: str
+    elapsed_seconds: float
 
 
 def _resolve_mempalace_binary(mempalace_bin: str) -> str:
@@ -70,6 +74,10 @@ def _run_mempalace_command(
     )
 
 
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def reset_palace_dir(palace_dir: Path) -> Path:
     normalized = palace_dir.expanduser().resolve()
     if normalized.exists():
@@ -91,6 +99,8 @@ def run_mempalace_convo_mine(
         raise MemPalaceError(f"Codex staging directory does not exist: {staging_dir}")
 
     command = [binary, "--palace", str(palace_dir), "mine", str(staging_dir), "--mode", "convos"]
+    started_at = _utc_now_iso()
+    started_perf = time.perf_counter()
     stdout, stderr, attempts = _run_mempalace_command(
         command,
         cwd=staging_dir,
@@ -98,6 +108,8 @@ def run_mempalace_convo_mine(
         retry_attempts=retry_attempts,
         retry_delay_seconds=retry_delay_seconds,
     )
+    finished_at = _utc_now_iso()
+    elapsed_seconds = round(time.perf_counter() - started_perf, 3)
     return MemPalaceMineResult(
         command=command,
         palace_dir=palace_dir,
@@ -105,4 +117,7 @@ def run_mempalace_convo_mine(
         stdout=stdout,
         stderr=stderr,
         attempts=attempts,
+        started_at=started_at,
+        finished_at=finished_at,
+        elapsed_seconds=elapsed_seconds,
     )
