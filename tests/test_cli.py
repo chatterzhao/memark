@@ -888,6 +888,68 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIsNone(state["memark"]["last_mined_at"])
         self.assertIsInstance(state["memark"]["last_run_at"], str)
 
+    def test_projects_list_includes_runtime_state(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        sessions_root = self.workspace / "codex-sessions"
+        session_file = sessions_root / "2026" / "04" / "09" / "rollout-a.jsonl"
+        session_file.parent.mkdir(parents=True, exist_ok=True)
+        session_file.write_text(
+            json.dumps(
+                {
+                    "type": "session_meta",
+                    "payload": {
+                        "id": "sess-a",
+                        "cwd": str(ROOT),
+                        "timestamp": "2026-04-09T12:00:00Z",
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--root",
+            str(ROOT),
+            "--sessions-root",
+            str(sessions_root),
+            cwd=ROOT,
+        )
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        run_cli("projects-run", "--workspace", str(self.workspace), cwd=ROOT, env=env)
+        json_result = run_cli("projects-list", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(json_result.returncode, 0, json_result.stderr)
+        payload = json.loads(json_result.stdout)
+        self.assertEqual(len(payload), 1)
+        self.assertFalse(payload[0]["pending_mine"])
+        self.assertIsInstance(payload[0]["last_run_at"], str)
+        self.assertIsInstance(payload[0]["last_mined_at"], str)
+
+        text_result = run_cli("projects-list", "--workspace", str(self.workspace), cwd=ROOT)
+        self.assertEqual(text_result.returncode, 0, text_result.stderr)
+        self.assertIn("pending_mine=False", text_result.stdout)
+        self.assertIn("last_run_at=", text_result.stdout)
+        self.assertIn("last_mined_at=", text_result.stdout)
+
     def test_projects_run_non_json_reports_phase_progress(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         sessions_root = self.workspace / "codex-sessions"
