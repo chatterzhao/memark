@@ -61,6 +61,7 @@
 - [x] `memark palace-export` 能只读导出项目 palace 中的 drawer
 - [x] `memark palace-package` 能把 palace drawer 按 room 整理成候选 room package
 - [x] `memark palace-package --write-inbox` 能把候选 package 写回 `inbox/promoted`
+- [x] `memark palace-run` 能把 palace package、promote、可选 build 串起来
 
 ## G. 不做伪实现
 
@@ -92,6 +93,7 @@
 - [x] 能在失败时报告具体是 session 解析失败、staging 失败，还是 `MemPalace` mine 失败
 - [x] 能从项目 palace 读出 `document + metadata`
 - [x] 能从项目 palace 生成确定性的候选 room package
+- [x] 能把候选 room package 直接落盘并立即晋升为 Markdown
 - [ ] 还能提供项目级 rebuild 操作
 - [x] 文档明确说明当前 Graphify fallback 只保证 code graph 重建，不保证 mixed-corpus 完整编译
 

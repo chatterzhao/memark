@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -112,3 +113,23 @@ def package_to_dict(package: RoomPackage) -> dict[str, object]:
         "updated_at": package.updated_at,
         "project": package.project,
     }
+
+
+def group_drawers_by_room(drawers: list[PalaceDrawer]) -> dict[tuple[str, str], list[PalaceDrawer]]:
+    grouped: dict[tuple[str, str], list[PalaceDrawer]] = {}
+    for drawer in drawers:
+        wing = drawer.wing or "unknown"
+        room = drawer.room or "general"
+        grouped.setdefault((wing, room), []).append(drawer)
+    return grouped
+
+
+def write_package_payloads(package_payloads: list[dict[str, object]], destination_dir: Path) -> list[Path]:
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for package in package_payloads:
+        room_id = str(package["room_id"])
+        destination = destination_dir / f"palace-{room_id}.json"
+        destination.write_text(json.dumps(package, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+        written.append(destination)
+    return written

@@ -22,7 +22,8 @@
 8. `memark mempalace-mine`
 9. `memark palace-export`
 10. `memark palace-package`
-11. `memark status`
+11. `memark palace-run`
+12. `memark status`
 
 ## 为什么第一版这样切
 
@@ -58,6 +59,7 @@
 5. `memark mempalace-mine`
 6. `memark palace-export`
 7. `memark palace-package`
+8. `memark palace-run`
 
 ## 当前工作区布局
 
@@ -152,6 +154,8 @@ workspace/
 - `memark palace-package`
 - 按 `(wing, room)` 分组生成确定性的 room package JSON
 - 可选直接写入 `inbox/promoted/`
+- `memark palace-run`
+- 可把 package -> promote -> 可选 build 串成一条命令
 
 注意：
 
@@ -185,4 +189,4 @@ workspace/
 - 还没有 Windows CI
 - `Codex session` 去重还不是跨路径内容归并
 - 还没有项目级 palace clean / rebuild / retry 管理命令
-- 还没有把 `palace-package -> promote/build` 串成一个明确的一键命令
+- 还没有项目级增量策略，当前仍是“读当前 palace 并重新分组生成”

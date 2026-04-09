@@ -942,6 +942,128 @@ class MemArkCliTests(unittest.TestCase):
         package = json.loads(written_path.read_text(encoding="utf-8"))
         self.assertEqual(package["room_id"], "ci-debugging")
 
+    def test_palace_run_promotes_packages_without_build(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (1, 'seg-a', 'drawer_bridge', X'01')"
+            )
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (1, "chroma:document", "Decision: promote curated bridge notes, not the whole palace.", None, None, None),
+                    (1, "wing", "codex_project", None, None, None),
+                    (1, "room", "bridge_governance", None, None, None),
+                    (1, "source_file", "/tmp/demo/rollout-d.jsonl", None, None, None),
+                    (1, "filed_at", "2026-04-09T02:13:00Z", None, None, None),
+                    (1, "ingest_mode", "convos", None, None, None),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli(
+            "palace-run",
+            "--workspace",
+            str(self.workspace),
+            "--no-build",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["drawers"], 1)
+        self.assertEqual(payload["packages"], 1)
+        self.assertIsNone(payload["build"])
+        self.assertEqual(len(payload["written"]), 1)
+        promoted = payload["promoted"][0]
+        self.assertEqual(promoted["room_id"], "bridge-governance")
+        self.assertTrue(promoted["changed"])
+        output = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge-governance.md"
+        self.assertTrue(output.exists())
+
+    def test_palace_run_dry_run_reports_targets(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (1, 'seg-a', 'drawer_dry', X'01')"
+            )
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (1, "chroma:document", "Plan: dry-run the full palace pipeline before enabling build.", None, None, None),
+                    (1, "wing", "codex_project", None, None, None),
+                    (1, "room", "pipeline_preview", None, None, None),
+                    (1, "source_file", "/tmp/demo/rollout-e.jsonl", None, None, None),
+                    (1, "filed_at", "2026-04-09T02:14:00Z", None, None, None),
+                    (1, "ingest_mode", "convos", None, None, None),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli(
+            "palace-run",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["dry_run"])
+        self.assertEqual(payload["packages"], 1)
+        self.assertEqual(len(payload["write_targets"]), 1)
+        self.assertIn("graphify", " ".join(payload["build_command"]))
+        self.assertFalse((self.workspace / "inbox" / "promoted" / "palace-pipeline-preview.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

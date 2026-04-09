@@ -6,7 +6,6 @@ import argparse
 import json
 import shutil
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 from .codex import sync_codex_sessions
@@ -14,9 +13,14 @@ from .graphify import GraphifyError, run_graphify
 from .io import copy_document
 from .mempalace import MemPalaceError, run_mempalace_convo_mine
 from .models import ValidationError
-from .package_builder import build_room_package_from_drawers, package_to_dict
+from .package_builder import (
+    build_room_package_from_drawers,
+    group_drawers_by_room,
+    package_to_dict,
+    write_package_payloads,
+)
 from .palace import PalaceReadError, read_palace_drawers
-from .promote import load_room_packages, promote_path
+from .promote import load_room_packages, promote_file, promote_path
 from .version import __version__
 from .workspace import create_workspace, load_workspace, resolve_workspace, slugify
 
@@ -180,6 +184,28 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     package_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     package_parser.set_defaults(func=cmd_palace_package)
+
+    palace_run_parser = subparsers.add_parser(
+        "palace-run",
+        help="Build room packages from palace drawers, promote them, then optionally run Graphify",
+    )
+    palace_run_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    palace_run_parser.add_argument("--project", help="Target project slug")
+    palace_run_parser.add_argument("--palace-dir", help="Override palace directory")
+    palace_run_parser.add_argument("--ingest-mode", default="convos", help="Filter drawers by ingest_mode")
+    palace_run_parser.add_argument("--wing", help="Filter drawers by wing")
+    palace_run_parser.add_argument("--room", help="Filter drawers by room")
+    palace_run_parser.add_argument("--limit", type=int, help="Maximum number of drawers to read before grouping")
+    palace_run_parser.add_argument("--hall-id", default="discoveries", help="hall_id to assign to generated packages")
+    palace_run_parser.add_argument("--graphify-bin", help="Override graphify executable name")
+    palace_run_parser.add_argument("--update", action="store_true", help="Pass --update to graphify")
+    palace_run_parser.add_argument("--wiki", action="store_true", help="Pass --wiki to graphify")
+    palace_run_parser.add_argument("--obsidian", action="store_true", help="Pass --obsidian to graphify")
+    palace_run_parser.add_argument("--mcp", action="store_true", help="Pass --mcp to graphify")
+    palace_run_parser.add_argument("--dry-run", action="store_true", help="Render intended actions without executing them")
+    palace_run_parser.add_argument("--no-build", action="store_true", help="Only package and promote palace content")
+    palace_run_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    palace_run_parser.set_defaults(func=cmd_palace_run)
 
     status_parser = subparsers.add_parser("status", help="Show workspace and project status")
     status_parser.add_argument("--workspace", default=".", help="Workspace directory")
@@ -520,12 +546,6 @@ def cmd_palace_package(args: argparse.Namespace) -> int:
         room=args.room,
         limit=limit,
     )
-    grouped: dict[tuple[str, str], list] = defaultdict(list)
-    for drawer in drawers:
-        wing = drawer.wing or "unknown"
-        room = drawer.room or "general"
-        grouped[(wing, room)].append(drawer)
-
     packages = [
         build_room_package_from_drawers(
             project=project,
@@ -534,23 +554,20 @@ def cmd_palace_package(args: argparse.Namespace) -> int:
             drawers=group_drawers,
             hall_id=args.hall_id,
         )
-        for (wing, room), group_drawers in sorted(grouped.items())
+        for (wing, room), group_drawers in sorted(group_drawers_by_room(drawers).items())
     ]
     package_payloads = [package_to_dict(item) for item in packages]
 
-    written: list[str] = []
+    written_paths: list[Path] = []
     if args.write_inbox:
-        for package in package_payloads:
-            destination = config.inbox_promoted_dir / f"palace-{package['room_id']}.json"
-            destination.write_text(json.dumps(package, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
-            written.append(str(destination))
+        written_paths = write_package_payloads(package_payloads, config.inbox_promoted_dir)
 
     payload = {
         "project": project,
         "palace_dir": str(palace_dir),
         "drawers": len(drawers),
         "packages": package_payloads,
-        "written": written,
+        "written": [str(path) for path in written_paths],
     }
     if args.json:
         print(json.dumps(payload, indent=2, ensure_ascii=True))
@@ -562,8 +579,125 @@ def cmd_palace_package(args: argparse.Namespace) -> int:
     print(f"Packages: {len(package_payloads)}")
     for package in package_payloads:
         print(f"- {package['room_id']} -> {package['room_title']}")
-    for path in written:
+    for path in written_paths:
         print(f"written: {path}")
+    return 0
+
+
+def cmd_palace_run(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    palace_dir = Path(args.palace_dir).expanduser().resolve() if args.palace_dir else config.palace_dir(project)
+    limit = args.limit if args.limit and args.limit > 0 else None
+    graphify_bin = args.graphify_bin or config.graphify_bin
+
+    drawers = read_palace_drawers(
+        palace_dir,
+        ingest_mode=args.ingest_mode,
+        wing=args.wing,
+        room=args.room,
+        limit=limit,
+    )
+    packages = [
+        build_room_package_from_drawers(
+            project=project,
+            wing=wing,
+            room=room_name,
+            drawers=group_drawers,
+            hall_id=args.hall_id,
+        )
+        for (wing, room_name), group_drawers in sorted(group_drawers_by_room(drawers).items())
+    ]
+    package_payloads = [package_to_dict(item) for item in packages]
+    written_paths = [config.inbox_promoted_dir / f"palace-{package['room_id']}.json" for package in package_payloads]
+    command = _graphify_command(graphify_bin, config.corpus_project_dir(project), args)
+
+    if args.dry_run:
+        payload = {
+            "project": project,
+            "palace_dir": str(palace_dir),
+            "drawers": len(drawers),
+            "packages": len(package_payloads),
+            "write_targets": [str(path) for path in written_paths],
+            "build_command": None if args.no_build else command,
+            "dry_run": True,
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=True))
+            return 0
+        print(f"Project: {project}")
+        print(f"Palace dir: {palace_dir}")
+        print(f"Drawers: {len(drawers)}")
+        print(f"Packages: {len(package_payloads)}")
+        for path in written_paths:
+            print(f"would write: {path}")
+        if not args.no_build:
+            print("would build:", " ".join(command))
+        return 0
+
+    written_paths = write_package_payloads(package_payloads, config.inbox_promoted_dir)
+    promote_results = []
+    for path in written_paths:
+        promote_results.extend(
+            promote_file(
+                config=config,
+                source=path,
+                project_override=project,
+                allow_non_project=False,
+                archive=False,
+            )
+        )
+
+    build_payload: dict[str, object] | None = None
+    if not args.no_build:
+        result = run_graphify(
+            graphify_bin=graphify_bin,
+            project_dir=config.corpus_project_dir(project),
+            update=args.update,
+            wiki=args.wiki,
+            obsidian=args.obsidian,
+            mcp=args.mcp,
+        )
+        build_payload = {
+            "command": result.command,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+        }
+
+    payload = {
+        "project": project,
+        "palace_dir": str(palace_dir),
+        "drawers": len(drawers),
+        "packages": len(package_payloads),
+        "written": [str(path) for path in written_paths],
+        "promoted": [
+            {
+                "room_id": item.room_id,
+                "output": str(item.output),
+                "changed": item.changed,
+            }
+            for item in promote_results
+        ],
+        "build": build_payload,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+
+    print(f"Project: {project}")
+    print(f"Palace dir: {palace_dir}")
+    print(f"Drawers: {len(drawers)}")
+    print(f"Packages: {len(package_payloads)}")
+    for path in written_paths:
+        print(f"written: {path}")
+    _print_promote_results(promote_results)
+    if build_payload is not None:
+        print("Graphify build completed")
+        print("Command:", " ".join(build_payload["command"]))
+        if isinstance(build_payload["stdout"], str) and build_payload["stdout"].strip():
+            print(build_payload["stdout"].rstrip())
+        if isinstance(build_payload["stderr"], str) and build_payload["stderr"].strip():
+            print(build_payload["stderr"].rstrip(), file=sys.stderr)
     return 0
 
 
