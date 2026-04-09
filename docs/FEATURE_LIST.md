@@ -124,6 +124,13 @@
 - 生成 `Graphify-ready` Markdown
 - 默认保留来源、会话、文件、时间等 provenance
 
+前置状态：
+
+- 已实现 `memark palace-export` 作为只读 adapter
+- 已实现 `memark palace-package`
+- 当前能按 `(wing, room)` 生成确定性候选 package
+- 当前仍未实现“自动判定哪些内容值得晋升”的策略层
+
 ### F8. 语料分层落盘
 
 说明：
@@ -200,6 +207,12 @@
 
 - 从 `chroma.sqlite3` 读取 metadata 与 `chroma:document`
 - 作为 best-effort adapter，而不是官方稳定 API
+
+当前状态：
+
+- 已实现 `palace-export`
+- 已实现 `palace-package`
+- 当前主要面向 `convos` palace 读取
 
 ### F14. 更细的治理规则
 

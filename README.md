@@ -165,6 +165,8 @@
 - `memark run`
 - `memark codex-sync`
 - `memark mempalace-mine`
+- `memark palace-export`
+- `memark palace-package`
 - `memark status`
 
 仍然没有提供：
@@ -240,6 +242,49 @@ mempalace --palace ./memark-work/.memark/palaces/<project> \
   --mode convos
 ```
 
+如果要把项目 palace 里已经 ingest 的 drawer 原样读出来做后续适配，可以执行：
+
+```bash
+python3 -m memark palace-export \
+  --workspace ./memark-work \
+  --json
+```
+
+当前返回的是只读 adapter 结果，包含：
+
+- `drawer_id`
+- `document`
+- `wing`
+- `room`
+- `source_file`
+- `filed_at`
+- `ingest_mode`
+- `extract_mode`
+
+如果要把这些 drawer 按 `(wing, room)` 自动整理成候选 room package，可以直接执行：
+
+```bash
+python3 -m memark palace-package \
+  --workspace ./memark-work \
+  --json
+```
+
+如果希望直接把候选 package 写回 `inbox/promoted/`，再交给现有 `promote` / `run` 主链消费：
+
+```bash
+python3 -m memark palace-package \
+  --workspace ./memark-work \
+  --write-inbox
+```
+
+当前 `palace-package` 的真实边界是：
+
+- 只读 palace 中已经存在的 drawer
+- 按 `(wing, room)` 分组
+- 生成确定性的 room package JSON
+- 保留 `drawer_id`、`source_file`、`filed_at` 等 provenance
+- 不伪装成 AI 摘要器，只做保守整理
+
 `promote` 会把输入写成下面这种 Graphify corpus：
 
 ```bash
@@ -279,7 +324,8 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 注意：
 
 - 当前版本不会伪造 `MemPalace` 的 `since` 接口
-- 因此“从宫殿里拿出 room package”这一步，仍需要外部抽取器、AI 助手或后续专门适配器来完成
+- 当前版本已经能从 palace 读 drawer，并生成候选 room package
+- 但“哪些 drawer 值得晋升、哪些只该停留在原始记忆层”仍是治理问题，不是上游自动保证
 - `MemArk` 当前负责的是稳定消费这些 package，并落成 `Graphify` 能直接吃的 corpus
 - 如果当前走的是 `_rebuild_code` fallback，真正进入图谱的主要还是代码树；`promoted/` 与 `documents/` 仍更像是已整理好的待编译语料
 - `memark status --json` 可作为脚本化验收入口

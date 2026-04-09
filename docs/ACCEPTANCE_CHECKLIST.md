@@ -58,6 +58,9 @@
 - [x] `memark mempalace-mine` 能调用 `mempalace mine --mode convos`
 - [x] `memark mempalace-mine` 支持 `--dry-run`
 - [x] `memark mempalace-mine` 在 `mempalace` 不存在时会明确报错
+- [x] `memark palace-export` 能只读导出项目 palace 中的 drawer
+- [x] `memark palace-package` 能把 palace drawer 按 room 整理成候选 room package
+- [x] `memark palace-package --write-inbox` 能把候选 package 写回 `inbox/promoted`
 
 ## G. 不做伪实现
 
@@ -87,6 +90,8 @@
 - [x] 能以项目 staging 为输入执行 `mempalace mine --mode convos`
 - [x] 能对混合项目 session 做正确隔离，不再让它们落成同一个 ingest 输入目录
 - [x] 能在失败时报告具体是 session 解析失败、staging 失败，还是 `MemPalace` mine 失败
+- [x] 能从项目 palace 读出 `document + metadata`
+- [x] 能从项目 palace 生成确定性的候选 room package
 - [ ] 还能提供项目级 rebuild 操作
 - [x] 文档明确说明当前 Graphify fallback 只保证 code graph 重建，不保证 mixed-corpus 完整编译
 
