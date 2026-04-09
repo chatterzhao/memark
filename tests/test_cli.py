@@ -666,6 +666,54 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("--mode convos", logged)
         self.assertIn(str(self.workspace / ".memark" / "staging" / "memark" / "sessions"), logged)
 
+    def test_mempalace_mine_retries_on_lock_error(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        counter_file = self.workspace / "retry-count.txt"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                COUNT_FILE="{counter_file}"
+                count=0
+                if [ -f "$COUNT_FILE" ]; then
+                  count=$(cat "$COUNT_FILE")
+                fi
+                count=$((count + 1))
+                printf '%s' "$count" > "$COUNT_FILE"
+                if [ "$count" -eq 1 ]; then
+                  echo "sqlite3.OperationalError: database is locked" >&2
+                  exit 1
+                fi
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli(
+            "mempalace-mine",
+            "--workspace",
+            str(self.workspace),
+            "--retry-delay-seconds",
+            "0",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["attempts"], 2)
+        self.assertEqual(counter_file.read_text(encoding="utf-8"), "2")
+
     def test_mempalace_mine_dry_run_renders_json(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         result = run_cli(
@@ -797,6 +845,54 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue(payload["clean_first"])
         self.assertFalse(stale.exists())
         self.assertIn("--mode", log_file.read_text(encoding="utf-8"))
+
+    def test_palace_retry_reports_attempts_after_lock_retry(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        counter_file = self.workspace / "palace-retry-count.txt"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                COUNT_FILE="{counter_file}"
+                count=0
+                if [ -f "$COUNT_FILE" ]; then
+                  count=$(cat "$COUNT_FILE")
+                fi
+                count=$((count + 1))
+                printf '%s' "$count" > "$COUNT_FILE"
+                if [ "$count" -eq 1 ]; then
+                  echo "database is locked" >&2
+                  exit 1
+                fi
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli(
+            "palace-retry",
+            "--workspace",
+            str(self.workspace),
+            "--retry-delay-seconds",
+            "0",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["attempts"], 2)
+        self.assertEqual(counter_file.read_text(encoding="utf-8"), "2")
 
     def test_palace_retry_runs_without_cleaning(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)

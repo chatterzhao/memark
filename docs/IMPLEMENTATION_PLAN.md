@@ -135,6 +135,7 @@ workspace/
 - `memark palace-clean`
 - `memark palace-rebuild`
 - `memark palace-retry`
+- 对明确的 SQLite 锁冲突执行自动重试和指数 backoff
 
 注意：
 
@@ -189,4 +190,3 @@ workspace/
 - 还没有 Windows CI
 - `Codex session` 去重还不是跨路径内容归并
 - 还没有项目级增量策略，当前仍是“读当前 palace 并重新分组生成”
-- 还没有数据库锁冲突后的自动重试 / backoff 策略

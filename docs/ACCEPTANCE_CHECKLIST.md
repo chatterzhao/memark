@@ -58,6 +58,7 @@
 - [x] `memark mempalace-mine` 能调用 `mempalace mine --mode convos`
 - [x] `memark mempalace-mine` 支持 `--dry-run`
 - [x] `memark mempalace-mine` 在 `mempalace` 不存在时会明确报错
+- [x] `memark mempalace-mine` 会在明确的数据库锁冲突上自动重试
 - [x] `memark palace-status` 能输出项目级 palace 文件与 drawer 统计
 - [x] `memark palace-clean` 能清空项目 palace 并重建空目录
 - [x] `memark palace-rebuild` 能先 clean 再重跑 convo mine
@@ -114,4 +115,4 @@
 下一阶段的核心验收重点，不再是继续补主链命令，而是处理两类剩余问题：
 
 - `session` 去重目前仍是“同路径文件增量”，还不是跨路径内容归并
-- 还没有项目级增量策略与锁冲突恢复策略
+- 还没有项目级增量策略
