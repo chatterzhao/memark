@@ -50,6 +50,72 @@ class MemArkCliTests(unittest.TestCase):
         payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["mempalace_bin"], "mempalace")
 
+    def test_install_bundle_writes_user_skill_dir(self) -> None:
+        fake_home = Path(self.tmpdir.name) / "home"
+        memark_home = fake_home / ".memark-test"
+        env = {
+            "HOME": str(fake_home),
+            "MEMARK_HOME": str(memark_home),
+        }
+
+        result = run_cli(
+            "install",
+            "--platform",
+            "codex",
+            "--skip-runtime-install",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        bundle_dir = (fake_home / ".agents" / "skills" / "memark").resolve()
+        self.assertEqual(payload["targets"][0]["bundle_dir"], str(bundle_dir))
+        self.assertTrue((bundle_dir / "SKILL.md").exists())
+        self.assertTrue((bundle_dir / "project.md").exists())
+        self.assertTrue((bundle_dir / "doctor.md").exists())
+        self.assertTrue((bundle_dir / "bin" / "memark").exists())
+        self.assertTrue(os.access(bundle_dir / "bin" / "memark", os.X_OK))
+        self.assertTrue((bundle_dir / "manifest.json").exists())
+
+    def test_doctor_reports_missing_runtime(self) -> None:
+        fake_home = Path(self.tmpdir.name) / "home"
+        env = {
+            "HOME": str(fake_home),
+            "MEMARK_HOME": str(fake_home / ".memark-test"),
+        }
+
+        result = run_cli("doctor", "--platform", "codex", cwd=ROOT, env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing runtime environment", result.stderr)
+
+    def test_doctor_succeeds_with_fake_runtime_and_bundle(self) -> None:
+        fake_home = Path(self.tmpdir.name) / "home"
+        memark_home = fake_home / ".memark-test"
+        scripts_dir = memark_home / "venv" / "bin"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        for name in ("python", "memark", "mempalace", "graphify"):
+            path = scripts_dir / name
+            path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            path.chmod(path.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "MEMARK_HOME": str(memark_home),
+        }
+        install = run_cli(
+            "install",
+            "--platform",
+            "codex",
+            "--skip-runtime-install",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+
+        doctor = run_cli("doctor", "--platform", "codex", cwd=ROOT, env=env)
+        self.assertEqual(doctor.returncode, 0, doctor.stderr)
+        self.assertIn("Doctor summary: ok", doctor.stdout)
+
     def test_validate_and_promote_room_package(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         package = {

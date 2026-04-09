@@ -6,7 +6,7 @@
 
 ## 验证时间
 
-- 日期：2026-04-08
+- 日期：2026-04-09
 - 工作目录：[`/Users/zhaoyu/Downloads/code/my-memark/memark`](/Users/zhaoyu/Downloads/code/my-memark/memark)
 
 ## 验证环境
@@ -30,7 +30,9 @@ python3 -m pip install graphifyy
 - 说明系统 Python 受 PEP 668 保护
 - 因此正式安装路径不能默认写成“直接全局 `pip install` 一定成功”
 
-随后改用仓库内虚拟环境 `.venv-skill-check`：
+随后改用仓库内虚拟环境 `.venv-skill-check`。
+
+这一步是上游 CLI 探测，不是当前最终安装闭环：
 
 ```bash
 python3 -m venv .venv-skill-check
@@ -140,11 +142,65 @@ python3 -m venv .venv-skill-check
 
 基于以上验证，根目录 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md) 需要坚持以下口径：
 
-- 优先写 `python3 -m pip` / `py -m pip`
+- 首次执行必须允许 bootstrap venv
 - 系统 Python 受限时优先建议虚拟环境
-- 不要默认全局安装一定成功
 - 不要把 `graphify install --help` 当成安全验证
 - 不要伪造 `MemPalace` 已存在的增量接口
+
+## 当前正式安装闭环验证
+
+以下验证对应当前产品模型：用户级 runtime + AI skill bundle。
+
+### 验证命令
+
+```bash
+rm -rf /tmp/memark-prod-e2e
+mkdir -p /tmp/memark-prod-e2e/home
+HOME=/tmp/memark-prod-e2e/home \
+  ./.venv-dev/bin/python -m memark install \
+  --platform codex \
+  --memark-home /tmp/memark-prod-e2e/home/.memark \
+  --source-spec /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --json
+HOME=/tmp/memark-prod-e2e/home \
+  /tmp/memark-prod-e2e/home/.agents/skills/memark/bin/memark doctor --platform codex
+/tmp/memark-prod-e2e/home/.memark/venv/bin/mempalace --help
+/tmp/memark-prod-e2e/home/.memark/venv/bin/graphify --help
+```
+
+### 验证结果
+
+说明：
+
+- 命令中使用的是 `/tmp/...`
+- macOS 实际解析后的绝对路径是 `/private/tmp/...`
+
+- `memark install` 成功创建 runtime：[`/private/tmp/memark-prod-e2e/home/.memark/venv`](/private/tmp/memark-prod-e2e/home/.memark/venv)
+- `memark install` 成功写入 Codex skill bundle：[`/private/tmp/memark-prod-e2e/home/.agents/skills/memark`](/private/tmp/memark-prod-e2e/home/.agents/skills/memark)
+- skill bundle 中已确认存在：
+  - [`SKILL.md`](/private/tmp/memark-prod-e2e/home/.agents/skills/memark/SKILL.md)
+  - [`project.md`](/private/tmp/memark-prod-e2e/home/.agents/skills/memark/project.md)
+  - [`doctor.md`](/private/tmp/memark-prod-e2e/home/.agents/skills/memark/doctor.md)
+  - [`bin/memark`](/private/tmp/memark-prod-e2e/home/.agents/skills/memark/bin/memark)
+  - [`bin/memark.cmd`](/private/tmp/memark-prod-e2e/home/.agents/skills/memark/bin/memark.cmd)
+  - [`manifest.json`](/private/tmp/memark-prod-e2e/home/.agents/skills/memark/manifest.json)
+- `bin/memark` 已具备可执行位
+- `memark doctor --platform codex` 返回 `Doctor summary: ok`
+- runtime 内上游 CLI 可执行：
+  - [`mempalace`](/private/tmp/memark-prod-e2e/home/.memark/venv/bin/mempalace)
+  - [`graphify`](/private/tmp/memark-prod-e2e/home/.memark/venv/bin/graphify)
+
+### 当前闭环安装到的版本
+
+- `mempalace 3.1.0`
+- `graphifyy 0.3.24`
+
+这说明当前仓库已经不只是“文档里写了安装器”，而是已经真实具备：
+
+- 用户级 runtime 安装
+- AI skill bundle 下发
+- 安装后 launcher 调用
+- `doctor` 自检
 
 ## 当前仓库上的真实联调结果
 

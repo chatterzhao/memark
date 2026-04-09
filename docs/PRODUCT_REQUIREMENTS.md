@@ -185,6 +185,22 @@
 - 可放进自动化流程
 - 不依赖桌面常驻应用
 
+### R7.1. 安装入口必须是用户级 Skill
+
+- 用户应把 `MemArk` 的安装 Skill 交给自己的 AI 工具
+- 安装完成后，`MemArk` 的一组 skills 与脚本应进入用户 AI 工具的 skill 目录
+- 之后用户在任意项目里与 AI 对话时，AI 应能自动调用 `MemArk`
+- 安装 Skill 本身不是运行时全部能力，而是安装器
+
+### R7.2. Skill bundle 必须与运行脚本分层
+
+- 至少区分：
+  - 安装 Skill
+  - 运行时 Skill
+  - 启动脚本 / CLI 入口
+- 不能把所有职责都塞进单一 `SKILL.md`
+- 开发期验收 Skill 与生产安装 Skill 也应区分
+
 ### R8. 后续可扩展，但当前不能伪实现
 
 - 后续可增加 `MemPalace` extractor / adapter

@@ -2,7 +2,11 @@
 
 本文件定义当前版本 `MemArk` 的验收标准。
 
-验收对象不是“未来完整产品”，而是当前这版 `CLI-first` 实现，以及已经接上的 `Codex session intake + MemPalace convo mine` 能力。
+验收对象不是“未来完整产品”，而是当前这版 `CLI-first` 实现，以及已经接上的：
+
+- 用户级安装与 skill bundle
+- `Codex session intake + MemPalace convo mine`
+- `MemPalace -> package -> promote -> Graphify-compatible build`
 
 ## A. 仓库与入口
 
@@ -10,8 +14,30 @@
 - [x] 存在 `python3 -m memark` 入口
 - [x] 存在 console script 定义 `memark`
 - [x] 不再引用仓库里不存在的 `memark.py`
+- [x] 根目录 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md) 已收敛为生产安装入口
+- [x] [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md) 已收敛为开发期隔离安装验收入口
 
-## B. 工作区初始化
+## B. 用户级安装与技能包
+
+- [x] `memark install` 可创建用户级 runtime venv
+- [x] 默认用户级 runtime 目录为 `~/.memark/venv`
+- [x] `memark install` 会安装 `MemArk`、`mempalace`、`graphifyy`
+- [x] `memark install` 支持 `--platform auto|codex|claude|all`
+- [x] `memark install` 可把运行时 skill bundle 安装到用户 AI 工具目录
+- [x] Codex 目标目录为 `~/.agents/skills/memark/`
+- [x] Claude 目标目录为 `~/.claude/skills/memark/`
+- [x] skill bundle 至少包含 `SKILL.md`
+- [x] skill bundle 至少包含 `project.md`
+- [x] skill bundle 至少包含 `doctor.md`
+- [x] skill bundle 至少包含 `bin/memark`
+- [x] skill bundle 至少包含 `bin/memark.cmd`
+- [x] 安装结果包含 `manifest.json`
+- [x] 安装后的 `bin/memark` 已具备可执行位
+- [x] `memark doctor` 能检查 runtime 与 skill bundle
+- [x] `memark doctor` 在缺失 runtime 时会失败
+- [x] `memark doctor` 在 fake runtime + installed bundle 场景下会成功
+
+## C. 工作区初始化
 
 - [x] `memark init` 可创建工作区
 - [x] 初始化时会创建 `.memark/config.json`
@@ -22,14 +48,14 @@
 - [x] 初始化时会创建 `corpus/<project>/documents`
 - [x] 初始化时会创建 `corpus/<project>/imports`
 
-## C. 输入契约与治理
+## D. 输入契约与治理
 
 - [x] `memark validate` 可以校验 room package JSON
 - [x] 默认只允许 `wing_kind=project` 的 package 晋升
 - [x] 不把“闲聊/general wing”默认送进 `Graphify`
 - [x] room package 缺少关键字段时会失败而不是静默继续
 
-## D. 已实现晋升逻辑
+## E. 已实现晋升逻辑
 
 - [x] `memark promote` 能把 room package 落成 Markdown
 - [x] Markdown 保留 frontmatter 边界信息
@@ -38,12 +64,12 @@
 - [x] 同一 room 重复导入时具备幂等行为
 - [x] 可选把已消费 JSON 归档到 `.memark/archive`
 
-## E. 已实现文档纳入
+## F. 已实现文档纳入
 
 - [x] `memark add-documents` 能把已落盘文档复制进 corpus
 - [x] 文档和晋升 room 会落在同一项目 corpus 边界内
 
-## F. 已实现 Graphify 集成
+## G. 已实现 Graphify 集成
 
 - [x] `memark build` 会调用外部配置的 Graphify 构建入口
 - [x] 当顶层 `graphify <folder>` 不可用时，`memark build` 会退回已验证的 code-only fallback
@@ -68,7 +94,7 @@
 - [x] `memark palace-package --write-inbox` 能把候选 package 写回 `inbox/promoted`
 - [x] `memark palace-run` 能把 palace package、promote、可选 build 串起来
 
-## G. 不做伪实现
+## H. 不做伪实现
 
 - [x] 不声明已实现 `MemPalace` 的增量拉取
 - [x] 不声明已实现后台监控服务
@@ -77,16 +103,17 @@
 - [x] 不把 `~/.codex/history.jsonl` 写成项目级默认输入
 - [x] 不声称 `MemPalace` 会自动按项目拆分混合 `Codex` 会话
 
-## H. 自动化验证
+## I. 自动化验证
 
 - [x] 存在自动化测试
 - [x] 覆盖初始化、校验、晋升、幂等、归档、文档复制、Graphify 调用、状态输出
+- [x] 覆盖用户级安装与 `doctor`
 - [x] `memark status --json` 可输出机器可读状态
 - [x] `.venv-dev/bin/python -m pytest -q` 通过
 - [x] `python3 -m unittest discover -s tests -v` 通过
 - [x] `python3 -m compileall memark tests` 通过
 
-## I. 已实现的 Codex / MemPalace 编排验收项
+## J. 已实现的 Codex / MemPalace 编排验收项
 
 - [x] 能扫描 `~/.codex/sessions/**/*.jsonl`
 - [x] 能从 `session_meta.payload.cwd` 判断项目归属
@@ -109,11 +136,12 @@
 
 ## 当前结论
 
-当前版本已经达到“可运行的最小桥接器”验收线。
+当前版本已经达到“可运行的最小桥接器 + 用户级安装入口”验收线。
 
 它还不是“完全自动从 MemPalace 抽取增量的成品”，但已经是：
 
 - 一个真实可安装的 Python CLI
+- 一个可验证的用户级 runtime + AI skill bundle 安装器
 - 一个稳定的 room package -> corpus 编排层
 - 一个可测试、可扩展、已具备 code-only Graphify fallback 的实现基线
 

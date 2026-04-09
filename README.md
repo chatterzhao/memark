@@ -150,10 +150,14 @@
 
 - 经过收敛的项目定义
 - `MemPalace -> MemArk -> Graphify` 的治理和接口说明
-- 一个只负责安装上游工具的 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
+- 一个用户级生产安装入口 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
+- 一份开发期安装测试入口 [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)
+- 一个真实可执行的用户级安装命令：`memark install`
+- 一个真实可执行的健康检查命令：`memark doctor`
+- 一套会被安装到用户 AI 工具目录的 `MemArk` skill bundle
 - 基于真实命令执行结果的安装验证记录
 - 一个真实可运行的 Python CLI：`memark`
-- 一个针对 `graphifyy 0.3.12` 的兼容策略：当顶层 `graphify <folder>` 不可用时，退回 `graphify.watch._rebuild_code`
+- 一个针对安装版 `graphify` CLI 差异的兼容策略：当顶层 `graphify <folder>` 不可用时，退回 `graphify.watch._rebuild_code`
 
 当前 CLI 已支持：
 
@@ -181,10 +185,11 @@
 
 - 直接从 `MemPalace` 数据库或 MCP 自动抽取增量的实现
 - 后台监控或同步服务
+- “安装后自动发现项目并自动执行项目接入”的完整闭环
 
 另一个重要事实是：
 
-- 当前在 `.venv-skill-check` 中验证到的 `graphifyy 0.3.12` 顶层 `graphify --help` 暴露的是 `install`、`query`、`hook`、`claude/codex install` 等入口
+- 早期 CLI 探测时，在 `.venv-skill-check` 中验证到的 `graphifyy 0.3.12` 顶层 `graphify --help` 暴露的是 `install`、`query`、`hook`、`claude/codex install` 等入口
 - 它不是一个稳定公开的“任何版本都支持 `graphify <folder>`”接口
 - 因此 `MemArk build` 当前应被理解为“调用兼容的 Graphify 构建入口”，而不是保证所有 `graphifyy` 安装都可直接按同一命令消费目录
 - 当前实现里，当顶层 CLI 报 `unknown command` 时，会优先尝试在当前执行 `memark` 的 Python 环境里导入并调用 `graphify.watch._rebuild_code`
@@ -200,6 +205,25 @@
 - 而真正的图谱产物，例如 `graphify-out/graph.json`、`graphify-out/GRAPH_REPORT.md`，则落在你运行 `graphify` 的那个项目目录里
 
 所以之前如果看到当前仓库里出现 `graphify-out/`，那表示“`memark` 被当成 Graphify 的当前语料目录”，不是“Graphify skill 被安装进了 `memark` 仓库本身”。
+
+## 当前安装闭环
+
+当前已经实测通过的生产安装路径是：
+
+1. 用当前仓库做 bootstrap 安装源
+2. 执行 `memark install --platform <platform> --source-spec <repo-root>`
+3. 让 `MemArk` 自己创建用户级 runtime：`~/.memark/venv`
+4. 让 `MemArk` 把运行时 skill bundle 写入：
+   - `~/.agents/skills/memark/`
+   - `~/.claude/skills/memark/`
+5. 用安装后的 launcher 执行 `memark doctor`
+
+在 2026-04-09 的 fake-`HOME` 实测里，当前闭环确认到了：
+
+- `mempalace 3.1.0`
+- `graphifyy 0.3.24`
+- 安装后的 `bin/memark` 可直接调用 `doctor`
+- skill bundle 已实际落到 Codex skill 目录
 
 ## 当前 CLI 怎么用
 
@@ -444,7 +468,8 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 ## 文档
 
 - [`README.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/README.md)：项目入口
-- [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)：安装 `MemPalace` 与 `Graphify` 的 AI Skill
+- [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)：默认生产入口 Skill
+- [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)：开发期安装测试 Skill
 - [`docs/PROJECT_SCOPE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PROJECT_SCOPE.md)：项目边界、组件关系、当前状态
 - [`docs/GOVERNANCE_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/GOVERNANCE_MODEL.md)：闲聊、项目对话、产出文档的隔离与晋升模型
 - [`docs/INTERFACE_CONTRACT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INTERFACE_CONTRACT.md)：推荐输入契约、输出契约与 Markdown 包格式

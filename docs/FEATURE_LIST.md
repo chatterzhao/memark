@@ -1,6 +1,6 @@
 # Feature List
 
-本文件基于 2026-04-08 的实际使用结果，重新整理 `MemArk` 的功能列表。
+本文件基于 2026-04-09 的实际使用结果，重新整理 `MemArk` 的功能列表。
 
 依据文件：
 
@@ -14,7 +14,8 @@
 
 它负责：
 
-- 安装并验证 `MemPalace`、`Graphify`
+- 以用户级 AI skill bundle 的方式安装并配置 `MemArk`
+- 通过 `MemArk` 再安装、验证并编排 `MemPalace`、`Graphify`
 - 定义项目级输入边界
 - 把 `Codex` 会话整理成可安全挖掘的项目级输入
 - 编排 `MemPalace` 的项目级 ingest
@@ -34,10 +35,36 @@
 
 说明：
 
-- 根目录 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md) 负责安装 `MemPalace`、`Graphify`
-- 需要覆盖 macOS、Linux、Windows 的 Python 安装路径
-- 需要区分系统 Python 与虚拟环境
-- 需要说明 `graphify install` 是有副作用的真实写入动作
+- 根目录 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md) 不再只是“当前项目临时安装说明”
+- 它应是用户提供给 AI 工具的生产安装入口
+- 它的目标是把一整组 `MemArk` skills 和运行脚本安装到用户 AI 工具的 skill 目录
+- 安装后，AI 工具应能在用户任意项目对话中自动使用 `MemArk`
+- `MemArk` 再负责检查、安装并调度 `MemPalace`、`Graphify`
+
+当前状态：
+
+- 已实现安装目标目录识别：
+  - `~/.claude/skills/memark/`
+  - `~/.agents/skills/memark/`
+  - 以及其他后续支持的平台目录
+- 已实现 skill bundle 复制：
+  - `SKILL.md`
+  - `project.md`
+  - `doctor.md`
+  - `bin/memark`
+  - `bin/memark.cmd`
+  - `manifest.json`
+- 已实现用户级运行入口：
+  - `memark install`
+  - `memark doctor`
+  - 安装后 launcher `~/.agents/skills/memark/bin/memark`
+- 已实现开发期隔离验收入口：
+  - [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)
+
+当前文档中应删除的旧假设：
+
+- “生产 skill 默认只在当前项目创建 `.venv-skill-check/`”
+- “生产 skill 默认停在当前项目内 CLI 已可用”
 
 ### F2. 项目级会话发现
 
@@ -200,6 +227,20 @@
 - 已实现 `memark project-set`
 - 已实现 `memark projects-list`
 
+还需要扩展：
+
+- 区分用户级配置与项目级配置
+- 用户级配置至少应记录：
+  - `memark` 安装根
+  - 默认 palace / workspace 根
+  - AI 平台类型
+  - 已安装的 skill bundle 版本
+- 项目级配置继续记录：
+  - 项目根
+  - sessions 根
+  - mine 间隔
+  - corpus 目录
+
 ### F12. 定时扫描
 
 说明：
@@ -218,6 +259,36 @@
 - 已实现 `memark projects-run` 作为单次 cycle
 - 推荐由 `cron`、`launchd`、Windows Task Scheduler 或 CI 重复调用
 - 尚未实现常驻 daemon
+
+### F13. 用户级自动工作入口
+
+说明：
+
+- 安装完成后，`MemArk` 不能只停留在“用户以后手工输入命令”
+- 用户在 AI 工具中使用任意项目时，AI 应能无感调用 `MemArk`
+- 这要求 skill bundle 中存在稳定入口，而不只是安装说明
+
+至少需要：
+
+- 一个主 Skill，告诉 AI 何时调用 `MemArk`
+- 一个或多个辅助 Skill，负责：
+  - 安装后验证
+  - 项目接入
+  - 运行时工作流
+- 一个稳定脚本入口，供 Skill 调用
+
+### F14. 安装后自动配置
+
+说明：
+
+- 安装过程应能把 `MemArk` 所需的 skill bundle 放入用户 AI 工具目录
+- 必要时写入 AI 工具要求的说明文件、入口文件或 hook 配置
+- 安装完成后应让 `MemArk` 处于“AI 可直接使用”的状态
+
+注意：
+
+- 这里的“自动”是指安装阶段配置好，不代表后台守护进程已经实现
+- 当前仍不能伪装成“已经有完整后台自动同步系统”
 
 ### F13. MemPalace 读取适配器
 

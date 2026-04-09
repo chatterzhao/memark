@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .codex import sync_codex_sessions
 from .graphify import GraphifyError, run_graphify
+from .install import InstallError, install_memark, run_doctor
 from .io import copy_document
 from .mempalace import MemPalaceError, reset_palace_dir, run_mempalace_convo_mine
 from .models import ValidationError
@@ -46,6 +47,39 @@ def _build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--graphify-bin", default="graphify", help="Graphify executable name")
     init_parser.add_argument("--mempalace-bin", default="mempalace", help="MemPalace executable name")
     init_parser.set_defaults(func=cmd_init)
+
+    install_parser = subparsers.add_parser(
+        "install",
+        help="Install MemArk as a user-level runtime plus AI skill bundle",
+    )
+    install_parser.add_argument(
+        "--platform",
+        default="auto",
+        help="Target AI platform: auto, codex, claude, or all",
+    )
+    install_parser.add_argument("--memark-home", help="Override MemArk user-level home directory")
+    install_parser.add_argument("--python-command", help="Python launcher used to create the runtime venv")
+    install_parser.add_argument("--source-spec", help="Package source passed to pip for MemArk itself")
+    install_parser.add_argument(
+        "--skip-runtime-install",
+        action="store_true",
+        help="Only install the skill bundle; do not recreate the runtime venv",
+    )
+    install_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    install_parser.set_defaults(func=cmd_install)
+
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Check user-level MemArk runtime and installed skill bundle health",
+    )
+    doctor_parser.add_argument(
+        "--platform",
+        default="auto",
+        help="Target AI platform: auto, codex, claude, or all",
+    )
+    doctor_parser.add_argument("--memark-home", help="Override MemArk user-level home directory")
+    doctor_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    doctor_parser.set_defaults(func=cmd_doctor)
 
     validate_parser = subparsers.add_parser("validate", help="Validate a room package JSON file")
     validate_parser.add_argument("input", help="JSON file to validate")
@@ -392,6 +426,56 @@ def cmd_init(args: argparse.Namespace) -> int:
     print(f"Inbox documents: {config.inbox_documents_dir}")
     print(f"Corpus: {config.corpus_project_dir()}")
     print(f"MemPalace bin: {config.mempalace_bin}")
+    return 0
+
+
+def cmd_install(args: argparse.Namespace) -> int:
+    result = install_memark(
+        platform=args.platform,
+        memark_home=Path(args.memark_home) if args.memark_home else None,
+        python_command=args.python_command,
+        source_spec=args.source_spec,
+        skip_runtime_install=args.skip_runtime_install,
+    )
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2, ensure_ascii=True))
+        return 0
+
+    print(f"MemArk home: {result.memark_home}")
+    print(f"Runtime venv: {result.venv_dir}")
+    print(f"Python: {result.python_bin}")
+    print(f"MemArk: {result.memark_bin}")
+    print(f"MemPalace: {result.mempalace_bin}")
+    print(f"Graphify: {result.graphify_bin}")
+    print(f"Source spec: {result.source_spec}")
+    for target in result.targets:
+        print(f"Installed skill bundle: {target.platform} -> {target.bundle_dir}")
+    return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    result = run_doctor(
+        platform=args.platform,
+        memark_home=Path(args.memark_home) if args.memark_home else None,
+    )
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2, ensure_ascii=True))
+        return 0 if result.ok() else 1
+
+    print(f"MemArk home: {result.memark_home}")
+    print(f"Runtime venv: {result.venv_dir}")
+    print(f"Python: {result.python_bin}")
+    print(f"MemArk: {result.memark_bin}")
+    print(f"MemPalace: {result.mempalace_bin}")
+    print(f"Graphify: {result.graphify_bin}")
+    for target in result.targets:
+        print(f"Skill bundle: {target.platform} -> {target.bundle_dir}")
+    if result.issues:
+        print("Doctor issues:", file=sys.stderr)
+        for issue in result.issues:
+            print(f"- {issue}", file=sys.stderr)
+        return 1
+    print("Doctor summary: ok")
     return 0
 
 
@@ -1203,7 +1287,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (FileNotFoundError, ValidationError, ValueError, GraphifyError, MemPalaceError, PalaceReadError) as exc:
+    except (FileNotFoundError, ValidationError, ValueError, GraphifyError, MemPalaceError, PalaceReadError, InstallError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

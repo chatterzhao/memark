@@ -8,6 +8,7 @@
 
 - [`README.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/README.md)
 - [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
+- [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)
 - [`docs/PROJECT_SCOPE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PROJECT_SCOPE.md)
 - [`docs/GOVERNANCE_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/GOVERNANCE_MODEL.md)
 - [`docs/INTERFACE_CONTRACT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INTERFACE_CONTRACT.md)
@@ -18,7 +19,7 @@
 - [`docs/IMPLEMENTATION_PLAN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/IMPLEMENTATION_PLAN.md)
 - [`docs/ACCEPTANCE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/ACCEPTANCE_CHECKLIST.md)
 
-它们用于回答“MemArk 是什么、当前仓库提供什么、AI 助手该如何理解这些材料”。
+它们用于回答“MemArk 是什么、当前仓库已经实现到哪里、AI 助手该如何理解这些材料”。
 
 [`docs/MAINTAINER_SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MAINTAINER_SKILL.md) 是维护说明，不是用户入口。
 
