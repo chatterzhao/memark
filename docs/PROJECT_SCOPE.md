@@ -32,6 +32,7 @@ MemArk 关心的正是这条链路：
 `MemPalace` 代表记忆层。它负责：
 
 - 保存原始对话
+- 也支持 ingest 项目文件
 - 提供记忆检索能力
 - 提供 wake-up context
 - 支持通过 hooks / 自动 mine 持续采集
@@ -92,16 +93,26 @@ MemArk 关心的正是这条链路：
 - 只有具备项目知识价值的增量内容，才由 `MemArk` 晋升给 `Graphify`
 - 已落盘的项目文档是 `Graphify` 的一等输入
 
-在 `MemPalace` 的宫殿结构中，`MemArk` 当前选择的默认晋升单位不是整个 `wing`，也不是裸 `drawer`，而是：
+在当前推荐的默认组合里，还应进一步明确：
+
+- `Graphify` 直接扫描项目目录
+- `MemPalace` 默认优先 ingest AI 会话导出，而不是重复全量扫描同一项目目录
+- 对 `Codex` 来说，默认应优先读取 `~/.codex/sessions/**/*.jsonl`，因为 session 文件首行 `session_meta` 带 `cwd`
+- `~/.codex/history.jsonl` 只适合作为全局索引，不适合作为项目级主入口
+- 只有当用户确实需要在 palace 中统一搜索项目文件与会话时，才额外让 `MemPalace` 也 ingest 项目路径
+
+这样做不是否认 `MemPalace` 的项目能力，而是为了减少与 `Graphify` 的默认重叠。
+
+在 `MemPalace` 的宫殿结构中，`MemArk` 当前选择的默认抽取边界不是整个 `wing`，也不是去碰底层 ANN 文件，而是：
 
 - 以 `project wing` 为边界
 - 以 `room` 为主题单位
-- 以 `closet` 为优先抽取对象
-- 必要时附带 `drawer` 引用
+- 以 Chroma 中的 `drawer metadata + chroma:document` 为主抽取面
+- 必要时再在桥接层上做主题级整理与晋升
 
 也就是当前桥接层的推荐默认策略：
 
-`project wing -> hall -> room -> closet (+ drawer refs)`
+`project wing -> room -> drawer metadata + text -> promoted markdown`
 
 更完整的隔离与晋升规则见 [`docs/GOVERNANCE_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/GOVERNANCE_MODEL.md)。
 
@@ -132,16 +143,22 @@ MemArk 关心的正是这条链路：
 - `PROJECT_SCOPE.md`：负责定义项目边界与组件关系
 - `GOVERNANCE_MODEL.md`：负责定义三类材料的隔离、晋升与输入治理
 - `INTERFACE_CONTRACT.md`：负责定义 `MemPalace -> MemArk -> Graphify` 的数据与目录契约
+- `CODEX_SESSION_INGEST_DESIGN.md`：负责定义 `Codex sessions -> project staging -> MemPalace` 的 intake 设计
 - `SKILL.md`：负责指导 AI 助手安装与验证 `MemPalace`、`Graphify`
 - `INSTALL_VERIFICATION.md`：负责记录已经真实执行过的安装与验证结果
 - `IMPLEMENTATION_PLAN.md`：负责定义当前 CLI 的实现边界与下一阶段路线
 - `ACCEPTANCE_CHECKLIST.md`：负责定义当前版本的验收标准
 - `PRODUCT_REQUIREMENTS.md`：负责定义基于上游能力面收敛出的具体产品需求
+- `FEATURE_LIST.md`：负责定义应实现与暂不应声称实现的功能列表
 - `DOCUMENT_STATUS.md`：负责定义正式文档与研究归档的关系
 
 ## 后续应补的文档
 
-如果后续继续推进，建议新增以下文档，而不是继续把内容堆进 README：
+当前已经补充：
+
+- `docs/CODEX_SESSION_INGEST_DESIGN.md`
+
+如果后续继续推进，建议再新增以下文档，而不是继续把内容堆进 README：
 
 - `docs/DEPENDENCY_CONTRACT.md`
 - `docs/OPERATIONS.md`

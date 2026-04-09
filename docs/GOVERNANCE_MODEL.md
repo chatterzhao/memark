@@ -12,81 +12,83 @@
 
 ## 先把 `MemPalace` 看清楚
 
-按 `MemPalace` 官方当前 README，它的宫殿结构不是“一个大向量库”，而是明确分层的：
+从这次实际测试看，`MemPalace` 有两层都很重要。
 
-- `wing`：人或项目，是第一层边界
-- `hall`：记忆类型，如 `hall_facts`、`hall_events`、`hall_discoveries`、`hall_preferences`、`hall_advice`
-- `room`：具体主题，如 `auth-migration`、`ci-pipeline`
-- `closet`：指向原始内容的摘要
-- `drawer`：原始逐字内容，exact words, never summarized
+第一层是它对外讲的宫殿结构：
 
-这意味着，`MemPalace` 的“顶层暴露”首先不是原始文档，而是：
+- `wing`
+- `hall`
+- `room`
+- `closet`
+- `drawer`
 
-1. `wing`
-2. `wing` 下面的 `room`
-3. `room` 下面按 `hall` 归类的主题记忆
+第二层是当前真正容易被 bridge 层消费的落地表面：
 
-对 `MemArk` 来说，这个层次非常关键，因为它决定了什么适合继续送到 `Graphify`。
+- `chroma.sqlite3`
+- 其中的 metadata
+- `chroma:document`
+
+这两层不能混为一谈。
+
+如果讨论“产品语义结构”，`wing / hall / room / closet / drawer` 当然重要。
+但如果讨论“`MemArk` 今天到底从哪里稳定取数据”，当前实测更可靠的切口是：
+
+- `wing`
+- `room`
+- `source_file`
+- `filed_at`
+- `ingest_mode`
+- `extract_mode`
+- `chroma:document`
+
+尤其对 `Codex` 会话场景，更要先加一层现实修正：
+
+- `MemPalace` 不会自动根据 `session_meta.payload.cwd` 帮你拆项目
+- 如果把两个项目的 session 文件放进同一个输入目录，它会被挖成同一个 wing
+
+所以，真正的顶层治理边界其实不是 palace 里已经存在的 taxonomy，而是：
+
+1. `MemArk` 先按项目切输入
+2. `MemPalace` 再 ingest 项目级输入
+3. `MemArk` 再从项目级结果里抽可晋升内容
 
 ## 哪一层最适合喂给 `Graphify`
 
-先说明口径：
+当前必须把“理想结构”和“已验证切口”分开。
 
-下面的“`room + closet (+ drawer refs)`”不是 `MemPalace` 或 `Graphify` 官方强制接口，而是 `MemArk` 当前采用的桥接治理策略。
+理想上，最适合喂给 `Graphify` 的不是整座 palace，也不是裸会话洪水，而是经过主题整理、保留证据的项目知识包。
 
-在这个前提下，结论是：
+但按这次已验证结果，`MemArk` 现在最应依赖的默认抽取单位不是“官方稳定 closet 导出”，而是：
 
-最适合喂给 `Graphify` 的默认单位，不是整个宫殿，也不是裸 `drawer`，而是：
-
-- 以 `project wing` 为边界
-- 以 `room` 为基本主题单元
-- 以 `closet` 为优先抽取对象
-- 必要时附上对应 `drawer` 的原文引用或节选
+- 先用 `session_meta.payload.cwd` 切出项目级 `Codex` 会话
+- 再让 `MemPalace` ingest 这个项目级会话目录
+- 再从 `metadata + chroma:document` 中整理候选主题内容
+- 最后生成 `Graphify-ready` Markdown
 
 也就是：
 
-`project wing -> hall -> room -> closet (+ drawer refs)`
+`project-scoped sessions -> MemPalace convo chunks -> curated promoted markdown`
 
-原因如下。
-
-### 为什么不是直接喂 `drawer`
-
-`drawer` 是原始逐字内容，最完整，也最适合溯源。
-
-但如果把全部 `drawer` 原样喂给 `Graphify`：
+### 为什么不是直接喂全部 `drawer`
 
 - 噪音太大
-- 闲聊、试探、重复表述会很多
-- 同一个主题会出现大量近似内容
-- `Graphify` 会被迫替你做第一轮“去混杂”
+- 重复太多
+- 会话里大量内容只是推进过程，不是最终知识
 
-这会削弱 `MemPalace` 已经做好的结构价值。
+### 为什么也不能只喂 taxonomy
 
-### 为什么也不能只喂最顶层 taxonomy
+- 只有 `wing` 或 `room` 名称太薄
+- `Graphify` 需要的是有正文的 corpus
 
-如果只喂 `wing` 列表、`room` 列表或纯 taxonomy：
+### 当前最稳的默认治理
 
-- 信息太薄
-- 缺少足够的主题内容
-- 只能做目录，做不出有解释力的知识图谱
+当前默认不应再写成“`room + closet` 已经是实测稳定桥接面”。
 
-`Graphify` 需要的不是只有目录名，而是“带有内容的主题包”。
+更准确的说法是：
 
-### 为什么 `room + closet` 最合适
-
-`room` 已经把一堆对话和材料压到一个明确主题上。
-
-`closet` 又是“指向原始内容的摘要”，既比 taxonomy 丰富，又比全量 `drawer` 干净。
-
-因此，最合理的默认输入包是：
-
-- `wing` 作为项目边界
-- `hall` 作为语义标签
-- `room` 作为一篇知识条目的主题
-- `closet` 作为该条目的核心正文
-- `drawer` 只作为引用、证据、追溯链接，不默认全量展开
-
-对 `Graphify` 来说，这种输入最接近“已经过一次项目语义整理的原始语料”，而不是毫无边界的聊天洪水。
+- `room` 仍然适合作为主题边界
+- 但当前已实测、最稳的读取面是 `chroma metadata + chroma:document`
+- `MemArk` 需要自己把 chunked 会话文本整理成更适合 `Graphify` 的主题包
 
 ## 三类材料怎么治理
 
@@ -95,37 +97,36 @@
 这类内容默认应该：
 
 - 进入 `MemPalace`
-- 放在 `wing_general` 或对应 `person wing`
+- 留在 `general` 或 `person` 边界
 - 不默认进入 `Graphify`
 
-原因很简单：
+原因：
 
-- 它适合记忆，不一定适合编译成项目知识
-- 它对长期个性化检索有价值
-- 但对项目图谱常常是噪音
-
-只有当其中某段内容后来被确认与某项目强相关，才允许晋升。
+- 它适合长期记忆和唤醒
+- 但通常不适合直接编译为项目知识
 
 ### 2. 项目 AI 助手对话
 
 这类内容默认应该：
 
-- 进入对应 `project wing`
-- 在 `hall` 中区分是事实、事件、发现还是建议
-- 先保留在 `MemPalace`
-- 再由 `MemArk` 挑出值得晋升的 `room` 增量
+- 先在 `MemArk` 侧按项目切分
+- 再进入对应项目自己的 `MemPalace` ingest 流
+- 先保留原始逐字内容
+- 再由 `MemArk` 抽出值得晋升的内容
 
-这类内容是 `MemArk` 最主要的原料来源。
+这里要特别强调：
 
-因为这里面常常有：
+- 对 `Codex`，默认输入不是 `history.jsonl`
+- 而是 `~/.codex/sessions/**/*.jsonl`
+- 并且必须先按 `session_meta.payload.cwd` 过滤
+
+这类内容是 `MemArk` 最主要的原料来源，因为里面有：
 
 - 决策
 - 设计取舍
-- 故障排查
+- 排障过程
 - 里程碑推进
-- 可复用的经验模式
-
-这些都比泛聊天更适合继续变成项目知识图谱。
+- 可复用方法
 
 ### 3. 对话产生的文档
 
@@ -140,50 +141,43 @@
 - API 说明
 - 调研笔记
 
-一旦这些内容已经落盘，它们就不该继续只作为“聊天记忆”存在，而应成为 `Graphify` 的一等输入。
+一旦已经落盘，它们就是正式 corpus，不应继续只作为“聊天记忆”存在。
 
 ## `MemArk` 应做的不是同步，而是晋升
 
-`MemArk` 最重要的职责不是：
+`MemArk` 最重要的职责不是“全量同步”，而是“项目级晋升”。
 
-- 把 `MemPalace` 全量导出给 `Graphify`
+它不应该：
 
-而是：
+- 把 `MemPalace` 全量倒给 `Graphify`
 
-- 在 `MemPalace` 中识别什么已经值得成为“项目知识输入”
-- 把这些内容稳定地落成项目语料
-- 再交给 `Graphify` 做图谱、报告、Wiki、Obsidian 输出
+它应该：
 
-所以，`MemArk` 的动作应该叫 `promotion`，而不只是 `sync`。
+- 先治理项目边界
+- 再识别哪些项目会话内容值得保留
+- 再把这些内容稳定地落成项目语料
+- 最后交给 `Graphify`
 
 ## 推荐晋升单位
 
-默认推荐以 `room` 为单位做晋升。
+默认推荐以“项目主题包”为单位做晋升。
 
-每次晋升一个 `room` 时，建议生成一个面向 `Graphify` 的 Markdown 包，包含：
+在当前实现口径里，这个主题包通常应包含：
 
-- `project wing`
-- `hall`
-- `room`
-- `closet` 摘要正文
+- 项目标识
+- 候选主题标题
+- 整理后的正文
 - 关键时间
-- 涉及的人、模块、文档、决策
-- 指向原始 `drawer` 的引用信息
+- 涉及的人、模块、文件、文档、决策
+- 指向原始 session 文件或 drawer 的证据引用
 
-这比直接倒原始聊天更稳，因为它：
-
-- 已经有项目边界
-- 已经有主题边界
-- 已经有记忆类型边界
-- 仍然保留对原文的追溯能力
+未来它可以映射成 `room` 级对象，但当前不要把这一层写死成已经验证的官方导出格式。
 
 ## 推荐隔离模型
 
 最稳的做法是三层隔离。
 
-### Layer A: Memory
-
-全部内容先进 `MemPalace`。
+### Layer A: Raw Memory
 
 这里接受：
 
@@ -191,11 +185,7 @@
 - 项目对话
 - 原始材料导入
 
-但必须有 `wing` 边界：
-
-- `wing_general`
-- `wing_person_*`
-- `wing_project_*`
+但对 `Codex` 项目对话，真正第一道边界不是 palace 内 wing，而是 `MemArk` 的项目级 staging。
 
 ### Layer B: Promoted Corpus
 
@@ -203,11 +193,29 @@
 
 这一层的单位不是“所有聊天”，而是：
 
-- `room` 级主题包
+- 晋升后的项目主题包
 - 正式文档
 - 代码和项目文件
 
 这才是 `Graphify` 应该面对的输入目录。
+
+但这里有一条必须额外补上的治理规则：
+
+- 派生产物不能回流
+
+至少要排除：
+
+- `graphify-out/`
+- `.experiments/`
+- `.mempalace/`
+- `memark-work/`
+
+原因不是洁癖，而是已经实测到：
+
+- `MemPalace mine` 会因为忽略规则不同而产生显著不同结果
+- `Graphify detect` 也不会天然替你区分“项目知识”和“上次实验产物”
+
+所以桥接之前，必须先隔离，后晋升。
 
 ### Layer C: Compiled Knowledge
 
@@ -228,8 +236,8 @@
 因此它不应该直接连接到：
 
 - `MemPalace` 全量聊天
-- `wing_general`
-- 未筛选的原始 `drawer` 批量导出
+- `general` 边界
+- 未筛选的原始会话 chunk 批量导出
 
 它最适合连接到：
 
@@ -241,15 +249,14 @@
 
 ## 最终建议
 
-如果要把 `MemPalace` 和 `Graphify` 接得干净，推荐采用下面这条主路径：
+- `MemPalace` 负责保真记忆
+- `Graphify` 负责知识编译
+- `MemArk` 负责项目隔离、增量治理、晋升和编排
 
-1. 所有聊天和原始材料先进入 `MemPalace`
-2. 用 `wing` 做人/项目边界
-3. 在项目 wing 中，以 `room` 为主题单元组织记忆
-4. 默认从 `closet` 抽取内容，必要时附带 `drawer` 引用
-5. 由 `MemArk` 把这些主题包写入项目语料目录
-6. 由 `Graphify` 对该目录做 `--update`、`--wiki`、`--obsidian` 等编译输出
+对 `Codex` 场景，当前最重要的治理不是“先谈 palace 里的 room/closet”，而是：
 
-一句话说：
-
-`MemPalace` 负责保存和找回世界，`Graphify` 负责编译项目知识，`MemArk` 负责把宫殿里真正值得晋升的房间送过去。
+1. 从 `~/.codex/sessions/**/*.jsonl` 读真实 session
+2. 按 `session_meta.payload.cwd` 做项目归属
+3. 为每个项目维护独立 staging
+4. 再执行项目级 `MemPalace convo mine`
+5. 再从项目级结果晋升到 `Graphify`

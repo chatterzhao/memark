@@ -9,13 +9,34 @@
 
 ## 当前判断
 
-基于上游源码、README 和本仓库里的实际验证记录，当前可以把三者关系收敛为：
+基于 2026-04-08 的实际使用结果，而不是只看 README 或源码，当前可以把三者关系收敛为：
 
-- `MemPalace`：记忆层。保留原始内容，按 `wing -> hall -> room -> closet -> drawer` 组织；`closet` 是指向原文的摘要，`drawer` 保留逐字内容；既能 CLI 搜索，也能提供 wake-up context、MCP 工具与自动化采集路径。
-- `Graphify`：知识编译层。把目录语料编译为 `graph.json`、`GRAPH_REPORT.md`、`graph.html`，并进一步支持 wiki / Obsidian / MCP / query 等消费路径。
-- `MemArk`：桥接层。把 `MemPalace` 中具备项目知识价值的内容，整理成 `Graphify` 的稳定输入目录。
+- `MemPalace`：原始记忆层。真实强项是逐字保存、搜索、wake-up、MCP 协议化访问，以及项目/对话两种 ingest 策略。
+- `Graphify`：知识编译层。真实强项是代码图、报告、查询、导出和 AI 工具集成，但安装版 CLI 暴露面比官方技能描述要窄。
+- `MemArk`：桥接与治理层。把原始记忆里值得晋升为项目知识的部分，整理成 `Graphify` 更适合消费的语料边界。
 
 `MemArk` 不是新的记忆系统，也不是新的图谱引擎。
+
+基于真实运行，还需要补一个更保守的判断：
+
+- 只需要记忆找回时，`MemPalace` 单独就已经有价值
+- 只需要代码结构图时，`Graphify` 单独也已经有价值
+- `MemArk` 的价值只在“原始项目记忆 -> 可编译项目知识”这一段
+
+这不是保守表述，而是来自真实运行结果：
+
+- 在当前 `memark` 仓库上，`MemPalace` 如果不额外治理，会把 `.graphify_detect.json`、`entities.json`、`docs/raw/` 这类噪音也一起挖进去
+- 给仓库补上更严格的忽略规则后，当前仓库的 `MemPalace` dogfood 结果收敛到 `28 files / 200 drawers`
+- 同一轮 dogfood 中，`Graphify detect` 从 `35 files / ~18.7k words` 收敛到 `25 files / ~11.6k words`
+- `Graphify` 在当前仓库代码图上实际给出了 `101 nodes / 167 edges / 8 communities`
+- `Graphify benchmark` 在当前仓库图上给出了约 `10.0x` 的每查询 token reduction
+
+详细实测报告：
+
+- [`docs/RESEARCH_MEMPALACE_USAGE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RESEARCH_MEMPALACE_USAGE.md)
+- [`docs/RESEARCH_GRAPHIFY_USAGE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RESEARCH_GRAPHIFY_USAGE.md)
+- [`docs/MEMARK_REASSESSMENT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MEMARK_REASSESSMENT.md)
+- [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)
 
 ## 两个上游到底怎么用，才能发挥它们的强项
 
@@ -36,10 +57,28 @@
 3. 让 AI 在问答时自动调用搜索、wake-up 和记忆工具，而不是把它当成人工知识库 UI
 4. 对长期项目或长期聊天，优先用 hooks / 自动 mine 保持记忆持续更新
 
+在组合使用 `MemPalace + Graphify` 时，当前更推荐的默认分工是：
+
+- `Graphify` 直接扫描项目目录，负责代码和正式文档的结构理解
+- `MemPalace` 优先 ingest `Claude Code` / `Codex` / `ChatGPT` 这类会话导出
+- `MemArk` 再从这些会话记忆里挑出值得晋升到项目语料的部分
+
+原因不是 `MemPalace` 不能扫项目。恰恰相反，官方明确支持：
+
+- `mempalace mine <project_dir>` 处理 `code / docs / notes`
+- `mempalace mine <chat_dir> --mode convos` 处理 `txt / md / json / jsonl` 会话导出
+
+但在组合场景里，如果让两个上游都默认全量重扫整个项目目录，会产生更多重复与治理成本。
+
 需要特别注意的一点是：
 
-- 当前源码里可以看到 drawer metadata 含 `filed_at`
-- 但没有核对到一个稳定公开的“按时间戳取增量” CLI 或 MCP 接口
+- 实际 palace 顶层是 `chroma.sqlite3` 和 ANN 段文件，不是现成 Markdown 语料目录
+- 最适合桥接层消费的表面，是 Chroma 里的 drawer metadata 加 `chroma:document`
+- 对 `Codex` 来说，默认主入口应是 `~/.codex/sessions/**/*.jsonl`，因为 session 文件首行 `session_meta` 带 `cwd`
+- 这次按 `cwd=/Users/zhaoyu/Downloads/code/my-memark/memark` 筛出 `11` 个 session 文件后，实际 mine 出 `216 drawers`
+- `~/.codex/history.jsonl` 只是全局扁平索引，不应被当成项目级主入口
+- 虽然 metadata 里存在 `filed_at`
+- 但这次没有验证到一个稳定公开的“按时间戳取增量” CLI 或 MCP 接口
 
 这意味着 `MemArk` 不能假设上游已经提供现成的 `since` 拉取能力。
 
@@ -61,25 +100,47 @@
 3. 把代码、文档、图像、研究材料和晋升后的项目记忆放在同一个 corpus 边界里
 4. 把 `graph.json` 继续作为 AI 可读的查询面，而不是只看静态 HTML
 
+这次实测还确认了一个重要事实：
+
+- 裸安装 `graphify` CLI 主要暴露的是 query、hook、平台安装等入口
+- 代码图重建是可运行的
+- 但“完整 mixed-corpus semantic pipeline”更多依赖官方 skill 路径，而不是安装版 CLI 的帮助输出
+
 ## MemArk 该做什么
 
 `MemArk` 的合理职责是：
 
-1. 从 `MemPalace` 中识别哪些内容已经值得晋升为项目知识
-2. 以 `project wing` 为边界，按 `room` 组织这些内容
-3. 优先抽取 `closet`，必要时附上 `drawer` 引用
+1. 从 `MemPalace` 的 Chroma drawer text + metadata 中识别哪些内容值得晋升为项目知识
+2. 默认优先从项目相关会话记忆里筛选内容，并以 `project wing` 为边界按 `room` 组织
+3. 保留原文证据与来源，而不是伪造新的记忆层
 4. 落成 `Graphify` 可直接消费的 Markdown 语料
 5. 触发 `Graphify` 对 corpus 做 `--update`、`--wiki` 或其他编译
 
-当前 `MemArk` 的默认设计假设不是整个宫殿，也不是裸 `drawer`，而是：
+当前更稳妥的设计假设不是整个宫殿，也不是裸数据库，而是：
 
-`project wing -> hall -> room -> closet (+ drawer refs)`
+`project wing -> room -> selected drawers -> promoted markdown (+ provenance)`
 
 这是桥接层的治理选择，不是上游官方强制接口。原因很直接：
 
-- 直接喂全量 `drawer`，噪音太大
-- 只喂顶层 taxonomy，信息又太薄
-- `room + closet` 正好保留了主题边界和足够正文
+- 直接喂全量 raw memory，噪音太大
+- 只喂 taxonomy，又太薄
+- 只读 ANN 段文件，没有产品意义
+- drawer metadata + selected text 才是当前最可操作的切口
+
+另外还有一个已经被实测证明的前置条件：
+
+- 先隔离派生产物，再谈桥接
+
+对当前仓库来说，至少要排除：
+
+- `.experiments/`
+- `graphify-out/`
+- `.mempalace/`
+- `memark-work/`
+- `.graphify_detect.json`
+- `.graphify_python`
+- `entities.json`
+- `docs/raw/`
 
 ## 当前仓库提供什么
 
@@ -92,6 +153,7 @@
 - 一个只负责安装上游工具的 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
 - 基于真实命令执行结果的安装验证记录
 - 一个真实可运行的 Python CLI：`memark`
+- 一个针对 `graphifyy 0.3.12` 的兼容策略：当顶层 `graphify <folder>` 不可用时，退回 `graphify.watch._rebuild_code`
 
 当前 CLI 已支持：
 
@@ -101,6 +163,8 @@
 - `memark add-documents`
 - `memark build`
 - `memark run`
+- `memark codex-sync`
+- `memark mempalace-mine`
 - `memark status`
 
 仍然没有提供：
@@ -113,6 +177,19 @@
 - 当前在 `.venv-skill-check` 中验证到的 `graphifyy 0.3.12` 顶层 `graphify --help` 暴露的是 `install`、`query`、`hook`、`claude/codex install` 等入口
 - 它不是一个稳定公开的“任何版本都支持 `graphify <folder>`”接口
 - 因此 `MemArk build` 当前应被理解为“调用兼容的 Graphify 构建入口”，而不是保证所有 `graphifyy` 安装都可直接按同一命令消费目录
+- 当前实现里，当顶层 CLI 报 `unknown command` 时，会优先尝试在当前执行 `memark` 的 Python 环境里导入并调用 `graphify.watch._rebuild_code`
+- 这个 fallback 只覆盖 code graph 重建，不等价于包含文档 / paper / image 语料的完整 semantic build
+- 这意味着当前 `memark build` 虽然已经可以真实产出 `graph.json`，但还不能把“晋升后的 Markdown 记忆”表述成已经进入完整 Graphify 图谱
+
+还需要把“安装位置”和“项目产物位置”区分开：
+
+- `graphify codex install` 安装的 skill 在用户目录 `~/.agents/skills/graphify/`
+- `graphify claude install` 安装的 skill 在用户目录 `~/.claude/skills/graphify/`
+- 这些是全局安装，不在当前 `memark` 仓库里
+- 但 `graphify` 上游源码同时表明，Codex 安装还会在当前项目目录写入 `AGENTS.md` 和 `.codex/hooks.json`
+- 而真正的图谱产物，例如 `graphify-out/graph.json`、`graphify-out/GRAPH_REPORT.md`，则落在你运行 `graphify` 的那个项目目录里
+
+所以之前如果看到当前仓库里出现 `graphify-out/`，那表示“`memark` 被当成 Graphify 的当前语料目录”，不是“Graphify skill 被安装进了 `memark` 仓库本身”。
 
 ## 当前 CLI 怎么用
 
@@ -142,6 +219,26 @@ python3 -m memark promote --workspace ./memark-work
 ```
 
 如果已经有 room package JSON，也可以直接放进去执行同一条主路径。
+
+如果要把 `Codex` 项目会话同步到项目级 staging，再触发 `MemPalace` 对这些会话做 `convos` ingest，可以直接执行：
+
+```bash
+python3 -m memark codex-sync \
+  --workspace ./memark-work \
+  --project-root /abs/path/to/project \
+  --sessions-root ~/.codex/sessions
+
+python3 -m memark mempalace-mine \
+  --workspace ./memark-work
+```
+
+默认情况下，第二条命令会执行：
+
+```bash
+mempalace --palace ./memark-work/.memark/palaces/<project> \
+  mine ./memark-work/.memark/staging/<project>/sessions \
+  --mode convos
+```
 
 `promote` 会把输入写成下面这种 Graphify corpus：
 
@@ -184,7 +281,9 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 - 当前版本不会伪造 `MemPalace` 的 `since` 接口
 - 因此“从宫殿里拿出 room package”这一步，仍需要外部抽取器、AI 助手或后续专门适配器来完成
 - `MemArk` 当前负责的是稳定消费这些 package，并落成 `Graphify` 能直接吃的 corpus
+- 如果当前走的是 `_rebuild_code` fallback，真正进入图谱的主要还是代码树；`promoted/` 与 `documents/` 仍更像是已整理好的待编译语料
 - `memark status --json` 可作为脚本化验收入口
+- 如果要让 `MemPalace` 与 `Graphify` 的实测结果保持干净，项目本身还应维护 `.gitignore` 和 `.graphifyignore`
 
 ## 文档
 

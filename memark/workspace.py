@@ -23,6 +23,7 @@ class WorkspaceConfig:
     workspace: Path
     default_project: str
     graphify_bin: str = "graphify"
+    mempalace_bin: str = "mempalace"
 
     @property
     def config_dir(self) -> Path:
@@ -52,6 +53,10 @@ class WorkspaceConfig:
     def state_dir(self) -> Path:
         return self.config_dir / "state"
 
+    @property
+    def staging_dir(self) -> Path:
+        return self.config_dir / "staging"
+
     def corpus_project_dir(self, project: str | None = None) -> Path:
         name = slugify(project or self.default_project)
         return self.workspace / "corpus" / name
@@ -68,6 +73,15 @@ class WorkspaceConfig:
     def ledger_file(self, project: str | None = None) -> Path:
         return self.state_dir / f"{slugify(project or self.default_project)}-ledger.json"
 
+    def codex_sessions_dir(self, project: str | None = None) -> Path:
+        return self.staging_dir / slugify(project or self.default_project) / "sessions"
+
+    def codex_ledger_file(self, project: str | None = None) -> Path:
+        return self.state_dir / f"{slugify(project or self.default_project)}-codex-sessions.json"
+
+    def palace_dir(self, project: str | None = None) -> Path:
+        return self.config_dir / "palaces" / slugify(project or self.default_project)
+
     def ensure_layout(self, project: str | None = None) -> None:
         for path in [
             self.config_dir,
@@ -76,6 +90,8 @@ class WorkspaceConfig:
             self.inbox_documents_dir,
             self.archive_dir,
             self.state_dir,
+            self.codex_sessions_dir(project),
+            self.palace_dir(project),
             self.promoted_dir(project),
             self.documents_dir(project),
             self.imports_dir(project),
@@ -89,14 +105,25 @@ def resolve_workspace(path: str | None) -> Path:
     return Path(path).expanduser().resolve()
 
 
-def create_workspace(workspace: Path, project: str, graphify_bin: str = "graphify") -> WorkspaceConfig:
-    config = WorkspaceConfig(workspace=workspace, default_project=slugify(project), graphify_bin=graphify_bin)
+def create_workspace(
+    workspace: Path,
+    project: str,
+    graphify_bin: str = "graphify",
+    mempalace_bin: str = "mempalace",
+) -> WorkspaceConfig:
+    config = WorkspaceConfig(
+        workspace=workspace,
+        default_project=slugify(project),
+        graphify_bin=graphify_bin,
+        mempalace_bin=mempalace_bin,
+    )
     config.ensure_layout()
     config.config_file.write_text(
         json.dumps(
             {
                 "default_project": config.default_project,
                 "graphify_bin": graphify_bin,
+                "mempalace_bin": mempalace_bin,
             },
             indent=2,
             ensure_ascii=True,
@@ -121,10 +148,14 @@ def load_workspace(path: str | None) -> WorkspaceConfig:
     graphify_bin = payload.get("graphify_bin")
     if not isinstance(graphify_bin, str) or not graphify_bin.strip():
         graphify_bin = "graphify"
+    mempalace_bin = payload.get("mempalace_bin")
+    if not isinstance(mempalace_bin, str) or not mempalace_bin.strip():
+        mempalace_bin = "mempalace"
     config = WorkspaceConfig(
         workspace=workspace,
         default_project=slugify(default_project),
         graphify_bin=graphify_bin.strip(),
+        mempalace_bin=mempalace_bin.strip(),
     )
     config.ensure_layout()
     return config
