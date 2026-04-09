@@ -6,6 +6,7 @@ import argparse
 import json
 import shutil
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 from .codex import sync_codex_sessions
@@ -13,6 +14,7 @@ from .graphify import GraphifyError, run_graphify
 from .io import copy_document
 from .mempalace import MemPalaceError, run_mempalace_convo_mine
 from .models import ValidationError
+from .package_builder import build_room_package_from_drawers, package_to_dict
 from .palace import PalaceReadError, read_palace_drawers
 from .promote import load_room_packages, promote_path
 from .version import __version__
@@ -158,6 +160,26 @@ def _build_parser() -> argparse.ArgumentParser:
     palace_parser.add_argument("--limit", type=int, help="Maximum number of drawers to return")
     palace_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     palace_parser.set_defaults(func=cmd_palace_export)
+
+    package_parser = subparsers.add_parser(
+        "palace-package",
+        help="Build deterministic room package candidates from palace drawers",
+    )
+    package_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    package_parser.add_argument("--project", help="Target project slug")
+    package_parser.add_argument("--palace-dir", help="Override palace directory")
+    package_parser.add_argument("--ingest-mode", default="convos", help="Filter drawers by ingest_mode")
+    package_parser.add_argument("--wing", help="Filter drawers by wing")
+    package_parser.add_argument("--room", help="Filter drawers by room")
+    package_parser.add_argument("--limit", type=int, help="Maximum number of drawers to read before grouping")
+    package_parser.add_argument("--hall-id", default="discoveries", help="hall_id to assign to generated packages")
+    package_parser.add_argument(
+        "--write-inbox",
+        action="store_true",
+        help="Write one JSON package per room into workspace/inbox/promoted",
+    )
+    package_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    package_parser.set_defaults(func=cmd_palace_package)
 
     status_parser = subparsers.add_parser("status", help="Show workspace and project status")
     status_parser.add_argument("--workspace", default=".", help="Workspace directory")
@@ -483,6 +505,65 @@ def cmd_palace_export(args: argparse.Namespace) -> int:
             print(f"  source_file={drawer.source_file}")
         if drawer.filed_at:
             print(f"  filed_at={drawer.filed_at}")
+    return 0
+
+
+def cmd_palace_package(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    palace_dir = Path(args.palace_dir).expanduser().resolve() if args.palace_dir else config.palace_dir(project)
+    limit = args.limit if args.limit and args.limit > 0 else None
+    drawers = read_palace_drawers(
+        palace_dir,
+        ingest_mode=args.ingest_mode,
+        wing=args.wing,
+        room=args.room,
+        limit=limit,
+    )
+    grouped: dict[tuple[str, str], list] = defaultdict(list)
+    for drawer in drawers:
+        wing = drawer.wing or "unknown"
+        room = drawer.room or "general"
+        grouped[(wing, room)].append(drawer)
+
+    packages = [
+        build_room_package_from_drawers(
+            project=project,
+            wing=wing,
+            room=room,
+            drawers=group_drawers,
+            hall_id=args.hall_id,
+        )
+        for (wing, room), group_drawers in sorted(grouped.items())
+    ]
+    package_payloads = [package_to_dict(item) for item in packages]
+
+    written: list[str] = []
+    if args.write_inbox:
+        for package in package_payloads:
+            destination = config.inbox_promoted_dir / f"palace-{package['room_id']}.json"
+            destination.write_text(json.dumps(package, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+            written.append(str(destination))
+
+    payload = {
+        "project": project,
+        "palace_dir": str(palace_dir),
+        "drawers": len(drawers),
+        "packages": package_payloads,
+        "written": written,
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+
+    print(f"Project: {project}")
+    print(f"Palace dir: {palace_dir}")
+    print(f"Drawers: {len(drawers)}")
+    print(f"Packages: {len(package_payloads)}")
+    for package in package_payloads:
+        print(f"- {package['room_id']} -> {package['room_title']}")
+    for path in written:
+        print(f"written: {path}")
     return 0
 
 

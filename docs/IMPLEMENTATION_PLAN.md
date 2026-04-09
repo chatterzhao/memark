@@ -21,7 +21,8 @@
 7. `memark codex-sync`
 8. `memark mempalace-mine`
 9. `memark palace-export`
-10. `memark status`
+10. `memark palace-package`
+11. `memark status`
 
 ## 为什么第一版这样切
 
@@ -56,6 +57,7 @@
 4. 项目级 session ledger
 5. `memark mempalace-mine`
 6. `memark palace-export`
+7. `memark palace-package`
 
 ## 当前工作区布局
 
@@ -139,7 +141,7 @@ workspace/
 
 ### Phase 4: Palace 读取适配器
 
-状态：已完成第一版只读适配器。
+状态：已完成第一版只读适配器和候选 package 生成。
 
 已完成：
 
@@ -147,11 +149,14 @@ workspace/
 - 读取 `document + metadata`
 - 优先走 Chroma collection 读取
 - 无 `chromadb` 时回退 SQLite 只读提取
+- `memark palace-package`
+- 按 `(wing, room)` 分组生成确定性的 room package JSON
+- 可选直接写入 `inbox/promoted/`
 
 注意：
 
 - 这是 best-effort adapter，不是官方稳定 API 契约
-- 还没有自动生成候选晋升单元或 room package
+- 当前生成的是保守候选 package，不等价于“自动完成知识治理”
 
 ### Phase 5: 自动化编译
 
@@ -180,4 +185,4 @@ workspace/
 - 还没有 Windows CI
 - `Codex session` 去重还不是跨路径内容归并
 - 还没有项目级 palace clean / rebuild / retry 管理命令
-- 还没有从 `palace-export` 自动生成候选 room package / promoted markdown
+- 还没有把 `palace-package -> promote/build` 串成一个明确的一键命令

@@ -817,6 +817,131 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload["count"], 1)
         self.assertEqual(payload["drawers"][0]["drawer_id"], "drawer_b")
 
+    def test_palace_package_builds_room_package_candidates(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (?, ?, ?, X'01')",
+                [
+                    (1, "seg-a", "drawer_auth_1"),
+                    (2, "seg-b", "drawer_auth_2"),
+                ],
+            )
+            metadata_rows = [
+                (1, "chroma:document", "Decision: adopt Clerk for auth and write an ADR.", None, None, None),
+                (1, "wing", "codex_project", None, None, None),
+                (1, "room", "auth_decisions", None, None, None),
+                (1, "source_file", "/tmp/demo/rollout-a.jsonl", None, None, None),
+                (1, "filed_at", "2026-04-09T02:10:00Z", None, None, None),
+                (1, "ingest_mode", "convos", None, None, None),
+                (2, "chroma:document", "Migration checklist: keep billing internal and stage rollout.", None, None, None),
+                (2, "wing", "codex_project", None, None, None),
+                (2, "room", "auth_decisions", None, None, None),
+                (2, "source_file", "/tmp/demo/rollout-b.jsonl", None, None, None),
+                (2, "filed_at", "2026-04-09T02:11:00Z", None, None, None),
+                (2, "ingest_mode", "convos", None, None, None),
+            ]
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                metadata_rows,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli("palace-package", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["drawers"], 2)
+        self.assertEqual(len(payload["packages"]), 1)
+        package = payload["packages"][0]
+        self.assertEqual(package["wing_id"], "project/memark")
+        self.assertEqual(package["room_id"], "auth-decisions")
+        self.assertEqual(len(package["drawer_refs"]), 2)
+        self.assertEqual(package["source_timestamps"]["start"], "2026-04-09T02:10:00Z")
+        self.assertEqual(package["source_timestamps"]["end"], "2026-04-09T02:11:00Z")
+
+    def test_palace_package_can_write_into_inbox(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (1, 'seg-a', 'drawer_debug', X'01')"
+            )
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (1, "chroma:document", "Resolved flaky CI by isolating race in auth tests.", None, None, None),
+                    (1, "wing", "codex_project", None, None, None),
+                    (1, "room", "ci_debugging", None, None, None),
+                    (1, "source_file", "/tmp/demo/rollout-c.jsonl", None, None, None),
+                    (1, "filed_at", "2026-04-09T02:12:00Z", None, None, None),
+                    (1, "ingest_mode", "convos", None, None, None),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli(
+            "palace-package",
+            "--workspace",
+            str(self.workspace),
+            "--write-inbox",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(len(payload["written"]), 1)
+        written_path = Path(payload["written"][0])
+        self.assertTrue(written_path.exists())
+        package = json.loads(written_path.read_text(encoding="utf-8"))
+        self.assertEqual(package["room_id"], "ci-debugging")
+
 
 if __name__ == "__main__":
     unittest.main()
