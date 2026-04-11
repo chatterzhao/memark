@@ -181,6 +181,9 @@
 - `memark project-set`
 - `memark projects-list`
 - `memark projects-run`
+- `memark service-install`
+- `memark service-status`
+- `memark service-uninstall`
 - `memark mempalace-mine`
 - `memark palace-status`
 - `memark palace-clean`
@@ -308,6 +311,14 @@ python3 -m memark project-set \
 python3 -m memark projects-run --workspace ./memark-work
 ```
 
+如果要把这条 cycle 安装成用户级自动调度，而不是手工或自己写定时器，当前可以直接执行：
+
+```bash
+python3 -m memark service-install \
+  --workspace ./memark-work \
+  --interval-seconds 300
+```
+
 `projects-run` 的行为是：
 
 - 先按 `projects.toml` 执行目录级 `codex-sync`
@@ -354,12 +365,13 @@ python3 -m memark worktree-hook-install --source-dir /abs/path/to/repo
 - 让 `MemPalace` 把每个版本当作新的 `source_file` 摄取
 - 在 `palace-package` / `palace-run` 这层按逻辑 session 只取最新 snapshot，避免旧版本混进下游 room package
 
-这不是后台守护进程。
+这不是自写后台守护进程。
 
 更推荐的用法是：
 
-- 用 `cron`、`launchd`、Windows Task Scheduler 或 CI 定时调用 `projects-run`
-- 把常驻调度交给系统层，`MemArk` 只负责单次可重复执行的 cycle
+- 直接用 `memark service-install` 安装用户级 `launchd` 调度
+- 或者继续用 `cron`、Windows Task Scheduler、CI 等系统层调度器重复调用 `projects-run`
+- `MemArk` 仍然只负责单次可重复执行的 cycle，不自己实现常驻 daemon
 
 默认情况下，第二条命令会执行：
 

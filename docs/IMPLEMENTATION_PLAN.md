@@ -188,5 +188,5 @@ workspace/
 - 还没有对 `Graphify` 输出结果做二次验证
 - `Graphify` 的直接构建 CLI 契约在不同版本/入口之间并不稳定
 - 还没有 Windows CI
-- 还没有后台守护进程；当前推荐是外部定时器重复调用 `projects-run`
+- 还没有自写后台守护进程；当前主路径是通过 `memark service-install` 安装用户级 `launchd` 调度，其他平台仍需外部定时器
 - 还没有稳定公开的 `MemPalace` 增量读取契约，当前项目级增量仍以 `Codex session` 文件变化和 `pending_mine` 状态为主

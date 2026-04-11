@@ -35,6 +35,13 @@ from .project_registry import (
     upsert_project_profile,
 )
 from .promote import load_room_packages, promote_file, promote_path
+from .service import (
+    ServiceInstallResult,
+    resolve_scheduler,
+    install_launchd_service,
+    status_launchd_service,
+    uninstall_launchd_service,
+)
 from .version import __version__
 from .workspace import create_workspace, load_workspace, resolve_workspace, slugify
 
@@ -197,6 +204,56 @@ def _build_parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument("--memark-home", help="Override MemArk user-level home directory")
     doctor_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     doctor_parser.set_defaults(func=cmd_doctor)
+
+    service_install_parser = subparsers.add_parser(
+        "service-install",
+        help="Install a user-level scheduler that repeatedly runs 'memark projects-run'",
+    )
+    service_install_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    service_install_parser.add_argument("--project", help="Only run one configured project")
+    service_install_parser.add_argument(
+        "--scheduler",
+        default="auto",
+        help="Scheduler backend: auto or launchd",
+    )
+    service_install_parser.add_argument(
+        "--interval-seconds",
+        type=int,
+        default=300,
+        help="Minimum repeat interval for projects-run; launchd uses a minimum of 60 seconds",
+    )
+    service_install_parser.add_argument("--dry-run", action="store_true", help="Render the scheduler config without installing it")
+    service_install_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    service_install_parser.set_defaults(func=cmd_service_install)
+
+    service_status_parser = subparsers.add_parser(
+        "service-status",
+        help="Show user-level projects-run scheduler status for a workspace",
+    )
+    service_status_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    service_status_parser.add_argument("--project", help="Only inspect the project-specific scheduler label")
+    service_status_parser.add_argument(
+        "--scheduler",
+        default="auto",
+        help="Scheduler backend: auto or launchd",
+    )
+    service_status_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    service_status_parser.set_defaults(func=cmd_service_status)
+
+    service_uninstall_parser = subparsers.add_parser(
+        "service-uninstall",
+        help="Remove a user-level projects-run scheduler for a workspace",
+    )
+    service_uninstall_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    service_uninstall_parser.add_argument("--project", help="Only remove the project-specific scheduler label")
+    service_uninstall_parser.add_argument(
+        "--scheduler",
+        default="auto",
+        help="Scheduler backend: auto or launchd",
+    )
+    service_uninstall_parser.add_argument("--dry-run", action="store_true", help="Render the target scheduler label without removing it")
+    service_uninstall_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    service_uninstall_parser.set_defaults(func=cmd_service_uninstall)
 
     validate_parser = subparsers.add_parser("validate", help="Validate a room package JSON file")
     validate_parser.add_argument("input", help="JSON file to validate")
@@ -679,6 +736,98 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             print(f"- {issue}", file=sys.stderr)
         return 1
     print("Doctor summary: ok")
+    return 0
+
+
+def _print_service_install_result(result: ServiceInstallResult) -> None:
+    print(f"Scheduler: {result.scheduler}")
+    print(f"Workspace: {result.workspace}")
+    if result.project is not None:
+        print(f"Project: {result.project}")
+    print(f"Label: {result.label}")
+    print(f"Interval seconds: {result.interval_seconds}")
+    print(f"Plist path: {result.plist_path}")
+    print(f"Stdout log: {result.stdout_path}")
+    print(f"Stderr log: {result.stderr_path}")
+    print("Command:", " ".join(result.command))
+    if result.environment:
+        print("Environment:")
+        for key, value in sorted(result.environment.items()):
+            print(f"  {key}={value}")
+    print(f"Loaded: {result.loaded}")
+
+
+def cmd_service_install(args: argparse.Namespace) -> int:
+    try:
+        scheduler = resolve_scheduler(args.scheduler)
+        workspace = resolve_workspace(args.workspace)
+        project = slugify(args.project) if args.project else None
+        if scheduler != "launchd":
+            raise InstallError(f"Unsupported scheduler '{scheduler}'")
+        result = install_launchd_service(
+            workspace,
+            project=project,
+            interval_seconds=max(int(args.interval_seconds), 60),
+            dry_run=args.dry_run,
+        )
+    except InstallError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2, ensure_ascii=True))
+        return 0
+    _print_service_install_result(result)
+    return 0
+
+
+def cmd_service_status(args: argparse.Namespace) -> int:
+    try:
+        scheduler = resolve_scheduler(args.scheduler)
+        workspace = resolve_workspace(args.workspace)
+        project = slugify(args.project) if args.project else None
+        if scheduler != "launchd":
+            raise InstallError(f"Unsupported scheduler '{scheduler}'")
+        result = status_launchd_service(workspace, project=project)
+    except InstallError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2, ensure_ascii=True))
+        return 0
+    print(f"Scheduler: {result.scheduler}")
+    print(f"Workspace: {result.workspace}")
+    if result.project is not None:
+        print(f"Project: {result.project}")
+    print(f"Label: {result.label}")
+    print(f"Installed: {result.installed}")
+    print(f"Loaded: {result.loaded}")
+    print(f"Plist path: {result.plist_path}")
+    print("Command:", " ".join(result.command))
+    return 0
+
+
+def cmd_service_uninstall(args: argparse.Namespace) -> int:
+    try:
+        scheduler = resolve_scheduler(args.scheduler)
+        workspace = resolve_workspace(args.workspace)
+        project = slugify(args.project) if args.project else None
+        if scheduler != "launchd":
+            raise InstallError(f"Unsupported scheduler '{scheduler}'")
+        result = uninstall_launchd_service(workspace, project=project, dry_run=args.dry_run)
+    except InstallError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2, ensure_ascii=True))
+        return 0
+    print(f"Scheduler: {result.scheduler}")
+    print(f"Workspace: {result.workspace}")
+    if result.project is not None:
+        print(f"Project: {result.project}")
+    print(f"Label: {result.label}")
+    print(f"Plist path: {result.plist_path}")
+    print(f"Removed: {result.removed}")
+    print(f"Unloaded: {result.unloaded}")
     return 0
 
 
