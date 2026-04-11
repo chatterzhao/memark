@@ -202,6 +202,195 @@ HOME=/tmp/memark-prod-e2e/home \
 - 安装后 launcher 调用
 - `doctor` 自检
 
+## 2026-04-09 晚间重装与真实工作流验收
+
+以下验证不是 fake-`HOME`，而是直接在当前用户目录里重装后执行。
+
+### 1. 删除旧安装并按生产 Skill 重装
+
+执行：
+
+```bash
+rm -rf ~/.memark ~/.agents/skills/memark ~/.claude/skills/memark /tmp/memark-bootstrap
+python3 -m venv /tmp/memark-bootstrap
+/tmp/memark-bootstrap/bin/python -m pip install --upgrade pip
+/tmp/memark-bootstrap/bin/python -m pip install .
+/tmp/memark-bootstrap/bin/python -m memark install \
+  --platform codex \
+  --source-spec /Users/zhaoyu/Downloads/code/my-memark/memark
+~/.memark/venv/bin/memark doctor --platform codex --json
+```
+
+结果：
+
+- 用户级 runtime 成功重建在 [`/Users/zhaoyu/.memark/venv`](/Users/zhaoyu/.memark/venv)
+- Codex skill bundle 成功重建在 [`/Users/zhaoyu/.agents/skills/memark`](/Users/zhaoyu/.agents/skills/memark)
+- `doctor` 返回 `ok: true`
+- runtime 实际版本：
+  - `Python 3.13.6`
+  - `mempalace 3.1.0`
+  - `graphifyy 0.3.27`
+  - `memark 0.1.0`
+
+这里还有一个已经确认的实现细节：
+
+- `memark install` 不再盲目使用当前系统 `python3`
+- 当前会自动选择兼容的 runtime Python
+- 这次实际避开了系统 `Python 3.14`，改用 `Python 3.13`
+
+### 2. 当前仓库会话重喂成功
+
+执行：
+
+```bash
+rm -rf .memark/staging/memark .memark/palaces/memark .memark/state/memark-codex-sessions.json .memark/state/projects-run.json
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark init . --project MemArk
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark project-set \
+  --workspace . \
+  --project MemArk \
+  --path /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --sessions-root ~/.codex/sessions
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark projects-run --workspace . --json
+```
+
+结果：
+
+- `scanned: 1053`
+- `matched: 14`
+- `copied: 14`
+- `mined: true`
+- `mine_elapsed_seconds: 47.651`
+
+随后执行：
+
+```bash
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/mempalace --palace .memark/palaces/memark status
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/mempalace --palace .memark/palaces/memark search "worktree"
+```
+
+结果：
+
+- 当前仓库 palace 状态为 `403 drawers`
+- `search "worktree"` 可以命中当前项目真实会话内容
+
+这次 staged 输入已经不是原始 JSONL 原样复制，而是 transcript Markdown snapshot。
+实际 staged 文件开头包含：
+
+- `Source Path`
+- `Workspace Path`
+- `Session ID`
+- `Session Timestamp`
+
+### 3. worktree 复制验证
+
+#### 无 hook 的已存在 worktree
+
+执行：
+
+```bash
+git worktree add /tmp/memark-worktree-nohook -b test/worktree-nohook
+~/.memark/venv/bin/memark worktree-attach \
+  --source-dir /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --target-dir /tmp/memark-worktree-nohook \
+  --json
+```
+
+结果：
+
+- 新 worktree 初始没有 `.memark`
+- 手动 attach 后有：
+  - [`config.json`](/private/tmp/memark-worktree-nohook/.memark/config.json)
+  - [`projects.toml`](/private/tmp/memark-worktree-nohook/.memark/projects.toml)
+- 不会复制 `.memark/state`
+- 不会复制 `.memark/staging`
+- 不会复制 `.memark/palaces`
+
+#### 安装 hook 后新建 worktree
+
+执行：
+
+```bash
+~/.memark/venv/bin/memark worktree-hook-install \
+  --source-dir /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --json
+git worktree add /tmp/memark-worktree-auto2 -b test/worktree-auto2
+```
+
+结果：
+
+- `post-checkout` hook 成功写入 [`/Users/zhaoyu/Downloads/code/my-memark/memark/.git/hooks/post-checkout`](/Users/zhaoyu/Downloads/code/my-memark/memark/.git/hooks/post-checkout)
+- 新 worktree 自动出现：
+  - [`config.json`](/private/tmp/memark-worktree-auto2/.memark/config.json)
+  - [`projects.toml`](/private/tmp/memark-worktree-auto2/.memark/projects.toml)
+- 没有自动复制运行状态目录
+
+这说明：
+
+- 现在已经能覆盖“后创建的 worktree 自动接入”
+- 复制语义已经收敛成“只复制配置，不复制状态”
+
+### 4. 新 worktree 中的 `codex exec` 验证
+
+执行：
+
+```bash
+codex exec --dangerously-bypass-approvals-and-sandbox \
+  -C /tmp/memark-worktree-auto2 \
+  -o /tmp/memark-worktree-auto2-codex.txt \
+  'Read README.md and answer in one sentence what MemArk currently does. Do not modify files.'
+```
+
+结果：
+
+- `Codex` 成功创建 session
+- workdir 正确是 `/tmp/memark-worktree-auto2`
+- 但这次生成阶段被外部配额限制阻塞，报错为：
+  - `You've hit your usage limit ... try again at 11:31 PM`
+
+尽管如此，新的 session 文件仍然真实落盘在：
+
+- [`/Users/zhaoyu/.codex/sessions/2026/04/09/rollout-2026-04-09T20-13-26-019d7561-56b2-7f52-8488-fd359a7bb971.jsonl`](/Users/zhaoyu/.codex/sessions/2026/04/09/rollout-2026-04-09T20-13-26-019d7561-56b2-7f52-8488-fd359a7bb971.jsonl)
+
+随后对该 worktree 执行：
+
+```bash
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark init /tmp/memark-worktree-auto2 --project MemArk
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark project-set \
+  --workspace /tmp/memark-worktree-auto2 \
+  --project MemArk \
+  --path /tmp/memark-worktree-auto2 \
+  --sessions-root ~/.codex/sessions
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark projects-run \
+  --workspace /tmp/memark-worktree-auto2 \
+  --json
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/mempalace \
+  --palace /tmp/memark-worktree-auto2/.memark/palaces/memark status
+```
+
+结果：
+
+- `scanned: 1054`
+- `matched: 1`
+- `copied: 1`
+- `mined: true`
+- 该 worktree palace 状态为 `2 drawers`
+
+这说明：
+
+- 即便 `codex exec` 因外部配额没有生成 assistant 回复
+- 只要 session 文件已经落盘
+- `MemArk` 仍然能在新 worktree 目录下单独识别并 ingest 它
+
+### 5. 当前唯一剩余外部阻塞
+
+这轮没有完成的最后一步只有一个：
+
+- 在新 worktree 中让 `codex exec` 真正成功返回 assistant 回复
+- 再次 ingest 该回复内容
+- 最后从 palace 搜索命中 assistant 回复
+
+它当前不是实现阻塞，而是外部配额阻塞。
+
 ## 当前仓库上的真实联调结果
 
 以下结果是在当前 `memark` 仓库里直接实测得到的，不是推测。

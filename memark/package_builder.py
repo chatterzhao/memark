@@ -24,6 +24,21 @@ def _excerpt(text: str, limit: int = 180) -> str:
     return compact[: limit - 3].rstrip() + "..."
 
 
+def _session_title_from_text(text: str, limit: int = 72) -> str | None:
+    compact = " ".join(text.split())
+    if not compact:
+        return None
+    if compact.startswith("> "):
+        compact = compact[2:].strip()
+    if compact.startswith(">"):
+        compact = compact[1:].strip()
+    if not compact:
+        return None
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3].rstrip() + "..."
+
+
 def _sort_timestamp(value: str | None) -> tuple[int, str]:
     if not value:
         return (1, "")
@@ -46,6 +61,75 @@ def _logical_source_uri(source_uri: str | None) -> str | None:
         return source_uri
     suffix = match.group("suffix") or ""
     return str(path.with_name(f"{match.group('stem')}{suffix}"))
+
+
+def _logical_source_key(source_uri: str | None) -> str | None:
+    logical = _logical_source_uri(source_uri)
+    if logical is None:
+        return None
+    path = Path(logical)
+    if path.suffix:
+        return path.stem
+    return path.name or logical
+
+
+def _logical_source_title(source_uri: str | None) -> str | None:
+    key = _logical_source_key(source_uri)
+    if not key:
+        return None
+    value = key
+    if value.startswith("rollout-"):
+        value = value[len("rollout-") :]
+    return _titleize(value)
+
+
+_GENERIC_SESSION_LINES = {
+    "continue",
+    "hi",
+    "ok",
+    "继续",
+    "推进",
+    "提交",
+    "由您决定",
+    "卡住了吗？继续",
+    "卡住了吗?继续",
+    "。继续",
+}
+
+
+def _snapshot_session_title(source_uri: str | None) -> str | None:
+    logical_source = _logical_source_uri(source_uri)
+    if not logical_source:
+        return None
+    candidates: list[Path] = []
+    path = Path(logical_source)
+    candidates.append(path)
+    if path.suffix:
+        candidates.extend(sorted(path.parent.glob(f"{path.stem}--*{path.suffix}")))
+    for candidate in candidates:
+        try:
+            lines = candidate.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        title = _snapshot_title_from_lines(lines)
+        if title:
+            return title
+    return None
+
+
+def _snapshot_title_from_lines(lines: list[str]) -> str | None:
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith(("Source Path:", "Workspace Path:", "Session ID:", "Session Timestamp:")):
+            continue
+        if line.startswith(">"):
+            line = line[1:].strip()
+        if not line or len(line) < 6:
+            continue
+        if line.lower() in _GENERIC_SESSION_LINES:
+            continue
+        return _session_title_from_text(line)
+    return None
 
 
 def _latest_drawers_by_logical_source(drawers: list[PalaceDrawer]) -> list[PalaceDrawer]:
@@ -123,6 +207,72 @@ def build_room_package_from_drawers(
     return package
 
 
+def build_session_package_from_drawers(
+    *,
+    project: str,
+    wing: str,
+    room: str,
+    session_key: str,
+    session_title: str | None,
+    drawers: list[PalaceDrawer],
+    hall_id: str = "discoveries",
+) -> RoomPackage:
+    room_id = slugify(f"{room}-{session_key}")
+    ordered = sorted(_latest_drawers_by_logical_source(drawers), key=lambda item: _sort_timestamp(item.filed_at))
+    inferred_title = None
+    for item in ordered:
+        candidate = _session_title_from_text(item.document)
+        if candidate:
+            inferred_title = candidate
+            break
+    room_title = session_title or inferred_title or _titleize(session_key)
+    excerpts = [_excerpt(item.document) for item in ordered[:5]]
+    summary = (
+        f"Collected {len(ordered)} memory drawer(s) from logical session '{session_key}' "
+        f"in room '{room}' and wing '{wing}'."
+    )
+    closet = Closet(
+        closet_id="closet-1",
+        summary=summary,
+        key_points=excerpts,
+        tags=sorted(
+            {
+                slugify(room).replace("-", "_"),
+                slugify(wing).replace("-", "_"),
+                slugify(session_key).replace("-", "_"),
+                "mempalace",
+                "codex_session",
+            }
+        ),
+        evidence_refs=[item.drawer_id for item in ordered[:10]],
+    )
+    timestamps = [item.filed_at for item in ordered if item.filed_at]
+    related_entities = sorted(
+        {
+            f"File: {Path(source_uri).name}"
+            for item in ordered
+            for source_uri in [_logical_source_uri(item.source_file)]
+            if source_uri
+        }
+    )
+    return RoomPackage(
+        wing_id=f"project/{slugify(project)}",
+        wing_kind="project",
+        hall_id=slugify(hall_id),
+        room_id=room_id,
+        room_title=room_title,
+        room_summary=summary,
+        closets=[closet],
+        drawer_refs=[_drawer_ref(item) for item in ordered[:20]],
+        participants=[],
+        related_entities=related_entities,
+        source_time_start=min(timestamps) if timestamps else None,
+        source_time_end=max(timestamps) if timestamps else None,
+        updated_at=max(timestamps) if timestamps else None,
+        project=slugify(project),
+    )
+
+
 def package_to_dict(package: RoomPackage) -> dict[str, object]:
     return {
         "wing_id": package.wing_id,
@@ -150,6 +300,23 @@ def group_drawers_by_room(drawers: list[PalaceDrawer]) -> dict[tuple[str, str], 
         wing = drawer.wing or "unknown"
         room = drawer.room or "general"
         grouped.setdefault((wing, room), []).append(drawer)
+    return grouped
+
+
+def group_drawers_by_logical_session(
+    drawers: list[PalaceDrawer],
+) -> dict[tuple[str, str, str, str], list[PalaceDrawer]]:
+    grouped: dict[tuple[str, str, str, str], list[PalaceDrawer]] = {}
+    for drawer in drawers:
+        wing = drawer.wing or "unknown"
+        room = drawer.room or "general"
+        session_key = _logical_source_key(drawer.source_file) or f"drawer-{drawer.drawer_id}"
+        session_title = (
+            _snapshot_session_title(drawer.source_file)
+            or _logical_source_title(drawer.source_file)
+            or _titleize(session_key)
+        )
+        grouped.setdefault((wing, room, session_key, session_title), []).append(drawer)
     return grouped
 
 

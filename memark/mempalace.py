@@ -41,6 +41,22 @@ def _is_lock_error(stdout: str, stderr: str) -> bool:
     return "database is locked" in combined or "sqlite" in combined and "locked" in combined
 
 
+def _is_incompatible_palace_error(stdout: str, stderr: str) -> bool:
+    combined = f"{stdout}\n{stderr}".lower()
+    markers = (
+        "'_type'",
+        '"_type"',
+        "keyerror: '_type'",
+        "keyerror: \"_type\"",
+        "deprecated configuration",
+        "legacy configuration",
+        "invalid collection configuration",
+        "could not load collection",
+        "could not open chroma",
+    )
+    return any(marker in combined for marker in markers)
+
+
 def _run_mempalace_command(
     command: list[str],
     *,
@@ -68,9 +84,19 @@ def _run_mempalace_command(
         time.sleep(delay)
         delay *= 2
     assert last_completed is not None
-    raise MemPalaceError(
+    detail = (
         f"MemPalace {action} failed with exit code {last_completed.returncode} after {attempts} attempt(s)\n"
         f"STDOUT:\n{last_completed.stdout}\nSTDERR:\n{last_completed.stderr}"
+    )
+    if _is_incompatible_palace_error(last_completed.stdout, last_completed.stderr):
+        detail += (
+            "\nDetected a likely stale or incompatible palace directory. "
+            "Clean and rebuild the palace before retrying. "
+            "If you are using MemArk, run `memark palace-rebuild --workspace <workspace> --project <project>` "
+            "or remove the palace directory and mine again."
+        )
+    raise MemPalaceError(
+        detail
     )
 
 

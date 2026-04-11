@@ -1,0 +1,46 @@
+{
+  "wing_id": "project/memark",
+  "wing_kind": "project",
+  "hall_id": "discoveries",
+  "room_id": "technical-rollout-2026-04-08t19-06-10-019d6ffd-631a-7571-884b-c583b265bbcd",
+  "room_title": "You are performing one bounded extraction task for Graphify research....",
+  "room_summary": "Collected 1 memory drawer(s) from logical session 'rollout-2026-04-08T19-06-10-019d6ffd-631a-7571-884b-c583b265bbcd' in room 'technical' and wing 'sessions'.",
+  "closets": [
+    {
+      "closet_id": "closet-1",
+      "summary": "Collected 1 memory drawer(s) from logical session 'rollout-2026-04-08T19-06-10-019d6ffd-631a-7571-884b-c583b265bbcd' in room 'technical' and wing 'sessions'.",
+      "key_points": [
+        "Rules: - Extract semantic concepts and rationale, not imports already covered by AST. - It is acceptable to add concept nodes that connect code and doc semantics. - Keep it smal..."
+      ],
+      "tags": [
+        "codex_session",
+        "mempalace",
+        "rollout_2026_04_08t19_06_10_019d6ffd_631a_7571_884b_c583b265bbcd",
+        "sessions",
+        "technical"
+      ],
+      "evidence_refs": [
+        "drawer_sessions_technical_790af7dc15a4541d531da23a"
+      ]
+    }
+  ],
+  "drawer_refs": [
+    {
+      "drawer_id": "drawer_sessions_technical_790af7dc15a4541d531da23a",
+      "timestamp": "2026-04-09T20:12:21.051047",
+      "speaker": null,
+      "excerpt": "Rules: - Extract semantic concepts and rationale, not imports already covered by AST. - It is acceptable to add concept nodes that connect code and doc semantics. - Keep it smal...",
+      "source_uri": "/Users/zhaoyu/Downloads/code/my-memark/memark/.memark/staging/memark/sessions/2026/04/08/rollout-2026-04-08T19-06-10-019d6ffd-631a-7571-884b-c583b265bbcd.md"
+    }
+  ],
+  "participants": [],
+  "related_entities": [
+    "File: rollout-2026-04-08T19-06-10-019d6ffd-631a-7571-884b-c583b265bbcd.md"
+  ],
+  "source_timestamps": {
+    "start": "2026-04-09T20:12:21.051047",
+    "end": "2026-04-09T20:12:21.051047"
+  },
+  "updated_at": "2026-04-09T20:12:21.051047",
+  "project": "memark"
+}

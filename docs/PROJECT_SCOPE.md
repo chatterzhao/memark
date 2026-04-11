@@ -25,6 +25,13 @@ MemArk 关心的正是这条链路：
 
 所以，MemArk 的重点不是“再造一个记忆系统”，而是把“记忆内容”晋升成“项目知识输入”，再交给 `Graphify` 编译成知识视图。
 
+还要再加一个更直接的目标定义：
+
+- 前半段：让工具吃进项目相关数据
+- 后半段：让项目内 AI 在需要时能把这些数据消费出来
+
+如果只有 ingest，没有后续消费，`MemArk` 只完成了半个问题。
+
 ## 组件关系
 
 ### MemPalace
@@ -84,6 +91,13 @@ MemArk 关心的正是这条链路：
 - 把内容整理为 `Graphify` 最适合处理的项目语料
 - 定义这条处理管线的入口、格式和工作流
 - 以用户级 AI skill bundle 的方式暴露安装与运行入口
+- 定义“项目 AI 在需要时该先读什么、怎么读”的消费面
+
+对应消费面至少包括：
+
+- `MemPalace` 的 search / wake-up / MCP
+- `MemArk` 晋升后的 `promoted/*.md`
+- `Graphify` 的 `GRAPH_REPORT.md`、`graph.json`、query、wiki、MCP
 
 ## 治理原则
 
@@ -157,6 +171,7 @@ MemArk 关心的正是这条链路：
 - `ACCEPTANCE_CHECKLIST.md`：负责定义当前版本的验收标准
 - `PRODUCT_REQUIREMENTS.md`：负责定义基于上游能力面收敛出的具体产品需求
 - `FEATURE_LIST.md`：负责定义应实现与暂不应声称实现的功能列表
+- `AI_CONSUMPTION_MODEL.md`：负责定义项目 AI 当前应如何消费 `MemPalace`、`Graphify` 与 `MemArk` 产物
 - `DOCUMENT_STATUS.md`：负责定义正式文档与研究归档的关系
 
 ## 后续应补的文档

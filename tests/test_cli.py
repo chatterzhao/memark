@@ -10,7 +10,10 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
+from memark import install as install_mod
+from memark import workspace as workspace_mod
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -48,7 +51,21 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue((self.workspace / "inbox" / "documents").exists())
         self.assertTrue((self.workspace / "corpus" / "memark" / "promoted").exists())
         payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
-        self.assertEqual(payload["mempalace_bin"], "mempalace")
+        self.assertEqual(Path(payload["mempalace_bin"]).name, "mempalace")
+        self.assertEqual(Path(payload["graphify_bin"]).name, "graphify")
+
+    def test_load_workspace_prefers_user_runtime_binaries(self) -> None:
+        with (
+            mock.patch("memark.workspace.shutil.which", return_value=None),
+            mock.patch.object(workspace_mod, "_runtime_binary", side_effect=lambda name: f"/tmp/runtime/{name}"),
+        ):
+            config = workspace_mod.create_workspace(self.workspace, "MemArk")
+            self.assertEqual(config.mempalace_bin, "mempalace")
+            self.assertEqual(config.graphify_bin, "graphify")
+
+            loaded = workspace_mod.load_workspace(str(self.workspace))
+            self.assertEqual(loaded.mempalace_bin, "/tmp/runtime/mempalace")
+            self.assertEqual(loaded.graphify_bin, "/tmp/runtime/graphify")
 
     def test_install_bundle_writes_user_skill_dir(self) -> None:
         fake_home = Path(self.tmpdir.name) / "home"
@@ -94,7 +111,13 @@ class MemArkCliTests(unittest.TestCase):
         memark_home = fake_home / ".memark-test"
         scripts_dir = memark_home / "venv" / "bin"
         scripts_dir.mkdir(parents=True, exist_ok=True)
-        for name in ("python", "memark", "mempalace", "graphify"):
+        python_bin = scripts_dir / "python"
+        python_bin.write_text(
+            "#!/bin/sh\nif [ \"$1\" = \"-c\" ]; then\n  printf '3.13\\n'\nfi\nexit 0\n",
+            encoding="utf-8",
+        )
+        python_bin.chmod(python_bin.stat().st_mode | stat.S_IEXEC)
+        for name in ("memark", "mempalace", "graphify"):
             path = scripts_dir / name
             path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             path.chmod(path.stat().st_mode | stat.S_IEXEC)
@@ -115,6 +138,52 @@ class MemArkCliTests(unittest.TestCase):
         doctor = run_cli("doctor", "--platform", "codex", cwd=ROOT, env=env)
         self.assertEqual(doctor.returncode, 0, doctor.stderr)
         self.assertIn("Doctor summary: ok", doctor.stdout)
+
+    def test_default_python_command_prefers_supported_interpreter(self) -> None:
+        with mock.patch.object(
+            install_mod,
+            "_python_version",
+            side_effect=lambda command: {
+                "python3.13": (3, 13),
+                "python3.12": (3, 12),
+                "python3.11": (3, 11),
+                "python3.10": (3, 10),
+                "python3": (3, 14),
+                "python": (3, 14),
+            }.get(command),
+        ):
+            selected = install_mod._resolve_python_command("python3", "python3.13", "python3.12")
+        self.assertEqual(selected, "python3.13")
+
+    def test_doctor_rejects_unsupported_runtime_python(self) -> None:
+        fake_home = Path(self.tmpdir.name) / "home"
+        memark_home = fake_home / ".memark-test"
+        scripts_dir = memark_home / "venv" / "bin"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        python_bin = scripts_dir / "python"
+        python_bin.write_text("#!/bin/sh\nprintf '3.14\\n'\n", encoding="utf-8")
+        python_bin.chmod(python_bin.stat().st_mode | stat.S_IEXEC)
+        for name in ("memark", "mempalace", "graphify"):
+            path = scripts_dir / name
+            path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            path.chmod(path.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "MEMARK_HOME": str(memark_home),
+        }
+        install = run_cli(
+            "install",
+            "--platform",
+            "codex",
+            "--skip-runtime-install",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+
+        doctor = run_cli("doctor", "--platform", "codex", cwd=ROOT, env=env)
+        self.assertNotEqual(doctor.returncode, 0)
+        self.assertIn("unsupported runtime python version", doctor.stderr)
 
     def test_validate_and_promote_room_package(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -196,6 +265,89 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         copied = self.workspace / "corpus" / "memark" / "documents" / "architecture.md"
         self.assertTrue(copied.exists())
+
+    def test_query_searches_promoted_and_documents(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
+        promoted.write_text(
+            textwrap.dedent(
+                """\
+                ---
+                room_title: "Bridge Governance"
+                ---
+
+                # Bridge Governance
+
+                Graphify fallback is code-only today.
+                """
+            ),
+            encoding="utf-8",
+        )
+        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
+        document.write_text("# Notes\n\nGraphify fallback is code-only today.\n", encoding="utf-8")
+
+        result = run_cli("query", "graphify fallback", "--workspace", str(self.workspace), cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('[promoted] Bridge Governance', result.stdout)
+        self.assertIn('[documents] Notes', result.stdout)
+
+    def test_query_can_filter_scope_and_render_json(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
+        promoted.write_text("# Bridge Governance\n\nSession knowledge lives here.\n", encoding="utf-8")
+        imports = self.workspace / "corpus" / "memark" / "imports" / "repo.md"
+        imports.parent.mkdir(parents=True, exist_ok=True)
+        imports.write_text("# Repo Import\n\nSession knowledge should not show up in promoted-only scope.\n", encoding="utf-8")
+
+        result = run_cli(
+            "query",
+            "session knowledge",
+            "--workspace",
+            str(self.workspace),
+            "--scope",
+            "promoted",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["scopes"], ["promoted"])
+        self.assertEqual(len(payload["hits"]), 1)
+        self.assertEqual(payload["hits"][0]["scope"], "promoted")
+        self.assertEqual(payload["hits"][0]["title"], "Bridge Governance")
+
+    def test_graphify_handoff_renders_prompt_and_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
+        promoted.write_text("# Bridge Governance\n\nSession-derived project knowledge.\n", encoding="utf-8")
+        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
+        document.write_text("# Notes\n\nProject notes live here.\n", encoding="utf-8")
+        imports = self.workspace / "corpus" / "memark" / "imports" / "paper.md"
+        imports.parent.mkdir(parents=True, exist_ok=True)
+        imports.write_text("# Imported\n\nExternal material.\n", encoding="utf-8")
+
+        result = run_cli("graphify-handoff", "--workspace", str(self.workspace), cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        corpus_dir = (self.workspace / "corpus" / "memark").resolve()
+        self.assertIn(f"Graphify handoff target: {corpus_dir}", result.stdout)
+        self.assertIn(f"Recommended command: /graphify {corpus_dir} --update", result.stdout)
+        self.assertIn("promoted: 1 files", result.stdout)
+        self.assertIn("documents: 1 files", result.stdout)
+        self.assertIn("imports: 1 files", result.stdout)
+        self.assertIn("Use the Graphify skill, not bare memark build", result.stdout)
+
+    def test_graphify_handoff_can_render_json(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
+        promoted.write_text("# Bridge Governance\n\nSession-derived project knowledge.\n", encoding="utf-8")
+
+        result = run_cli("graphify-handoff", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["project"], "memark")
+        self.assertTrue(payload["recommended_command"].endswith(" --update"))
+        self.assertIn("Use the Graphify skill", payload["prompt"])
+        self.assertEqual(payload["inventories"][0]["scope"], "promoted")
 
     def test_build_uses_graphify_binary(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -304,8 +456,10 @@ class MemArkCliTests(unittest.TestCase):
 
         result = run_cli("build", "--workspace", str(self.workspace), cwd=ROOT, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Graphify build completed", result.stdout)
+        self.assertIn("Graphify step completed", result.stdout)
+        self.assertIn("Mode: watch-fallback", result.stdout)
         self.assertIn("graphify.watch", result.stdout)
+        self.assertIn("does not prove promoted markdown entered the graph", result.stdout)
         self.assertTrue((self.workspace / "corpus" / "memark" / "graphify-out" / "graph.json").exists())
 
     def test_build_fallback_uses_graphify_environment_python(self) -> None:
@@ -572,9 +726,11 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload["matched"], 1)
         self.assertEqual(payload["copied"], 1)
         staged_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "08"
-        staged_matches = sorted(staged_dir.glob("rollout-a--*.jsonl"))
+        staged_matches = sorted(staged_dir.glob("rollout-a--*.md"))
         self.assertEqual(len(staged_matches), 1)
-        self.assertFalse(list(staged_dir.glob("rollout-b--*.jsonl")))
+        self.assertFalse(list(staged_dir.glob("rollout-b--*.md")))
+        content = staged_matches[0].read_text(encoding="utf-8")
+        self.assertIn("Workspace Path:", content)
 
     def test_codex_sync_updates_changed_session_and_reports_unchanged(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -661,7 +817,7 @@ class MemArkCliTests(unittest.TestCase):
         third_payload = json.loads(third.stdout)
         self.assertEqual(third_payload["updated"], 1)
         staged_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "08"
-        self.assertEqual(len(list(staged_dir.glob("rollout-a--*.jsonl"))), 2)
+        self.assertEqual(len(list(staged_dir.glob("rollout-a--*.md"))), 2)
 
     def test_codex_sync_supports_cwd_prefix(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -710,11 +866,11 @@ class MemArkCliTests(unittest.TestCase):
             str(self.workspace),
             "--project",
             "MemArk",
-            "--root",
+            "--path",
             str(ROOT),
             "--sessions-root",
             str(self.workspace / "codex-sessions"),
-            "--cwd-prefix",
+            "--extra-path",
             str(self.workspace / "worktrees"),
             "--mine-interval-seconds",
             "180",
@@ -724,11 +880,99 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["project"], "memark")
-        self.assertEqual(payload["root"], str(ROOT))
+        self.assertEqual(payload["path"], str(ROOT))
         self.assertEqual(payload["mine_interval_seconds"], 180)
         registry = (self.workspace / ".memark" / "projects.toml").read_text(encoding="utf-8")
         self.assertIn('name = "memark"', registry)
-        self.assertIn(f'root = "{ROOT}"', registry)
+        self.assertIn(f'path = "{ROOT}"', registry)
+
+    def test_worktree_attach_copies_hidden_tool_config(self) -> None:
+        source_dir = self.workspace / "repo"
+        target_dir = self.workspace / "worktree"
+        (source_dir / ".memark").mkdir(parents=True)
+        (source_dir / ".codex").mkdir(parents=True)
+        (source_dir / ".claude").mkdir(parents=True)
+        (source_dir / ".mempalace").mkdir(parents=True)
+        (source_dir / ".memark" / "state").mkdir(parents=True)
+        (source_dir / ".memark" / "state" / "ledger.json").write_text('{"old":true}\n', encoding="utf-8")
+        (source_dir / ".memark" / "config.json").write_text('{"ok":true}\n', encoding="utf-8")
+        (source_dir / ".memark" / "projects.toml").write_text("version = 1\n", encoding="utf-8")
+        (source_dir / ".codex" / "config.toml").write_text("model = 'gpt-5.4'\n", encoding="utf-8")
+        (source_dir / ".claude" / "settings.json").write_text('{"hooks":[]}\n', encoding="utf-8")
+        (source_dir / ".mempalace" / "config.toml").write_text("mode = 'convos'\n", encoding="utf-8")
+        (source_dir / "AGENTS.md").write_text("# Graphify\n", encoding="utf-8")
+
+        result = run_cli(
+            "worktree-attach",
+            "--source-dir",
+            str(source_dir),
+            "--target-dir",
+            str(target_dir),
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertIn(".memark", payload["copied"])
+        self.assertIn(".codex", payload["copied"])
+        self.assertIn(".claude", payload["copied"])
+        self.assertIn(".mempalace", payload["copied"])
+        self.assertIn("AGENTS.md", payload["copied"])
+        self.assertEqual((target_dir / ".memark" / "config.json").read_text(encoding="utf-8"), '{"ok":true}\n')
+        self.assertEqual((target_dir / ".memark" / "projects.toml").read_text(encoding="utf-8"), "version = 1\n")
+        self.assertFalse((target_dir / ".memark" / "state").exists())
+        self.assertEqual((target_dir / ".codex" / "config.toml").read_text(encoding="utf-8"), "model = 'gpt-5.4'\n")
+        self.assertEqual((target_dir / ".claude" / "settings.json").read_text(encoding="utf-8"), '{"hooks":[]}\n')
+        self.assertEqual((target_dir / ".mempalace" / "config.toml").read_text(encoding="utf-8"), "mode = 'convos'\n")
+        self.assertEqual((target_dir / "AGENTS.md").read_text(encoding="utf-8"), "# Graphify\n")
+
+    def test_worktree_hook_install_auto_attaches_hidden_config_on_git_worktree_add(self) -> None:
+        repo_dir = self.workspace / "repo"
+        repo_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "init"], cwd=repo_dir, check=True, text=True, capture_output=True)
+        subprocess.run(["git", "config", "user.name", "MemArk Test"], cwd=repo_dir, check=True, text=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "memark@example.com"],
+            cwd=repo_dir,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+        (repo_dir / ".gitignore").write_text(".memark/\n", encoding="utf-8")
+        (repo_dir / ".codex").mkdir(parents=True)
+        (repo_dir / ".codex" / "config.toml").write_text("model = 'gpt-5.4'\n", encoding="utf-8")
+        (repo_dir / "README.md").write_text("# Demo\n", encoding="utf-8")
+        subprocess.run(["git", "add", ".gitignore", ".codex/config.toml", "README.md"], cwd=repo_dir, check=True, text=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", "init"], cwd=repo_dir, check=True, text=True, capture_output=True)
+        (repo_dir / ".memark").mkdir(parents=True)
+        (repo_dir / ".memark" / "config.json").write_text('{"ok":true}\n', encoding="utf-8")
+        (repo_dir / ".memark" / "state").mkdir(parents=True)
+        (repo_dir / ".memark" / "state" / "ledger.json").write_text('{"stale":true}\n', encoding="utf-8")
+
+        install = run_cli(
+            "worktree-hook-install",
+            "--source-dir",
+            str(repo_dir),
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+        payload = json.loads(install.stdout)
+        hook_path = Path(payload["hook_path"])
+        self.assertTrue(hook_path.exists())
+
+        worktree_dir = self.workspace / "repo-worktree"
+        subprocess.run(
+            ["git", "worktree", "add", str(worktree_dir), "-b", "test/worktree-auto-attach"],
+            cwd=repo_dir,
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+
+        self.assertTrue((worktree_dir / ".memark" / "config.json").exists())
+        self.assertEqual((worktree_dir / ".memark" / "config.json").read_text(encoding="utf-8"), '{"ok":true}\n')
+        self.assertFalse((worktree_dir / ".memark" / "state").exists())
 
     def test_projects_run_syncs_and_mines_configured_project(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -801,7 +1045,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertGreaterEqual(payload[0]["mine_elapsed_seconds"], 0)
         self.assertEqual(counter_file.read_text(encoding="utf-8"), "1")
         staged_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09"
-        self.assertEqual(len(list(staged_dir.glob("rollout-a--*.jsonl"))), 1)
+        self.assertEqual(len(list(staged_dir.glob("rollout-a--*.md"))), 1)
 
         second = run_cli("projects-run", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
         self.assertEqual(second.returncode, 0, second.stderr)
@@ -1395,6 +1639,33 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue(keep_file.exists())
         self.assertIn(str(palace_dir), log_file.read_text(encoding="utf-8"))
 
+    def test_mempalace_mine_reports_rebuild_hint_for_incompatible_palace(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.md"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text("Source Path: /tmp/example.jsonl\nWorkspace Path: /tmp/project\n", encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempalace = fake_bin_dir / "mempalace"
+        fake_mempalace.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                echo "KeyError: '_type'" >&2
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempalace.chmod(fake_mempalace.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("mempalace-mine", "--workspace", str(self.workspace), cwd=ROOT, env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("stale or incompatible palace directory", result.stderr)
+        self.assertIn("memark palace-rebuild", result.stderr)
+
     def test_palace_export_reads_convo_drawers_from_sqlite_fallback(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         palace_dir = self.workspace / ".memark" / "palaces" / "memark"
@@ -1645,6 +1916,116 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue(written_path.exists())
         package = json.loads(written_path.read_text(encoding="utf-8"))
         self.assertEqual(package["room_id"], "ci-debugging")
+
+    def test_palace_package_can_group_by_session(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        snapshot_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        (snapshot_dir / "rollout-alpha--111-aaaaaaaaaaaa.md").write_text(
+            "Source Path: /tmp/demo/rollout-alpha.jsonl\n"
+            f"Workspace Path: {self.workspace}\n"
+            "Session ID: alpha\n"
+            "Session Timestamp: 2026-04-09T02:10:00Z\n\n"
+            "> Continue\n\n"
+            "> Design the MemArk install flow for production skill bundles.\n",
+            encoding="utf-8",
+        )
+        (snapshot_dir / "rollout-alpha--222-bbbbbbbbbbbb.md").write_text(
+            "Source Path: /tmp/demo/rollout-alpha.jsonl\n"
+            f"Workspace Path: {self.workspace}\n"
+            "Session ID: alpha\n"
+            "Session Timestamp: 2026-04-09T02:11:00Z\n\n"
+            "> Continue\n\n"
+            "> Design the MemArk install flow for production skill bundles.\n",
+            encoding="utf-8",
+        )
+        (snapshot_dir / "rollout-beta--333-cccccccccccc.md").write_text(
+            "Source Path: /tmp/demo/rollout-beta.jsonl\n"
+            f"Workspace Path: {self.workspace}\n"
+            "Session ID: beta\n"
+            "Session Timestamp: 2026-04-09T02:12:00Z\n\n"
+            "> Compare MemPalace search and Graphify query for project AI consumption.\n",
+            encoding="utf-8",
+        )
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.executemany(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (?, ?, ?, ?)",
+                [
+                    (1, "seg-a", "drawer_a", b"\x01"),
+                    (2, "seg-b", "drawer_b", b"\x02"),
+                    (3, "seg-c", "drawer_c", b"\x03"),
+                ],
+            )
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (1, "chroma:document", "Session A first decision.", None, None, None),
+                    (1, "wing", "sessions", None, None, None),
+                    (1, "room", "technical", None, None, None),
+                    (1, "source_file", str(snapshot_dir / "rollout-alpha--111-aaaaaaaaaaaa.md"), None, None, None),
+                    (1, "filed_at", "2026-04-09T02:10:00Z", None, None, None),
+                    (1, "ingest_mode", "convos", None, None, None),
+                    (2, "chroma:document", "Session A follow-up.", None, None, None),
+                    (2, "wing", "sessions", None, None, None),
+                    (2, "room", "technical", None, None, None),
+                    (2, "source_file", str(snapshot_dir / "rollout-alpha--222-bbbbbbbbbbbb.md"), None, None, None),
+                    (2, "filed_at", "2026-04-09T02:11:00Z", None, None, None),
+                    (2, "ingest_mode", "convos", None, None, None),
+                    (3, "chroma:document", "Session B decision.", None, None, None),
+                    (3, "wing", "sessions", None, None, None),
+                    (3, "room", "technical", None, None, None),
+                    (3, "source_file", str(snapshot_dir / "rollout-beta--333-cccccccccccc.md"), None, None, None),
+                    (3, "filed_at", "2026-04-09T02:12:00Z", None, None, None),
+                    (3, "ingest_mode", "convos", None, None, None),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli(
+            "palace-package",
+            "--workspace",
+            str(self.workspace),
+            "--group-by",
+            "session",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["group_by"], "session")
+        self.assertEqual(len(payload["packages"]), 2)
+        room_ids = {item["room_id"] for item in payload["packages"]}
+        self.assertEqual(room_ids, {"technical-rollout-alpha", "technical-rollout-beta"})
+        titles = {item["room_id"]: item["room_title"] for item in payload["packages"]}
+        self.assertEqual(titles["technical-rollout-alpha"], "Design the MemArk install flow for production skill bundles.")
+        self.assertEqual(
+            titles["technical-rollout-beta"],
+            "Compare MemPalace search and Graphify query for project AI consumption.",
+        )
 
     def test_palace_run_promotes_packages_without_build(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)

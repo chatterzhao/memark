@@ -58,7 +58,7 @@ description: Production installer skill that bootstraps MemArk into a user-level
 - `mempalace mine`
 - `graphify codex install`
 - `graphify claude install`
-- 手写项目级配置
+- 手写目录级配置
 - 假设安装后已经完成项目接入
 
 ## 已确认的上游事实
@@ -189,6 +189,20 @@ py -m venv .memark-bootstrap
 - `memark` 可执行文件路径
 - skill bundle 安装到哪个平台目录
 - `doctor` 是否通过
+
+## 安装后默认使用方式
+
+安装完成后，运行时 `MemArk` skill bundle 应指导 AI 采用下面的消费顺序：
+
+1. 需要历史讨论与上下文时，优先 `mempalace search` / `mempalace wake-up`
+2. 需要读晋升后的项目知识时，优先 `memark query "<topic>" --workspace <workspace> --project <name>`
+3. 需要看代码结构和图谱导航时，再使用 `Graphify` 的 report / query
+4. 需要把当前 `MemArk` 语料继续交给 `Graphify` skill 做 mixed-corpus 编译时，先运行 `memark graphify-handoff --workspace <workspace> --project <name>`
+
+当前不要把安装结果表述成：
+
+- promoted markdown 已自动进入 `Graphify` 图
+- `memark build` 已自动完成 mixed-corpus semantic extraction
 
 ## 何时切到开发版
 

@@ -16,11 +16,12 @@
 
 - 以用户级 AI skill bundle 的方式安装并配置 `MemArk`
 - 通过 `MemArk` 再安装、验证并编排 `MemPalace`、`Graphify`
-- 定义项目级输入边界
-- 把 `Codex` 会话整理成可安全挖掘的项目级输入
-- 编排 `MemPalace` 的项目级 ingest
-- 把值得保留的项目过程知识晋升为 `Graphify-ready` 语料
+- 定义目录级输入边界
+- 把 `Codex` 会话整理成可安全挖掘的目录级输入
+- 编排 `MemPalace` 的目录级 ingest
+- 把值得保留的目录过程知识晋升为 `Graphify-ready` 语料
 - 触发兼容的 `Graphify` 编译入口
+- 在上游 mixed-corpus 编译仍由 skill 主导时，生成准确的 Graphify handoff
 
 它不负责：
 
@@ -47,6 +48,9 @@
   - `~/.claude/skills/memark/`
   - `~/.agents/skills/memark/`
   - 以及其他后续支持的平台目录
+- 已实现兼容 Python 运行时自动选择：
+  - 当前会优先选择 `3.13/3.12/3.11/3.10`
+  - 当前会明确拒绝不兼容的 `3.14+` runtime
 - 已实现 skill bundle 复制：
   - `SKILL.md`
   - `project.md`
@@ -66,32 +70,40 @@
 - “生产 skill 默认只在当前项目创建 `.venv-skill-check/`”
 - “生产 skill 默认停在当前项目内 CLI 已可用”
 
-### F2. 项目级会话发现
+### F2. 目录级会话发现
 
 说明：
 
 - 扫描 `~/.codex/sessions/**/*.jsonl`
 - 读取每个 session 文件首行 `session_meta`
-- 从 `session_meta.payload.cwd` 判断项目归属
-- 支持把多个 worktree、子目录映射回同一个项目根
+- 从 `session_meta.payload.cwd` 判断目录归属
+- 以目录路径为主模型，不要求目录必须处于 git 仓库中
+- 支持把附加目录路径映射到同一个目录工作单元
 
 为什么必须有：
 
 - 实测证明 `~/.codex/history.jsonl` 不带 `cwd`
 - 实测证明 `MemPalace convo mine` 不会自动把混合项目输入再拆开
 
-### F3. 项目级 staging
+### F3. 目录级 staging
 
 说明：
 
-- 每个项目需要独立的 staging 目录
-- 只把属于该项目的 session 文件写入该项目的 staging
+- 每个目录工作单元需要独立的 staging 目录
+- 只把属于该目录工作单元的 session 文件写入对应 staging
+- 默认写入的是 transcript Markdown snapshot，而不是原始 JSONL 原样复制
 - 当 session 内容变化时，写成新的不可变 snapshot 路径
 - `MemPalace` 只对这个 staging 目录执行 `mine --mode convos`
 
 当前状态：
 
 - 已实现为 `memark codex-sync`
+- 当前 staged snapshot 会保留：
+  - `Source Path`
+  - `Workspace Path`
+  - `Session ID`
+  - `Session Timestamp`
+  - 用户 / assistant transcript
 
 ### F4. 增量同步与去重
 
@@ -114,7 +126,7 @@
 - 已实现 package 层对同一逻辑 session 的最新 snapshot 选择
 - “跨路径同内容归并”目前仍是防御性增强项，不是已验证主需求
 
-### F5. 项目边界治理
+### F5. 目录边界治理
 
 说明：
 
@@ -137,7 +149,7 @@
 
 说明：
 
-- 以项目为单位执行 `mempalace mine <staging> --mode convos`
+- 以目录工作单元为单位执行 `mempalace mine <staging> --mode convos`
 - 明确 palace 路径
 - 明确清理、重建、重跑的运维入口
 
@@ -153,7 +165,7 @@
 
 说明：
 
-- 从 `MemPalace` 已 ingest 的项目会话中抽取有价值内容
+- 从 `MemPalace` 已 ingest 的目录会话中抽取有价值内容
 - 生成 `Graphify-ready` Markdown
 - 默认保留来源、会话、文件、时间等 provenance
 
@@ -161,14 +173,18 @@
 
 - 已实现 `memark palace-export` 作为只读 adapter
 - 已实现 `memark palace-package`
-- 当前能按 `(wing, room)` 生成确定性候选 package
+- 已实现 `palace-package --group-by session`
+- 已实现按逻辑 session 只取最新 snapshot，避免同一会话旧版本继续流入下游
+- 已实现优先从 staging snapshot 的首个有效会话开场语句提取 `room_title`，避免完全退化成时间戳标题
+- 当前能按 `(wing, room)` 或 `logical session` 生成确定性候选 package
 - 当前仍未实现“自动判定哪些内容值得晋升”的策略层
+- 当前 `room_title` 仍然只是启发式标题，不是稳定的会话摘要
 
 ### F8. 语料分层落盘
 
 说明：
 
-- 落成统一的项目 corpus 目录
+- 落成统一的目录 corpus 目录
 - 至少保留：
   - `promoted/`
   - `documents/`
@@ -183,13 +199,30 @@
   - code-only fallback
   - 真正 mixed-corpus build
 
+当前状态：
+
+- 已实现安装版 `graphify` CLI 不暴露直接 folder build 时的兼容 fallback
+- 当前 fallback 依赖 `graphify.watch._rebuild_code`
+- 这条 fallback 是 code-only 路径
+- 当前已通过 Graphify 源码与本仓库实测再次确认：
+  - `detect()` 能发现 `promoted/*.md`
+  - 但 `extract()` 公开入口只处理代码文件
+  - `watch()` 对文档变化只会写 `graphify-out/needs_update`，要求上游 AI skill 再执行 `/graphify --update`
+- 在当前仓库里，对 `corpus/<project>` 执行时会因为“没有代码文件”直接失败
+- 当前 `graphify-out/graph.json` 实测 `document_nodes = 0`、`promoted_nodes = 0`
+- 因此“promoted markdown 已稳定进入 Graphify 图”目前不能算已完成能力
+- 当前更准确的能力定义是：
+  - `MemArk` 能稳定落出 `Graphify-ready corpus`
+  - `MemArk` 能调用兼容的 Graphify 代码图重建路径
+  - `MemArk` 还不能独立完成上游 mixed-corpus 语义编译
+
 ### F10. 可观测结果
 
 说明：
 
 - 每次运行都应报告：
   - 扫描了多少 session
-  - 命中了多少项目 session
+  - 命中了多少目录 session
   - 新增或更新了多少 staging 文件
   - 执行了哪条 `MemPalace` 命令
   - 晋升了哪些语料
@@ -200,18 +233,55 @@
 - `codex-sync` 与 `mempalace-mine` 已能输出对应统计和命令
 - 晋升与 `Graphify` 路径也已有 CLI 输出
 
-## 二、下一阶段应实现
-
-### F11. 项目配置文件
+### F10.1. 本地项目语料消费入口
 
 说明：
 
-- 支持一个 `MemArk` 项目配置文件
-- 每个项目对象至少包含：
+- 当 `Graphify` 尚未稳定把 promoted markdown 编进图时，`MemArk` 仍需要一个独立消费入口
+- 这个入口至少应支持对 `corpus/<project>/promoted`、`documents`、`imports` 做固定字符串搜索
+- 输出应包含标题、路径、命中行、片段
+
+当前状态：
+
+- 已实现 `memark query`
+- 已支持：
+  - `--scope promoted|documents|imports|all`
+  - `--limit`
+  - `--json`
+- 该命令不依赖 `Graphify`，是当前阶段项目 AI 直接读取晋升知识的最小可用入口
+
+### F10.2. Graphify skill handoff
+
+说明：
+
+- 当 mixed-corpus 语义编译仍需要上游 `Graphify` skill 时，`MemArk` 需要给 AI 一个准确 handoff
+- 这个 handoff 至少应明确：
+  - 当前项目 `corpus/<project>` 的绝对路径
+  - `promoted/documents/imports` 的文件规模
+  - 推荐命令 `/graphify <corpus> --update`
+  - 为什么这里必须走 skill，而不是误用 `memark build`
+
+当前状态：
+
+- 已实现 `memark graphify-handoff`
+- 已输出：
+  - corpus 目标路径
+  - 推荐命令
+  - scope 文件数与词数
+  - 可直接复制给 AI 的 prompt
+
+## 二、下一阶段应实现
+
+### F11. 目录配置文件
+
+说明：
+
+- 支持一个 `MemArk` 目录配置文件
+- 每个目录对象至少包含：
   - `name`
-  - `root`
-  - `codex_session_glob`
-  - `cwd_prefixes`
+  - `path`
+  - `sessions_root`
+  - `extra_paths`
   - `staging_dir`
   - `palace_dir`
   - `mine_interval_seconds`
@@ -229,14 +299,14 @@
 
 还需要扩展：
 
-- 区分用户级配置与项目级配置
+- 区分用户级配置与目录级配置
 - 用户级配置至少应记录：
   - `memark` 安装根
   - 默认 palace / workspace 根
   - AI 平台类型
   - 已安装的 skill bundle 版本
-- 项目级配置继续记录：
-  - 项目根
+- 目录级配置继续记录：
+  - 目录路径
   - sessions 根
   - mine 间隔
   - corpus 目录
@@ -246,7 +316,7 @@
 说明：
 
 - 轮询 `Codex sessions`
-- 按项目更新 staging
+- 按目录更新 staging
 - 必要时触发 `mempalace mine`
 
 限制：
@@ -290,7 +360,7 @@
 - 这里的“自动”是指安装阶段配置好，不代表后台守护进程已经实现
 - 当前仍不能伪装成“已经有完整后台自动同步系统”
 
-### F13. MemPalace 读取适配器
+### F15. MemPalace 读取适配器
 
 说明：
 
@@ -304,7 +374,7 @@
 - 已实现 `palace-run`
 - 当前主要面向 `convos` palace 读取
 
-### F14. 更细的治理规则
+### F16. 更细的治理规则
 
 说明：
 
@@ -316,7 +386,7 @@
   - `ingest_mode`
   - `extract_mode`
 
-### F15. 人工审核流
+### F17. 人工审核流
 
 说明：
 
@@ -330,3 +400,30 @@
 - `Graphify` 已稳定支持消费所有晋升后的 Markdown 语料
 - `MemArk` 已经具备后台常驻守护服务
 - `MemArk` 已经具备跨 AI 工具通用的插件形态
+
+### F18. worktree 配置复制
+
+说明：
+
+- `git` 当前只用于发现 `worktree` 创建事件
+- 真正的复制动作由 `memark worktree-attach` 执行
+- 复制对象是目录级配置，而不是把 `git` 逻辑项目引入主模型
+- 默认复制：
+  - `.memark/`
+  - `.mempalace/`
+  - `.codex/`
+  - `.claude/`
+  - `AGENTS.md`
+
+当前状态：
+
+- 已实现为 `memark worktree-attach`
+- 已实现为 `memark worktree-hook-install`
+- 当前 `.memark` 只复制：
+  - `config.json`
+  - `projects.toml`
+- 当前不会复制：
+  - `.memark/state/`
+  - `.memark/staging/`
+  - `.memark/palaces/`
+- 后续可由 `git worktree add` 包装脚本或 hook 调用

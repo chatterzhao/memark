@@ -12,7 +12,7 @@
 
 - `~/.codex/history.jsonl` 是全局扁平索引
 - 它包含 `session_id`、`ts`、`text`
-- 它不包含项目级 `cwd`
+- 它不包含目录级 `cwd`
 
 因此：
 
@@ -92,7 +92,7 @@
 2. 读取 `session_meta`
 3. 做项目匹配
 4. 更新项目 staging
-5. 执行项目级 `mempalace mine --mode convos`
+5. 执行目录级 `mempalace mine --mode convos`
 6. 从 palace 中抽取候选内容
 7. 晋升到 `Graphify-ready` corpus
 
@@ -113,24 +113,30 @@
 
 ### 匹配规则
 
-项目匹配不应只做简单字符串相等，而应支持：
+目录匹配不应只做简单字符串相等，而应支持：
 
-- 项目根目录精确匹配
-- worktree 路径映射回主项目
-- 子目录映射回项目根
+- 被跟踪目录精确匹配
+- 子目录映射回被跟踪目录
+- 附加目录路径命中
 
 推荐规则顺序：
 
-1. 先看 `cwd` 是否等于项目根
-2. 再看 `cwd` 是否位于项目根之下
-3. 再看 `cwd` 是否命中项目定义的 `cwd_prefixes`
+1. 先看 `cwd` 是否等于被跟踪目录
+2. 再看 `cwd` 是否位于被跟踪目录之下
+3. 再看 `cwd` 是否命中目录工作单元定义的 `extra_paths`
 4. 未命中则视为未归属
 
-## 二、项目 staging
+`git` 不是主模型。
+
+- 非 git 目录也必须可以被整理
+- `worktree` 当前只作为“创建新目录后复制配置”的自动化触发器
+- 如果后续接 `git worktree add`，hook 只需要调用 `memark worktree-attach`
+
+## 二、目录 staging
 
 ### 目标
 
-每个项目都需要一个只包含本项目 session 的 staging 目录。
+每个目录工作单元都需要一个只包含该目录 session 的 staging 目录。
 
 例如：
 
@@ -152,7 +158,7 @@
 
 当前默认更稳妥的是：
 
-- 复制到 staging
+- 复制为 transcript Markdown snapshot 到 staging
 
 原因：
 
@@ -160,6 +166,15 @@
 - 后续做内容指纹最直接
 - 不依赖 `MemPalace` 对软链接行为的额外假设
 - 可以把每次会话更新落成新的不可变 snapshot
+- 可以避免原始 JSONL 过大时直接撞上 `MemPalace convos` 的输入大小限制
+
+当前 staged 文件至少保留：
+
+- `Source Path`
+- `Workspace Path`
+- `Session ID`
+- `Session Timestamp`
+- 用户 / assistant transcript
 
 ## 三、增量账本
 
@@ -273,14 +288,14 @@ mempalace --palace <project-palace> mine <project-staging-dir> --mode convos
 - 每次执行一轮 `projects-run`
 - 由系统定时器而不是 `MemArk` 常驻 daemon 负责重复调用
 - 更新项目 staging
-- 如果检测到新增内容，再执行一次项目级 `mine`
+- 如果检测到新增内容，再执行一次目录级 `mine`
 
 ### 为什么不是插件常驻
 
 当前没有验证到：
 
 - `Codex` 提供稳定的会话变更回调
-- `MemPalace` 提供稳定的项目级增量查询接口
+- `MemPalace` 提供稳定的目录级增量查询接口
 
 因此轮询更符合当前事实。
 
@@ -309,7 +324,7 @@ mempalace --palace <project-palace> mine <project-staging-dir> --mode convos
 - 项目匹配器
 - staging 管理器
 - 内容级 ledger
-- 项目级 `mempalace mine` 编排
+- 目录级 `mempalace mine` 编排
 - palace 提取适配器
 - 晋升到 `Graphify-ready` corpus 的治理器
 
@@ -318,3 +333,28 @@ mempalace --palace <project-palace> mine <project-staging-dir> --mode convos
 - `MemPalace` 已替我们解决项目隔离
 - `MemArk` 只要读 `history.jsonl` 就够了
 - `MemArk` 已有稳定的时间戳增量接口
+
+## 九、worktree 配置复制
+
+当前 `git` 不属于主模型，只在一个地方参与：
+
+- 发现新建 `worktree`
+- 调用 `memark worktree-attach`
+
+当前已实现：
+
+- `memark worktree-attach --source-dir <dir> --target-dir <dir>`
+- `memark worktree-hook-install --source-dir <dir>`
+
+当前复制语义是：
+
+- 复制 `.codex`、`.claude`、`.mempalace`、`AGENTS.md` 这类目录局部配置
+- 复制 `.memark` 时只复制：
+  - `config.json`
+  - `projects.toml`
+- 不复制 `.memark/state`、`.memark/staging`、`.memark/palaces`
+
+这样做的原因是：
+
+- 新 worktree 需要本地接入点
+- 但不应把旧目录的运行状态、已挖掘 palace、staging snapshot 一起污染到新目录

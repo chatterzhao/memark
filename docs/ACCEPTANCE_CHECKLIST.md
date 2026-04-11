@@ -21,6 +21,7 @@
 
 - [x] `memark install` 可创建用户级 runtime venv
 - [x] 默认用户级 runtime 目录为 `~/.memark/venv`
+- [x] `memark install` 会自动选择兼容的 Python 运行时版本，而不是盲目使用当前系统 `python3`
 - [x] `memark install` 会安装 `MemArk`、`mempalace`、`graphifyy`
 - [x] `memark install` 支持 `--platform auto|codex|claude|all`
 - [x] `memark install` 可把运行时 skill bundle 安装到用户 AI 工具目录
@@ -35,6 +36,7 @@
 - [x] 安装后的 `bin/memark` 已具备可执行位
 - [x] `memark doctor` 能检查 runtime 与 skill bundle
 - [x] `memark doctor` 在缺失 runtime 时会失败
+- [x] `memark doctor` 在 runtime Python 超出支持版本时会失败
 - [x] `memark doctor` 在 fake runtime + installed bundle 场景下会成功
 
 ## C. 工作区初始化
@@ -89,6 +91,7 @@
 - [x] `memark palace-clean` 能清空项目 palace 并重建空目录
 - [x] `memark palace-rebuild` 能先 clean 再重跑 convo mine
 - [x] `memark palace-retry` 能在不 clean 的情况下重试 convo mine
+- [x] 当旧 palace / Chroma 兼容错误触发时，`MemPalace` 失败信息会明确提示 `palace-rebuild`
 - [x] `memark palace-export` 能只读导出项目 palace 中的 drawer
 - [x] `memark palace-package` 能把 palace drawer 按 room 整理成候选 room package
 - [x] `memark palace-package --write-inbox` 能把候选 package 写回 `inbox/promoted`
@@ -116,23 +119,44 @@
 ## J. 已实现的 Codex / MemPalace 编排验收项
 
 - [x] 能扫描 `~/.codex/sessions/**/*.jsonl`
-- [x] 能从 `session_meta.payload.cwd` 判断项目归属
-- [x] 能把一个项目的 session 文件同步到独立 staging 目录
+- [x] 能从 `session_meta.payload.cwd` 判断目录归属
+- [x] 能把一个目录工作单元的 session 文件同步到独立 staging 目录
+- [x] 能把原始 `Codex` JSONL 转成可被 `MemPalace convos` 稳定接收的 transcript Markdown snapshot
 - [x] 能把同一路径 session 的新版本写成新的 staging snapshot，避免被 `MemPalace convos` 直接跳过
 - [x] 能识别同一路径 session 文件增长后的新增内容
-- [x] 能以项目 staging 为输入执行 `mempalace mine --mode convos`
-- [x] 能对混合项目 session 做正确隔离，不再让它们落成同一个 ingest 输入目录
+- [x] 能以目录级 staging 为输入执行 `mempalace mine --mode convos`
+- [x] 能对混合目录 session 做正确隔离，不再让它们落成同一个 ingest 输入目录
 - [x] 能在失败时报告具体是 session 解析失败、staging 失败，还是 `MemPalace` mine 失败
-- [x] 能从项目 palace 读出 `document + metadata`
-- [x] 能从项目 palace 生成确定性的候选 room package
+- [x] 能从目录 palace 读出 `document + metadata`
+- [x] 能从目录 palace 生成确定性的候选 room package
 - [x] 能把候选 room package 直接落盘并立即晋升为 Markdown
-- [x] 能提供项目级 clean / rebuild / retry 操作
-- [x] 能维护项目级 `projects.toml` 配置
-- [x] 能执行单次 `projects-run` cycle，把 `codex-sync` 与 `mempalace mine` 按项目配置串起来
+- [x] 能提供目录级 clean / rebuild / retry 操作
+- [x] 能维护目录级 `projects.toml` 配置
+- [x] 能执行单次 `projects-run` cycle，把 `codex-sync` 与 `mempalace mine` 按目录配置串起来
 - [x] 能在 `projects-run` 中对 `resume` 后同一路径 session 增长维持正确同步
-- [x] 能在 `projects-run` 中对项目级 `mine_interval_seconds` 做最小间隔控制
+- [x] 能在 `projects-run` 中对目录级 `mine_interval_seconds` 做最小间隔控制
+- [x] 即使 workspace 里配置的是默认命令名，也能在当前 `PATH` 不完整时回退到 `~/.memark/venv/bin/mempalace` / `graphify`
 - [x] 能在 `palace-package` / `palace-run` 中对同一逻辑 session 的旧 snapshot 做下游去重
+- [x] `palace-package` / `palace-run` 已支持 `--group-by session`，可把会话型 palace 从粗 room 拆成更细的逻辑 session package
 - [x] 文档明确说明当前 Graphify fallback 只保证 code graph 重建，不保证 mixed-corpus 完整编译
+- [x] 文档明确说明当前 `graphify.detect()` 与 `graphify.extract()` 的边界差异，避免把“已发现文档”误写成“已完成文档入图”
+- [x] 能把 `.memark` / `.mempalace` / `.codex` / `.claude` / `AGENTS.md` 从一个目录复制到新 worktree
+- [x] `memark worktree-hook-install` 能把自动 attach hook 装到共享 git hooks 目录
+- [x] worktree attach 复制 `.memark` 时只复制 `config.json` 与 `projects.toml`，不复制 `state` / `staging` / `palaces`
+- [x] `memark query` 能在 `corpus/<project>/promoted|documents|imports` 上提供不依赖 `Graphify` 的本地搜索入口
+- [x] `memark graphify-handoff` 能输出当前项目 corpus 的绝对路径、scope 规模和推荐 `/graphify <path> --update` 命令
+- [x] `memark graphify-handoff --json` 能输出可直接喂给 AI 的 prompt 与 machine-readable payload
+
+## K. 产品目标验收项
+
+- [x] 文档已明确区分“前半段 ingest”和“后半段消费”
+- [x] 文档已明确 `MemPalace`、`MemArk promoted corpus`、`Graphify` 各自承担的消费面
+- [x] 当前项目实测证明：会话 ingest 后可通过 `MemPalace search` 取回真实内容
+- [x] 当前 worktree 实测证明：新对话成功后可重新 ingest，并可通过 `MemPalace search` 取回 assistant 回复
+- [x] 当前项目实测证明：`palace-package --group-by session` 能把 2 个粗 room 改写为 14 个更细的 promoted package
+- [x] 已形成面向项目内 AI 的统一消费工作流说明
+- [ ] 已验证 `Graphify` 消费晋升后的 Markdown 语料并对项目 AI 产生可观察改进
+- [ ] 已验证相比“不使用 MemArk”，项目 AI 在延续性、找回历史决策、减少重复讨论方面有明确提升
 
 ## 当前结论
 

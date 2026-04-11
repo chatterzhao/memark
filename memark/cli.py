@@ -4,18 +4,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
+from .corpus import search_payload, search_project_corpus
 from .codex import sync_codex_sessions
 from .graphify import GraphifyError, run_graphify
+from .handoff import build_graphify_handoff
 from .install import InstallError, install_memark, run_doctor
 from .io import copy_document
 from .mempalace import MemPalaceError, reset_palace_dir, run_mempalace_convo_mine
 from .models import ValidationError
 from .package_builder import (
+    build_session_package_from_drawers,
     build_room_package_from_drawers,
+    group_drawers_by_logical_session,
     group_drawers_by_room,
     package_to_dict,
     write_package_payloads,
@@ -31,6 +37,117 @@ from .project_registry import (
 from .promote import load_room_packages, promote_file, promote_path
 from .version import __version__
 from .workspace import create_workspace, load_workspace, resolve_workspace, slugify
+
+
+WORKTREE_ATTACH_CANDIDATES = (
+    ".memark",
+    ".mempalace",
+    ".codex",
+    ".claude",
+    "AGENTS.md",
+)
+
+WORKTREE_HOOK_BEGIN = "# >>> memark worktree attach >>>"
+WORKTREE_HOOK_END = "# <<< memark worktree attach <<<"
+MEMARK_ATTACH_FILES = (
+    "config.json",
+    "projects.toml",
+)
+
+
+def _copy_attach_candidate(source: Path, destination: Path) -> None:
+    if source.name == ".memark" and source.is_dir():
+        destination.mkdir(parents=True, exist_ok=True)
+        for name in MEMARK_ATTACH_FILES:
+            child = source / name
+            if child.exists():
+                shutil.copy2(child, destination / name)
+        return
+    if source.is_dir():
+        shutil.copytree(source, destination, dirs_exist_ok=True)
+        return
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+
+
+def _attach_worktree_configs(source_dir: Path, target_dir: Path) -> dict[str, list[str]]:
+    copied: list[str] = []
+    skipped: list[str] = []
+    for name in WORKTREE_ATTACH_CANDIDATES:
+        source = source_dir / name
+        destination = target_dir / name
+        if not source.exists():
+            skipped.append(name)
+            continue
+        _copy_attach_candidate(source, destination)
+        copied.append(name)
+    return {"copied": copied, "skipped": skipped}
+
+
+def _git_common_dir(source_dir: Path) -> Path:
+    completed = subprocess.run(
+        ["git", "-C", str(source_dir), "rev-parse", "--git-common-dir"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "git rev-parse failed"
+        raise RuntimeError(detail)
+    resolved = completed.stdout.strip()
+    if not resolved:
+        raise RuntimeError("git rev-parse --git-common-dir returned an empty path")
+    common_dir = Path(resolved)
+    if not common_dir.is_absolute():
+        common_dir = (source_dir / common_dir).resolve()
+    return common_dir
+
+
+def _memark_hook_invocation() -> str:
+    package_root = Path(__file__).resolve().parents[1]
+    if (package_root / "pyproject.toml").exists():
+        return f"PYTHONPATH={shlex.quote(str(package_root))} {shlex.quote(sys.executable)} -m memark"
+    argv0 = Path(sys.argv[0]).resolve()
+    if argv0.name.startswith("python"):
+        return f"{shlex.quote(sys.executable)} -m memark"
+    return shlex.quote(str(argv0))
+
+
+def _render_worktree_hook_block(source_dir: Path) -> str:
+    invocation = _memark_hook_invocation()
+    source = shlex.quote(str(source_dir.resolve()))
+    return (
+        f"{WORKTREE_HOOK_BEGIN}\n"
+        f"MEMARK_SOURCE_DIR={source}\n"
+        "if [ \"$PWD\" != \"$MEMARK_SOURCE_DIR\" ]; then\n"
+        f"  {invocation} worktree-attach --source-dir \"$MEMARK_SOURCE_DIR\" --target-dir \"$PWD\" >/dev/null 2>&1 || true\n"
+        "fi\n"
+        f"{WORKTREE_HOOK_END}\n"
+    )
+
+
+def _install_worktree_hook(source_dir: Path) -> Path:
+    common_dir = _git_common_dir(source_dir)
+    hook_path = common_dir / "hooks" / "post-checkout"
+    hook_path.parent.mkdir(parents=True, exist_ok=True)
+    block = _render_worktree_hook_block(source_dir)
+    existing = hook_path.read_text(encoding="utf-8") if hook_path.exists() else "#!/bin/sh\n"
+
+    if WORKTREE_HOOK_BEGIN in existing and WORKTREE_HOOK_END in existing:
+        start = existing.index(WORKTREE_HOOK_BEGIN)
+        end = existing.index(WORKTREE_HOOK_END) + len(WORKTREE_HOOK_END)
+        prefix = existing[:start].rstrip()
+        suffix = existing[end:].lstrip("\n")
+        parts = [part for part in (prefix, block.rstrip(), suffix) if part]
+        updated = "\n\n".join(parts).rstrip() + "\n"
+    else:
+        prefix = existing.rstrip()
+        parts = [part for part in (prefix, block.rstrip()) if part]
+        updated = "\n\n".join(parts).rstrip() + "\n"
+
+    hook_path.write_text(updated, encoding="utf-8")
+    hook_path.chmod(hook_path.stat().st_mode | 0o111)
+    return hook_path
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -115,7 +232,36 @@ def _build_parser() -> argparse.ArgumentParser:
     docs_parser.add_argument("--project", help="Target project slug")
     docs_parser.set_defaults(func=cmd_add_documents)
 
-    build_parser = subparsers.add_parser("build", help="Run Graphify against a project corpus")
+    query_parser = subparsers.add_parser(
+        "query",
+        help="Search promoted project corpus content without relying on Graphify",
+    )
+    query_parser.add_argument("query", help="Fixed-string search query")
+    query_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    query_parser.add_argument("--project", help="Target project slug")
+    query_parser.add_argument(
+        "--scope",
+        choices=("all", "promoted", "documents", "imports"),
+        default="all",
+        help="Corpus scope to search",
+    )
+    query_parser.add_argument("--limit", type=int, default=10, help="Maximum number of hits to return")
+    query_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    query_parser.set_defaults(func=cmd_query)
+
+    handoff_parser = subparsers.add_parser(
+        "graphify-handoff",
+        help="Render a Graphify skill handoff for the prepared project corpus",
+    )
+    handoff_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    handoff_parser.add_argument("--project", help="Target project slug")
+    handoff_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    handoff_parser.set_defaults(func=cmd_graphify_handoff)
+
+    build_parser = subparsers.add_parser(
+        "build",
+        help="Run a compatible Graphify step for a project corpus",
+    )
     build_parser.add_argument("--workspace", default=".", help="Workspace directory")
     build_parser.add_argument("--project", help="Target project slug")
     build_parser.add_argument("--graphify-bin", help="Override graphify executable name")
@@ -149,14 +295,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
     codex_parser = subparsers.add_parser(
         "codex-sync",
-        help="Scan Codex sessions, match project sessions by cwd, and sync them into staging",
+        help="Scan Codex sessions, match them to one tracked directory path, and sync them into staging",
     )
     codex_parser.add_argument("--workspace", default=".", help="Workspace directory")
     codex_parser.add_argument("--project", help="Target project slug")
     codex_parser.add_argument(
+        "--path",
+        dest="tracked_path",
+        help="Absolute or relative directory path used to match session_meta.payload.cwd",
+    )
+    codex_parser.add_argument(
         "--project-root",
-        required=True,
-        help="Absolute or relative project root used to match session_meta.payload.cwd",
+        dest="tracked_path_compat",
+        help=argparse.SUPPRESS,
     )
     codex_parser.add_argument(
         "--sessions-root",
@@ -164,10 +315,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Root directory that contains Codex rollout JSONL files",
     )
     codex_parser.add_argument(
-        "--cwd-prefix",
+        "--extra-path",
         action="append",
         default=[],
-        help="Additional cwd prefixes that should map into the same project",
+        help="Additional directory paths that should map into the same tracked unit",
+    )
+    codex_parser.add_argument(
+        "--cwd-prefix",
+        dest="extra_path_compat",
+        action="append",
+        default=[],
+        help=argparse.SUPPRESS,
     )
     codex_parser.add_argument("--dry-run", action="store_true", help="Scan and report without writing staging or ledger")
     codex_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
@@ -175,21 +333,37 @@ def _build_parser() -> argparse.ArgumentParser:
 
     project_set_parser = subparsers.add_parser(
         "project-set",
-        help="Create or update a project registry entry for single-cycle sync and mine orchestration",
+        help="Create or update a tracked-path registry entry for single-cycle sync and mine orchestration",
     )
     project_set_parser.add_argument("--workspace", default=".", help="Workspace directory")
     project_set_parser.add_argument("--project", required=True, help="Project slug")
-    project_set_parser.add_argument("--root", required=True, help="Project root used to match session_meta.payload.cwd")
+    project_set_parser.add_argument(
+        "--path",
+        dest="tracked_path",
+        help="Tracked directory path used to match session_meta.payload.cwd",
+    )
+    project_set_parser.add_argument(
+        "--root",
+        dest="tracked_path_compat",
+        help=argparse.SUPPRESS,
+    )
     project_set_parser.add_argument(
         "--sessions-root",
         default="~/.codex/sessions",
         help="Root directory that contains Codex rollout JSONL files",
     )
     project_set_parser.add_argument(
-        "--cwd-prefix",
+        "--extra-path",
         action="append",
         default=[],
-        help="Additional cwd prefixes that should map into the same project",
+        help="Additional directory paths that should map into the same tracked unit",
+    )
+    project_set_parser.add_argument(
+        "--cwd-prefix",
+        dest="extra_path_compat",
+        action="append",
+        default=[],
+        help=argparse.SUPPRESS,
     )
     project_set_parser.add_argument(
         "--mine-interval-seconds",
@@ -201,6 +375,23 @@ def _build_parser() -> argparse.ArgumentParser:
     project_set_parser.add_argument("--disabled", action="store_true", help="Keep the project in config but skip it during projects-run")
     project_set_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     project_set_parser.set_defaults(func=cmd_project_set)
+
+    worktree_attach_parser = subparsers.add_parser(
+        "worktree-attach",
+        help="Copy MemArk, MemPalace, and Graphify-facing config files from one directory into another",
+    )
+    worktree_attach_parser.add_argument("--source-dir", required=True, help="Source directory to copy config from")
+    worktree_attach_parser.add_argument("--target-dir", required=True, help="Target directory to receive copied config")
+    worktree_attach_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    worktree_attach_parser.set_defaults(func=cmd_worktree_attach)
+
+    worktree_hook_parser = subparsers.add_parser(
+        "worktree-hook-install",
+        help="Install a git post-checkout hook that auto-attaches MemArk config into new worktrees",
+    )
+    worktree_hook_parser.add_argument("--source-dir", required=True, help="Repository directory used as the config source")
+    worktree_hook_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    worktree_hook_parser.set_defaults(func=cmd_worktree_hook_install)
 
     projects_list_parser = subparsers.add_parser("projects-list", help="List configured project registry entries")
     projects_list_parser.add_argument("--workspace", default=".", help="Workspace directory")
@@ -338,6 +529,12 @@ def _build_parser() -> argparse.ArgumentParser:
     package_parser.add_argument("--limit", type=int, help="Maximum number of drawers to read before grouping")
     package_parser.add_argument("--hall-id", default="discoveries", help="hall_id to assign to generated packages")
     package_parser.add_argument(
+        "--group-by",
+        choices=("room", "session"),
+        default="room",
+        help="Package drawers by MemPalace room or by logical source session",
+    )
+    package_parser.add_argument(
         "--write-inbox",
         action="store_true",
         help="Write one JSON package per room into workspace/inbox/promoted",
@@ -357,6 +554,12 @@ def _build_parser() -> argparse.ArgumentParser:
     palace_run_parser.add_argument("--room", help="Filter drawers by room")
     palace_run_parser.add_argument("--limit", type=int, help="Maximum number of drawers to read before grouping")
     palace_run_parser.add_argument("--hall-id", default="discoveries", help="hall_id to assign to generated packages")
+    palace_run_parser.add_argument(
+        "--group-by",
+        choices=("room", "session"),
+        default="room",
+        help="Package drawers by MemPalace room or by logical source session",
+    )
     palace_run_parser.add_argument("--graphify-bin", help="Override graphify executable name")
     palace_run_parser.add_argument("--update", action="store_true", help="Pass --update to graphify")
     palace_run_parser.add_argument("--wiki", action="store_true", help="Pass --wiki to graphify")
@@ -519,6 +722,67 @@ def cmd_add_documents(args: argparse.Namespace) -> int:
     return 0
 
 
+def _query_scopes(scope: str) -> tuple[str, ...]:
+    if scope == "all":
+        return ("promoted", "documents", "imports")
+    return (scope,)
+
+
+def cmd_query(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    scopes = _query_scopes(args.scope)
+    if args.json:
+        payload = search_payload(
+            config,
+            project=args.project,
+            query=args.query,
+            scopes=scopes,
+            limit=max(args.limit, 1),
+        )
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+
+    hits = search_project_corpus(
+        config,
+        project=args.project,
+        query=args.query,
+        scopes=scopes,
+        limit=max(args.limit, 1),
+    )
+    if not hits:
+        print(f'No corpus hits for "{args.query}"')
+        return 0
+
+    print(f'Corpus hits for "{args.query}":')
+    for index, hit in enumerate(hits, start=1):
+        print(f"{index}. [{hit.scope}] {hit.title}")
+        print(f"   Path: {hit.path}")
+        print(f"   Line: {hit.line_number}  Occurrences: {hit.occurrences}")
+        print(f"   Snippet: {hit.snippet}")
+    return 0
+
+
+def cmd_graphify_handoff(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    handoff = build_graphify_handoff(project, config.corpus_project_dir(project))
+
+    if args.json:
+        print(json.dumps(handoff.to_dict(), indent=2, ensure_ascii=True))
+        return 0
+
+    print(f"Graphify handoff target: {handoff.corpus_dir}")
+    print(f"Recommended command: {handoff.recommended_command}")
+    print("Corpus summary:")
+    for item in handoff.inventories:
+        print(f"  {item.scope}: {item.files} files, ~{item.words} words")
+    print(f"  code files: {handoff.code_files}")
+    print()
+    print("Prompt:")
+    print(handoff.prompt)
+    return 0
+
+
 def _graphify_command(graphify_bin: str, project_dir: Path, args: argparse.Namespace) -> list[str]:
     command = [graphify_bin, str(project_dir)]
     if args.update:
@@ -550,8 +814,15 @@ def cmd_build(args: argparse.Namespace) -> int:
         obsidian=args.obsidian,
         mcp=args.mcp,
     )
-    print("Graphify build completed")
+    print("Graphify step completed")
+    print("Mode:", result.mode)
     print("Command:", " ".join(result.command))
+    if result.mode == "watch-fallback":
+        print(
+            "Note: Graphify folder build was unavailable; MemArk used "
+            "graphify.watch._rebuild_code instead. This path rebuilds code graphs "
+            "only and does not prove promoted markdown entered the graph."
+        )
     if result.stdout.strip():
         print(result.stdout.rstrip())
     if result.stderr.strip():
@@ -601,8 +872,15 @@ def cmd_run(args: argparse.Namespace) -> int:
         obsidian=args.obsidian,
         mcp=args.mcp,
     )
-    print("Graphify build completed")
+    print("Graphify step completed")
+    print("Mode:", result.mode)
     print("Command:", " ".join(result.command))
+    if result.mode == "watch-fallback":
+        print(
+            "Note: Graphify folder build was unavailable; MemArk used "
+            "graphify.watch._rebuild_code instead. This path rebuilds code graphs "
+            "only and does not prove promoted markdown entered the graph."
+        )
     if result.stdout.strip():
         print(result.stdout.rstrip())
     if result.stderr.strip():
@@ -613,12 +891,17 @@ def cmd_run(args: argparse.Namespace) -> int:
 def cmd_codex_sync(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
     project = slugify(args.project or config.default_project)
+    tracked_path = args.tracked_path or args.tracked_path_compat
+    if not tracked_path:
+        print("codex-sync requires --path", file=sys.stderr)
+        return 2
+    extra_paths = [*args.extra_path_compat, *args.extra_path]
     result = sync_codex_sessions(
         config=config,
         project=project,
-        project_root=Path(args.project_root),
+        tracked_path=Path(tracked_path),
         sessions_root=Path(args.sessions_root),
-        cwd_prefixes=[Path(value) for value in args.cwd_prefix],
+        extra_paths=[Path(value) for value in extra_paths],
         dry_run=args.dry_run,
     )
     if args.json:
@@ -626,7 +909,7 @@ def cmd_codex_sync(args: argparse.Namespace) -> int:
         return 0
 
     print(f"Project: {result.project}")
-    print(f"Project root: {result.project_root}")
+    print(f"Tracked path: {result.tracked_path}")
     print(f"Sessions root: {result.sessions_root}")
     print(f"Staging dir: {result.staging_dir}")
     print(f"Scanned: {result.scanned}")
@@ -640,13 +923,18 @@ def cmd_codex_sync(args: argparse.Namespace) -> int:
 
 def cmd_project_set(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
+    tracked_path = args.tracked_path or args.tracked_path_compat
+    if not tracked_path:
+        print("project-set requires --path", file=sys.stderr)
+        return 2
+    extra_paths = [*args.extra_path_compat, *args.extra_path]
     profiles = upsert_project_profile(
         config.projects_file,
         ProjectProfile(
             name=args.project,
-            root=args.root,
+            path=tracked_path,
             sessions_root=args.sessions_root,
-            cwd_prefixes=args.cwd_prefix,
+            extra_paths=extra_paths,
             mine_interval_seconds=max(args.mine_interval_seconds, 0),
             auto_mine=not args.no_auto_mine,
             enabled=not args.disabled,
@@ -655,9 +943,9 @@ def cmd_project_set(args: argparse.Namespace) -> int:
     current = next(profile for profile in profiles if profile.normalized_name() == slugify(args.project))
     payload = {
         "project": current.normalized_name(),
-        "root": str(current.normalized_root()),
+        "path": str(current.normalized_path()),
         "sessions_root": current.sessions_root,
-        "cwd_prefixes": [str(value) for value in current.normalized_cwd_prefixes()],
+        "extra_paths": [str(value) for value in current.normalized_extra_paths()],
         "mine_interval_seconds": current.mine_interval_seconds,
         "auto_mine": current.auto_mine,
         "enabled": current.enabled,
@@ -667,11 +955,57 @@ def cmd_project_set(args: argparse.Namespace) -> int:
         print(json.dumps(payload, indent=2, ensure_ascii=True))
         return 0
     print(f"Project registry updated: {payload['project']}")
-    print(f"Root: {payload['root']}")
+    print(f"Path: {payload['path']}")
     print(f"Sessions root: {payload['sessions_root']}")
     print(f"Auto mine: {payload['auto_mine']}")
     print(f"Enabled: {payload['enabled']}")
     print(f"Projects file: {payload['projects_file']}")
+    return 0
+
+
+def cmd_worktree_attach(args: argparse.Namespace) -> int:
+    source_dir = Path(args.source_dir).expanduser().resolve()
+    target_dir = Path(args.target_dir).expanduser().resolve()
+    if not source_dir.exists() or not source_dir.is_dir():
+        print(f"Source directory does not exist: {source_dir}", file=sys.stderr)
+        return 1
+    target_dir.mkdir(parents=True, exist_ok=True)
+    result = _attach_worktree_configs(source_dir, target_dir)
+    payload = {
+        "source_dir": str(source_dir),
+        "target_dir": str(target_dir),
+        "copied": result["copied"],
+        "skipped": result["skipped"],
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+    print(f"Source dir: {payload['source_dir']}")
+    print(f"Target dir: {payload['target_dir']}")
+    print(f"Copied: {', '.join(payload['copied']) if payload['copied'] else '(none)'}")
+    print(f"Skipped: {', '.join(payload['skipped']) if payload['skipped'] else '(none)'}")
+    return 0
+
+
+def cmd_worktree_hook_install(args: argparse.Namespace) -> int:
+    source_dir = Path(args.source_dir).expanduser().resolve()
+    if not source_dir.exists() or not source_dir.is_dir():
+        print(f"Source directory does not exist: {source_dir}", file=sys.stderr)
+        return 1
+    try:
+        hook_path = _install_worktree_hook(source_dir)
+    except RuntimeError as exc:
+        print(f"Failed to install worktree hook: {exc}", file=sys.stderr)
+        return 1
+    payload = {
+        "source_dir": str(source_dir),
+        "hook_path": str(hook_path),
+    }
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+    print(f"Source dir: {payload['source_dir']}")
+    print(f"Hook path: {payload['hook_path']}")
     return 0
 
 
@@ -682,9 +1016,9 @@ def cmd_projects_list(args: argparse.Namespace) -> int:
     payload = [
         {
             "project": profile.normalized_name(),
-            "root": str(profile.normalized_root()),
+            "path": str(profile.normalized_path()),
             "sessions_root": profile.sessions_root,
-            "cwd_prefixes": [str(value) for value in profile.normalized_cwd_prefixes()],
+            "extra_paths": [str(value) for value in profile.normalized_extra_paths()],
             "mine_interval_seconds": profile.mine_interval_seconds,
             "auto_mine": profile.auto_mine,
             "enabled": profile.enabled,
@@ -702,7 +1036,7 @@ def cmd_projects_list(args: argparse.Namespace) -> int:
         return 0
     for item in payload:
         print(
-            f"{item['project']}: root={item['root']} sessions_root={item['sessions_root']} "
+            f"{item['project']}: path={item['path']} sessions_root={item['sessions_root']} "
             f"enabled={item['enabled']} pending_mine={item['pending_mine']}"
         )
         if item["last_run_at"] is not None:
@@ -1075,16 +1409,30 @@ def cmd_palace_package(args: argparse.Namespace) -> int:
         room=args.room,
         limit=limit,
     )
-    packages = [
-        build_room_package_from_drawers(
-            project=project,
-            wing=wing,
-            room=room,
-            drawers=group_drawers,
-            hall_id=args.hall_id,
-        )
-        for (wing, room), group_drawers in sorted(group_drawers_by_room(drawers).items())
-    ]
+    if args.group_by == "session":
+        packages = [
+            build_session_package_from_drawers(
+                project=project,
+                wing=wing,
+                room=room,
+                session_key=session_key,
+                session_title=session_title,
+                drawers=group_drawers,
+                hall_id=args.hall_id,
+            )
+            for (wing, room, session_key, session_title), group_drawers in sorted(group_drawers_by_logical_session(drawers).items())
+        ]
+    else:
+        packages = [
+            build_room_package_from_drawers(
+                project=project,
+                wing=wing,
+                room=room,
+                drawers=group_drawers,
+                hall_id=args.hall_id,
+            )
+            for (wing, room), group_drawers in sorted(group_drawers_by_room(drawers).items())
+        ]
     package_payloads = [package_to_dict(item) for item in packages]
 
     written_paths: list[Path] = []
@@ -1095,6 +1443,7 @@ def cmd_palace_package(args: argparse.Namespace) -> int:
         "project": project,
         "palace_dir": str(palace_dir),
         "drawers": len(drawers),
+        "group_by": args.group_by,
         "packages": package_payloads,
         "written": [str(path) for path in written_paths],
     }
@@ -1127,16 +1476,30 @@ def cmd_palace_run(args: argparse.Namespace) -> int:
         room=args.room,
         limit=limit,
     )
-    packages = [
-        build_room_package_from_drawers(
-            project=project,
-            wing=wing,
-            room=room_name,
-            drawers=group_drawers,
-            hall_id=args.hall_id,
-        )
-        for (wing, room_name), group_drawers in sorted(group_drawers_by_room(drawers).items())
-    ]
+    if args.group_by == "session":
+        packages = [
+            build_session_package_from_drawers(
+                project=project,
+                wing=wing,
+                room=room_name,
+                session_key=session_key,
+                session_title=session_title,
+                drawers=group_drawers,
+                hall_id=args.hall_id,
+            )
+            for (wing, room_name, session_key, session_title), group_drawers in sorted(group_drawers_by_logical_session(drawers).items())
+        ]
+    else:
+        packages = [
+            build_room_package_from_drawers(
+                project=project,
+                wing=wing,
+                room=room_name,
+                drawers=group_drawers,
+                hall_id=args.hall_id,
+            )
+            for (wing, room_name), group_drawers in sorted(group_drawers_by_room(drawers).items())
+        ]
     package_payloads = [package_to_dict(item) for item in packages]
     written_paths = [config.inbox_promoted_dir / f"palace-{package['room_id']}.json" for package in package_payloads]
     command = _graphify_command(graphify_bin, config.corpus_project_dir(project), args)
@@ -1146,6 +1509,7 @@ def cmd_palace_run(args: argparse.Namespace) -> int:
             "project": project,
             "palace_dir": str(palace_dir),
             "drawers": len(drawers),
+            "group_by": args.group_by,
             "packages": len(package_payloads),
             "write_targets": [str(path) for path in written_paths],
             "build_command": None if args.no_build else command,
@@ -1197,6 +1561,7 @@ def cmd_palace_run(args: argparse.Namespace) -> int:
         "project": project,
         "palace_dir": str(palace_dir),
         "drawers": len(drawers),
+        "group_by": args.group_by,
         "packages": len(package_payloads),
         "written": [str(path) for path in written_paths],
         "promoted": [

@@ -17,6 +17,7 @@ class GraphifyError(RuntimeError):
 class GraphifyBuildResult:
     command: list[str]
     project_dir: Path
+    mode: str
     stdout: str
     stderr: str
 
@@ -51,16 +52,28 @@ def _run_graphify_watch_fallback(binary: Path, project_dir: Path) -> GraphifyBui
         check=False,
     )
     if completed.returncode != 0:
-        raise GraphifyError(
+        detail = (
             "Graphify direct folder build was not available, and fallback to "
             "graphify.watch._rebuild_code failed. This fallback is code-only and "
             "depends on importing the installed graphify Python module from the "
-            "Graphify environment.\n"
+            "Graphify environment."
+        )
+        if "No code files found - nothing to rebuild." in completed.stdout:
+            detail += (
+                " The target corpus currently has no code files, so this path cannot "
+                "compile promoted markdown or other documents into the graph. Use the "
+                "upstream Graphify skill or platform flow that runs `/graphify <folder> "
+                "--update` for mixed-corpus semantic extraction."
+            )
+        raise GraphifyError(
+            detail
+            + "\n"
             f"STDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
         )
     return GraphifyBuildResult(
         command=command,
         project_dir=project_dir,
+        mode="watch-fallback",
         stdout=completed.stdout,
         stderr=completed.stderr,
     )
@@ -109,6 +122,7 @@ def run_graphify(
     return GraphifyBuildResult(
         command=command,
         project_dir=project_dir,
+        mode="cli",
         stdout=completed.stdout,
         stderr=completed.stderr,
     )

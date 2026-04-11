@@ -2,6 +2,20 @@
 
 本文件定义当前仓库中文档的层级关系，避免把研究稿误当成正式说明。
 
+## 最新设计入口
+
+如果要理解当前最新口径，请先读下面三份文档：
+
+- [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)
+- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
+- [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)
+
+其中：
+
+- `PRODUCT_REQUIREMENTS.md` 定义产品需求边界
+- `AI_CONSUMPTION_MODEL.md` 定义当前 AI 应如何消费这些产物
+- `AUTOMATION_CONSUMPTION_REQUIREMENTS.md` 定义下一阶段“自动喂数据、自动加工、自动消费”的目标
+
 ## 正式文档
 
 以下文件是当前仓库的唯一权威入口：
@@ -14,6 +28,8 @@
 - [`docs/INTERFACE_CONTRACT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INTERFACE_CONTRACT.md)
 - [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)
 - [`docs/FEATURE_LIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/FEATURE_LIST.md)
+- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
+- [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)
 - [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)
 - [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)
 - [`docs/IMPLEMENTATION_PLAN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/IMPLEMENTATION_PLAN.md)

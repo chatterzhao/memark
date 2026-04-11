@@ -1,0 +1,46 @@
+{
+  "wing_id": "project/memark",
+  "wing_kind": "project",
+  "hall_id": "discoveries",
+  "room_id": "technical-rollout-2026-04-08t01-17-39-019d6c2b-21ad-72b2-bbe4-b01de1f2e836",
+  "room_title": "\u6839\u636e docs/raw \u7279\u522b\u662f\u6700\u7ec8\u8bc4\u5ba1\uff0c\u6ce8\u610f a-f\uff0c\u672c\u8eab\u5c31\u662f\u4e00\u4e2a\u7ebf\u6027\u7684\u7814\u7a76\u7ed3\u679c\u3002\u73b0\u5728\u4f60\u6839\u636e\u6700\u7ec8\u8bc4\u5ba1\uff0c\u751f\u4ea7skill.md,readme....",
+  "room_summary": "Collected 1 memory drawer(s) from logical session 'rollout-2026-04-08T01-17-39-019d6c2b-21ad-72b2-bbe4-b01de1f2e836' in room 'technical' and wing 'sessions'.",
+  "closets": [
+    {
+      "closet_id": "closet-1",
+      "summary": "Collected 1 memory drawer(s) from logical session 'rollout-2026-04-08T01-17-39-019d6c2b-21ad-72b2-bbe4-b01de1f2e836' in room 'technical' and wing 'sessions'.",
+      "key_points": [
+        "> \u4e0d\u5bf9\u554a\u3002\u4f60\u6ca1\u6709\u81ea\u5df1\u601d\u8003\u54c8\u3002 Graphify \u662f\u4e2a wiki \u5de5\u5177\u3002\u4f60\u60f3\u60f3\u8981\u600e\u4e48\u8868\u8fbe \u5bf9\uff0c\u95ee\u9898\u5728\u8fd9\u91cc\uff1a`Graphify` \u4e0d\u8be5\u5148\u88ab\u5199\u6210\u62bd\u8c61\u6982\u5ff5\u6807\u7b7e\uff0c\u5b83\u9996\u5148\u662f\u4e00\u4e2a **wiki \u5de5\u5177**\u3002\u66f4\u51c6\u786e\u7684\u8868\u8fbe\u5e94\u8be5\u662f\u5148\u4ece\u4eba\u7684\u4f7f\u7528\u4f53\u9a8c\u8bb2\u6e05\u695a\uff0c\u518d\u8bb2\u4e09\u8005\u5206\u5de5\uff1a`MemPalace` \u8d1f\u8d23\u8bb0\u548c\u627e\uff0c`Graphify` \u8d1f\u8d23\u628a\u5185\u5bb9\u53d8\u6210\u9002\u5408\u4eba\u770b\u7684 wiki\uff0c`MemAr..."
+      ],
+      "tags": [
+        "codex_session",
+        "mempalace",
+        "rollout_2026_04_08t01_17_39_019d6c2b_21ad_72b2_bbe4_b01de1f2e836",
+        "sessions",
+        "technical"
+      ],
+      "evidence_refs": [
+        "drawer_sessions_technical_25ef76d330268a539f0ba50d"
+      ]
+    }
+  ],
+  "drawer_refs": [
+    {
+      "drawer_id": "drawer_sessions_technical_25ef76d330268a539f0ba50d",
+      "timestamp": "2026-04-09T20:12:29.785603",
+      "speaker": null,
+      "excerpt": "> \u4e0d\u5bf9\u554a\u3002\u4f60\u6ca1\u6709\u81ea\u5df1\u601d\u8003\u54c8\u3002 Graphify \u662f\u4e2a wiki \u5de5\u5177\u3002\u4f60\u60f3\u60f3\u8981\u600e\u4e48\u8868\u8fbe \u5bf9\uff0c\u95ee\u9898\u5728\u8fd9\u91cc\uff1a`Graphify` \u4e0d\u8be5\u5148\u88ab\u5199\u6210\u62bd\u8c61\u6982\u5ff5\u6807\u7b7e\uff0c\u5b83\u9996\u5148\u662f\u4e00\u4e2a **wiki \u5de5\u5177**\u3002\u66f4\u51c6\u786e\u7684\u8868\u8fbe\u5e94\u8be5\u662f\u5148\u4ece\u4eba\u7684\u4f7f\u7528\u4f53\u9a8c\u8bb2\u6e05\u695a\uff0c\u518d\u8bb2\u4e09\u8005\u5206\u5de5\uff1a`MemPalace` \u8d1f\u8d23\u8bb0\u548c\u627e\uff0c`Graphify` \u8d1f\u8d23\u628a\u5185\u5bb9\u53d8\u6210\u9002\u5408\u4eba\u770b\u7684 wiki\uff0c`MemAr...",
+      "source_uri": "/Users/zhaoyu/Downloads/code/my-memark/memark/.memark/staging/memark/sessions/2026/04/08/rollout-2026-04-08T01-17-39-019d6c2b-21ad-72b2-bbe4-b01de1f2e836.md"
+    }
+  ],
+  "participants": [],
+  "related_entities": [
+    "File: rollout-2026-04-08T01-17-39-019d6c2b-21ad-72b2-bbe4-b01de1f2e836.md"
+  ],
+  "source_timestamps": {
+    "start": "2026-04-09T20:12:29.785603",
+    "end": "2026-04-09T20:12:29.785603"
+  },
+  "updated_at": "2026-04-09T20:12:29.785603",
+  "project": "memark"
+}

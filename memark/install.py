@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -19,6 +20,10 @@ except ImportError:  # pragma: no cover
 
 class InstallError(RuntimeError):
     """Raised when MemArk installation fails."""
+
+
+MIN_RUNTIME_PYTHON = (3, 10)
+MAX_RUNTIME_PYTHON = (3, 13)
 
 
 @dataclass(frozen=True)
@@ -104,9 +109,65 @@ def default_memark_home() -> Path:
 
 
 def default_python_command() -> str:
+    explicit = os.environ.get("MEMARK_PYTHON")
+    if explicit:
+        return _resolve_python_command(explicit)
+
+    candidates: list[str] = []
     if os.name == "nt":
-        return "py"
-    return sys.executable or "python3"
+        candidates.extend(["python3.13", "python3.12", "python3.11", "python3.10", "python", "py"])
+    else:
+        candidates.extend(["python3.13", "python3.12", "python3.11", "python3.10"])
+        if sys.executable:
+            candidates.append(sys.executable)
+        candidates.extend(["python3", "python"])
+    return _resolve_python_command(*candidates)
+
+
+def _python_version(command: str) -> tuple[int, int] | None:
+    argv = shlex.split(command)
+    if not argv:
+        return None
+    try:
+        completed = subprocess.run(
+            [*argv, "-c", "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if completed.returncode != 0:
+        return None
+    text = completed.stdout.strip()
+    if "." not in text:
+        return None
+    major, minor = text.split(".", 1)
+    if not major.isdigit() or not minor.isdigit():
+        return None
+    return int(major), int(minor)
+
+
+def _python_version_supported(version: tuple[int, int]) -> bool:
+    return MIN_RUNTIME_PYTHON <= version <= MAX_RUNTIME_PYTHON
+
+
+def _resolve_python_command(*candidates: str) -> str:
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = candidate.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        version = _python_version(normalized)
+        if version and _python_version_supported(version):
+            return normalized
+    tried = ", ".join(seen) if seen else "<none>"
+    raise InstallError(
+        "No compatible Python interpreter found for MemArk runtime. "
+        f"Need Python {MIN_RUNTIME_PYTHON[0]}.{MIN_RUNTIME_PYTHON[1]}-"
+        f"{MAX_RUNTIME_PYTHON[0]}.{MAX_RUNTIME_PYTHON[1]}. Tried: {tried}"
+    )
 
 
 def bundle_template_dir() -> Path:
@@ -191,7 +252,10 @@ def create_runtime_environment(
     venv_dir, python_bin, memark_bin, mempalace_bin, graphify_bin = _venv_paths(memark_home)
     if venv_dir.exists():
         shutil.rmtree(venv_dir)
-    _run_command([python_command, "-m", "venv", str(venv_dir)])
+    python_argv = shlex.split(python_command)
+    if not python_argv:
+        raise InstallError("Python command is empty.")
+    _run_command([*python_argv, "-m", "venv", str(venv_dir)])
     _run_command([str(python_bin), "-m", "pip", "install", "--upgrade", "pip"])
     install_command = [str(python_bin), "-m", "pip", "install"]
     if upgrade:
@@ -258,7 +322,7 @@ def install_memark(
     skip_runtime_install: bool = False,
 ) -> InstallResult:
     resolved_home = (memark_home or default_memark_home()).expanduser().resolve()
-    resolved_python = python_command or default_python_command()
+    resolved_python = _resolve_python_command(python_command) if python_command else default_python_command()
     resolved_source = source_spec or detect_source_spec()
     venv_dir, python_bin, memark_bin, mempalace_bin, graphify_bin = _venv_paths(resolved_home)
 
@@ -300,6 +364,17 @@ def run_doctor(*, platform: str, memark_home: Path | None = None) -> DoctorResul
         issues.append(f"missing runtime environment: {venv_dir}")
     if not python_bin.exists():
         issues.append(f"missing python executable: {python_bin}")
+    else:
+        version = _python_version(str(python_bin))
+        if version is None:
+            issues.append(f"unable to determine runtime python version: {python_bin}")
+        elif not _python_version_supported(version):
+            issues.append(
+                "unsupported runtime python version: "
+                f"{version[0]}.{version[1]} (need "
+                f"{MIN_RUNTIME_PYTHON[0]}.{MIN_RUNTIME_PYTHON[1]}-"
+                f"{MAX_RUNTIME_PYTHON[0]}.{MAX_RUNTIME_PYTHON[1]})"
+            )
     if not memark_bin.exists():
         issues.append(f"missing memark executable: {memark_bin}")
     if not mempalace_bin.exists():

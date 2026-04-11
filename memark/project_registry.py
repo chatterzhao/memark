@@ -1,4 +1,4 @@
-"""Project registry and single-cycle orchestration for Codex -> MemPalace intake."""
+"""Tracked path registry and single-cycle orchestration for Codex -> MemPalace intake."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ except ModuleNotFoundError:  # pragma: no cover
 @dataclass(slots=True)
 class ProjectProfile:
     name: str
-    root: str
+    path: str
     sessions_root: str = "~/.codex/sessions"
-    cwd_prefixes: list[str] | None = None
+    extra_paths: list[str] | None = None
     mine_interval_seconds: int = 120
     auto_mine: bool = True
     enabled: bool = True
@@ -31,14 +31,21 @@ class ProjectProfile:
     def normalized_name(self) -> str:
         return slugify(self.name)
 
-    def normalized_root(self) -> Path:
-        return Path(self.root).expanduser().resolve()
+    def normalized_path(self) -> Path:
+        return Path(self.path).expanduser().resolve()
 
     def normalized_sessions_root(self) -> Path:
         return Path(self.sessions_root).expanduser().resolve()
 
+    def normalized_extra_paths(self) -> list[Path]:
+        return [Path(value).expanduser().resolve() for value in self.extra_paths or []]
+
+    # Compatibility aliases for older code and config naming.
+    def normalized_root(self) -> Path:
+        return self.normalized_path()
+
     def normalized_cwd_prefixes(self) -> list[Path]:
-        return [Path(value).expanduser().resolve() for value in self.cwd_prefixes or []]
+        return self.normalized_extra_paths()
 
 
 @dataclass(slots=True)
@@ -90,15 +97,15 @@ def _toml_string(value: str) -> str:
 def _render_projects_toml(profiles: list[ProjectProfile]) -> str:
     lines = ["version = 1", ""]
     for profile in sorted(profiles, key=lambda item: item.normalized_name()):
-        prefixes = profile.cwd_prefixes or []
-        prefix_values = ", ".join(_toml_string(value) for value in prefixes)
+        extra_paths = profile.extra_paths or []
+        extra_path_values = ", ".join(_toml_string(value) for value in extra_paths)
         lines.extend(
             [
                 "[[projects]]",
                 f"name = {_toml_string(profile.normalized_name())}",
-                f"root = {_toml_string(str(profile.normalized_root()))}",
+                f"path = {_toml_string(str(profile.normalized_path()))}",
                 f"sessions_root = {_toml_string(profile.sessions_root)}",
-                f"cwd_prefixes = [{prefix_values}]",
+                f"extra_paths = [{extra_path_values}]",
                 f"mine_interval_seconds = {max(int(profile.mine_interval_seconds), 0)}",
                 f"auto_mine = {'true' if profile.auto_mine else 'false'}",
                 f"enabled = {'true' if profile.enabled else 'false'}",
@@ -120,16 +127,16 @@ def load_project_profiles(path: Path) -> list[ProjectProfile]:
         if not isinstance(entry, dict):
             continue
         name = entry.get("name")
-        root = entry.get("root")
+        tracked_path = entry.get("path", entry.get("root"))
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"Invalid project registry entry without name: {path}")
-        if not isinstance(root, str) or not root.strip():
-            raise ValueError(f"Invalid project registry entry without root for {name}: {path}")
-        prefixes = entry.get("cwd_prefixes", [])
-        if prefixes is None:
-            prefixes = []
-        if not isinstance(prefixes, list) or any(not isinstance(value, str) for value in prefixes):
-            raise ValueError(f"Invalid cwd_prefixes for project {name}: {path}")
+        if not isinstance(tracked_path, str) or not tracked_path.strip():
+            raise ValueError(f"Invalid project registry entry without path for {name}: {path}")
+        extra_paths = entry.get("extra_paths", entry.get("cwd_prefixes", []))
+        if extra_paths is None:
+            extra_paths = []
+        if not isinstance(extra_paths, list) or any(not isinstance(value, str) for value in extra_paths):
+            raise ValueError(f"Invalid extra_paths for project {name}: {path}")
         sessions_root = entry.get("sessions_root", "~/.codex/sessions")
         if not isinstance(sessions_root, str) or not sessions_root.strip():
             raise ValueError(f"Invalid sessions_root for project {name}: {path}")
@@ -145,9 +152,9 @@ def load_project_profiles(path: Path) -> list[ProjectProfile]:
         profiles.append(
             ProjectProfile(
                 name=slugify(name),
-                root=root,
+                path=tracked_path,
                 sessions_root=sessions_root,
-                cwd_prefixes=prefixes,
+                extra_paths=extra_paths,
                 mine_interval_seconds=mine_interval_seconds,
                 auto_mine=auto_mine,
                 enabled=enabled,
@@ -167,9 +174,9 @@ def upsert_project_profile(path: Path, profile: ProjectProfile) -> list[ProjectP
     next_profiles.append(
         ProjectProfile(
             name=profile.normalized_name(),
-            root=str(profile.normalized_root()),
+            path=str(profile.normalized_path()),
             sessions_root=profile.sessions_root,
-            cwd_prefixes=[str(value) for value in profile.normalized_cwd_prefixes()],
+            extra_paths=[str(value) for value in profile.normalized_extra_paths()],
             mine_interval_seconds=max(int(profile.mine_interval_seconds), 0),
             auto_mine=profile.auto_mine,
             enabled=profile.enabled,
@@ -252,9 +259,9 @@ def run_projects_cycle(
         sync = sync_codex_sessions(
             config=config,
             project=project,
-            project_root=profile.normalized_root(),
+            tracked_path=profile.normalized_path(),
             sessions_root=profile.normalized_sessions_root(),
-            cwd_prefixes=profile.normalized_cwd_prefixes(),
+            extra_paths=profile.normalized_extra_paths(),
             dry_run=dry_run,
         )
         if progress is not None:

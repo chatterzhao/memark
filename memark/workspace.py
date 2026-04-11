@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +13,35 @@ from pathlib import Path
 CONFIG_DIR_NAME = ".memark"
 CONFIG_FILE_NAME = "config.json"
 PROJECTS_FILE_NAME = "projects.toml"
+
+
+def _runtime_binary(name: str) -> str | None:
+    try:
+        from .install import default_memark_home
+    except Exception:
+        return None
+    scripts_dir = default_memark_home() / "venv" / ("Scripts" if os.name == "nt" else "bin")
+    candidates = [scripts_dir / name]
+    if not name.endswith(".exe"):
+        candidates.append(scripts_dir / f"{name}.exe")
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+def resolve_workspace_binary(configured: str, *, default_name: str) -> str:
+    value = configured.strip()
+    candidate = Path(value).expanduser()
+    if candidate.is_file():
+        return str(candidate.resolve())
+    if shutil.which(value) is not None:
+        return value
+    if value == default_name:
+        runtime = _runtime_binary(default_name)
+        if runtime is not None:
+            return runtime
+    return value
 
 
 def slugify(value: str) -> str:
@@ -159,9 +190,11 @@ def load_workspace(path: str | None) -> WorkspaceConfig:
     graphify_bin = payload.get("graphify_bin")
     if not isinstance(graphify_bin, str) or not graphify_bin.strip():
         graphify_bin = "graphify"
+    graphify_bin = resolve_workspace_binary(graphify_bin, default_name="graphify")
     mempalace_bin = payload.get("mempalace_bin")
     if not isinstance(mempalace_bin, str) or not mempalace_bin.strip():
         mempalace_bin = "mempalace"
+    mempalace_bin = resolve_workspace_binary(mempalace_bin, default_name="mempalace")
     config = WorkspaceConfig(
         workspace=workspace,
         default_project=slugify(default_project),
