@@ -9,12 +9,14 @@
 - [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)
 - [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
 - [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)
+- [`docs/DOGFOOD_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_STATUS.md)
 
 其中：
 
 - `PRODUCT_REQUIREMENTS.md` 定义产品需求边界
 - `AI_CONSUMPTION_MODEL.md` 定义当前 AI 应如何消费这些产物
 - `AUTOMATION_CONSUMPTION_REQUIREMENTS.md` 定义下一阶段“自动喂数据、自动加工、自动消费”的目标
+- `DOGFOOD_STATUS.md` 定义哪些能力已经在当前仓库上真实吃过狗粮，哪些还只是测试通过
 
 ## 正式文档
 
@@ -30,6 +32,7 @@
 - [`docs/FEATURE_LIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/FEATURE_LIST.md)
 - [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
 - [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)
+- [`docs/DOGFOOD_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_STATUS.md)
 - [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)
 - [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)
 - [`docs/IMPLEMENTATION_PLAN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/IMPLEMENTATION_PLAN.md)

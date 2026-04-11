@@ -329,7 +329,89 @@ git worktree add /tmp/memark-worktree-auto2 -b test/worktree-auto2
 - 现在已经能覆盖“后创建的 worktree 自动接入”
 - 复制语义已经收敛成“只复制配置，不复制状态”
 
-### 4. 新 worktree 中的 `codex exec` 验证
+### 4. 当前仓库 `launchd` service 真实验证
+
+执行时间：
+
+- `2026-04-10`
+
+执行：
+
+```bash
+~/.memark/venv/bin/memark doctor --platform codex
+~/.memark/venv/bin/memark service-status --workspace . --scheduler launchd --json
+~/.memark/venv/bin/memark service-install \
+  --workspace . \
+  --scheduler launchd \
+  --interval-seconds 300 \
+  --json
+launchctl print gui/$(id -u)/io.memark.projects-run.memark.3897640fdb
+launchctl kickstart -k gui/$(id -u)/io.memark.projects-run.memark.3897640fdb
+~/.memark/venv/bin/memark service-uninstall --workspace . --scheduler launchd --json
+~/.memark/venv/bin/memark service-status --workspace . --scheduler launchd --json
+```
+
+结果：
+
+- `doctor` 返回 `Doctor summary: ok`
+- 安装前 `service-status` 为：
+  - `installed: false`
+  - `loaded: false`
+- 安装后 `service-status` 为：
+  - `installed: true`
+  - `loaded: true`
+- 生成的真实 plist 路径为：
+  - [`/Users/zhaoyu/Library/LaunchAgents/io.memark.projects-run.memark.3897640fdb.plist`](/Users/zhaoyu/Library/LaunchAgents/io.memark.projects-run.memark.3897640fdb.plist)
+- `launchctl print` 可见：
+  - `ProgramArguments = /Users/zhaoyu/.memark/venv/bin/memark projects-run --workspace /Users/zhaoyu/Downloads/code/my-memark/memark`
+  - `WorkingDirectory = /Users/zhaoyu/Downloads/code/my-memark/memark`
+  - `StartInterval = 300`
+- 卸载后 `service-uninstall` 返回：
+  - `removed: true`
+  - `unloaded: true`
+- 再查一次 `service-status`，已经回到：
+  - `installed: false`
+  - `loaded: false`
+
+这次验证能确认：
+
+- `launchd` 用户级 job 的安装、状态查询、卸载都已在真实机器上跑过
+- plist 内容与 `projects-run` 调用参数一致
+
+但这次验证也暴露了一个真实问题：
+
+- `kickstart` 后，`launchctl print` 的 `runs` 计数有增长
+- 但观察窗口内 `.memark/state/projects-run.json` 没有跟着更新
+- `.memark/logs/io.memark.projects-run.memark.3897640fdb.out.log` 与 `.err.log` 都保持 `0 bytes`
+- 当时后台 Python 进程曾持续存活，未拿到可直接归因给 `launchd` 的 cycle 完成证据
+
+为了排除“后台默认环境不兼容”这个方向，又补做了一次前台最小环境验证：
+
+```bash
+env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+  /Users/zhaoyu/.memark/venv/bin/memark \
+  projects-run \
+  --workspace /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --json
+```
+
+结果：
+
+- 命令可完成
+- 实测得到：
+  - `scanned: 1483`
+  - `matched: 17`
+  - `updated: 1`
+  - `mined: true`
+  - `mine_elapsed_seconds: 3.753`
+- `.memark/state/projects-run.json` 已更新为新的 `last_run_at`
+
+因此当前最准确的判断是：
+
+- `projects-run` 本身在接近 `launchd` 的最小环境下可以跑通
+- 但 `launchd` 后台持续 intake 的真实闭环，还不能因为“job 已注册”就判定为完成
+
+### 5. 新 worktree 中的 `codex exec` 验证
 
 执行：
 
@@ -381,7 +463,7 @@ PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/mempalace \
 - 只要 session 文件已经落盘
 - `MemArk` 仍然能在新 worktree 目录下单独识别并 ingest 它
 
-### 5. 当前唯一剩余外部阻塞
+### 6. 当前唯一剩余外部阻塞
 
 这轮没有完成的最后一步只有一个：
 
