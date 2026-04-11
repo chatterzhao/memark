@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .automation import run_automation_cycle
 from .corpus import search_payload, search_project_corpus
 from .codex import sync_codex_sessions
 from .graphify import GraphifyError, run_graphify
@@ -207,7 +208,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     service_install_parser = subparsers.add_parser(
         "service-install",
-        help="Install a user-level scheduler that repeatedly runs 'memark projects-run'",
+        help="Install a user-level scheduler that repeatedly runs 'memark automation-run'",
     )
     service_install_parser.add_argument("--workspace", default=".", help="Workspace directory")
     service_install_parser.add_argument("--project", help="Only run one configured project")
@@ -228,7 +229,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     service_status_parser = subparsers.add_parser(
         "service-status",
-        help="Show user-level projects-run scheduler status for a workspace",
+        help="Show user-level automation-run scheduler status for a workspace",
     )
     service_status_parser.add_argument("--workspace", default=".", help="Workspace directory")
     service_status_parser.add_argument("--project", help="Only inspect the project-specific scheduler label")
@@ -242,7 +243,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     service_uninstall_parser = subparsers.add_parser(
         "service-uninstall",
-        help="Remove a user-level projects-run scheduler for a workspace",
+        help="Remove a user-level automation-run scheduler for a workspace",
     )
     service_uninstall_parser.add_argument("--workspace", default=".", help="Workspace directory")
     service_uninstall_parser.add_argument("--project", help="Only remove the project-specific scheduler label")
@@ -471,6 +472,24 @@ def _build_parser() -> argparse.ArgumentParser:
     projects_run_parser.add_argument("--dry-run", action="store_true", help="Render what would happen without writing state or mining")
     projects_run_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     projects_run_parser.set_defaults(func=cmd_projects_run)
+
+    automation_run_parser = subparsers.add_parser(
+        "automation-run",
+        help="Run one automatic feed/process/consume cycle across enabled projects",
+    )
+    automation_run_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    automation_run_parser.add_argument("--project", help="Only run one configured project")
+    automation_run_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
+    automation_run_parser.add_argument(
+        "--retry-delay-seconds",
+        type=float,
+        default=0.2,
+        help="Initial retry delay for lock errors; doubles after each retry",
+    )
+    automation_run_parser.add_argument("--graphify-bin", help="Override graphify executable name")
+    automation_run_parser.add_argument("--no-build", action="store_true", help="Do not attempt Graphify update during automation")
+    automation_run_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    automation_run_parser.set_defaults(func=cmd_automation_run)
 
     mempalace_parser = subparsers.add_parser(
         "mempalace-mine",
@@ -1227,6 +1246,50 @@ def cmd_projects_run(args: argparse.Namespace) -> int:
                 print(f"  Mine elapsed seconds: {item.mine_elapsed_seconds}")
         else:
             print(f"  Mine: skipped ({item.mine_skipped_reason})")
+    return 0
+
+
+def cmd_automation_run(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    results = run_automation_cycle(
+        config=config,
+        project_filter=args.project,
+        retry_attempts=args.retry_attempts,
+        retry_delay_seconds=args.retry_delay_seconds,
+        graphify_bin=args.graphify_bin,
+        build_graph=not args.no_build,
+    )
+    payload = [item.to_dict() for item in results]
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+    if not results:
+        print(f"No enabled projects configured in {config.projects_file}")
+        return 0
+    for item in results:
+        print(f"Project: {item.project}")
+        if item.intake is not None:
+            print(
+                "  Intake:"
+                f" copied={item.intake.sync.copied}"
+                f" updated={item.intake.sync.updated}"
+                f" unchanged={item.intake.sync.unchanged}"
+                f" mined={'yes' if item.intake.mined else 'no'}"
+            )
+        print(
+            "  Documents:"
+            f" copied={item.documents.copied}"
+            f" updated={item.documents.updated}"
+            f" unchanged={item.documents.unchanged}"
+        )
+        print(f"  Palace drawers: {item.palace_drawers}")
+        print(f"  Packages: {item.packages}")
+        changed = sum(1 for result in item.promoted if result.changed)
+        unchanged = len(item.promoted) - changed
+        print(f"  Promoted: {changed} changed, {unchanged} unchanged")
+        print(f"  Graphify: {item.graphify.status}")
+        for artifact in item.artifacts:
+            print(f"  Artifact: {artifact}")
     return 0
 
 

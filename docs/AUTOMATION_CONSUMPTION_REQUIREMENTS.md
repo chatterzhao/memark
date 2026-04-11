@@ -36,15 +36,23 @@
 - 能把 palace drawers 按 `room` 或逻辑 `session` 自动打包
 - 能把 package 自动晋升为 `corpus/<project>/promoted/*.md`
 - 能把项目文档纳入 `documents/`
+- 文档同步会排除研究归档、构建产物、缓存和其他派生产物，避免自动消费被噪音稀释
 - 能对 promoted corpus 做本地固定字符串查询
 - 能生成给上游 `Graphify` skill 的 handoff
+- 已实现 `memark automation-run`，能把 intake、文档同步、promotion、消费产物生成串成一个单次自动 cycle
+- 已实现 `service-install` 默认调度 `automation-run`，而不是只调度 `projects-run`
+- 已能自动生成项目级消费产物：
+  - `latest-summary.md`
+  - `decisions-digest.md`
+  - `risks-digest.md`
+  - `ai-context.md`
+  - `graphify-status.md`
 
 ### 仍然缺失
 
-- 没有“持续后台 intake”能力，当前仍依赖人工或外部 cron/hook 触发 `projects-run`
-- 没有基于增量事件的 promotion 调度，当前 palace package/promote 仍是显式命令
-- 没有自动消费闭环，当前主要靠人手动执行 `query`、读 markdown、再调用 Graphify
-- 没有自动生成面向管理的产物，例如每日项目摘要、风险列表、决策 backlog、异常回顾
+- 还没有被真实狗粮稳定证明的“持续后台 intake + process + consume”闭环
+- 自动生成的消费产物目前主要是启发式摘要，还不是高质量结构化管理对象抽取
+- AI runtime 侧还没有做到“启动任务时自动注入这些上下文”，当前仍需上游 skill/runtime 接手
 - 没有自动把消费结果反馈回下一轮 ingest / promotion / 优先级策略
 - 没有针对“AI 应该何时主动读什么”的运行时编排
 
@@ -110,6 +118,7 @@ AI 在任务结束时应该自动沉淀：
 
 - 项目内正式文档、ADR、计划文档、复盘文档应自动进入 `documents/`
 - 同步应受忽略规则治理，不能把派生产物重新喂回系统
+- 当前至少应排除 `.experiments/`、`build/`、`dist/`、`.pytest_cache/`、`*.egg-info/`、`docs/raw/`
 
 验收标准：
 
@@ -253,10 +262,10 @@ AI 在任务结束时应该自动沉淀：
 
 基于现状，下一阶段不应继续把重点放在“再加一个 ingest 命令”，而应转向四个核心能力：
 
-1. 把 `projects-run` 变成默认自动运行的 intake service，而不是手工命令
-2. 把 `palace-run` 变成增量自动 promotion pipeline，而不是人工整理工具
-3. 新增项目级自动消费产物，而不是只提供 `query` 和 `promoted/*.md`
-4. 给 AI 提供自动装配的项目上下文，而不是要求用户记得先查 `wake-up`、再查 graph、再查 promoted
+1. 把 `automation-run` 在真实后台调度里跑稳，而不是只在前台和测试里可用
+2. 把自动生成的 summary / decisions / risks 从启发式摘要升级到更可靠的结构化对象
+3. 给 AI runtime 接上自动装配的项目上下文，而不是要求用户记得先查 `wake-up`、再查 graph、再查 promoted
+4. 把消费反馈回流到后续 ranking、promotion 和优先级策略
 
 更短地说：
 

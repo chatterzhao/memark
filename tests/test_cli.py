@@ -265,7 +265,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(install_payload["scheduler"], "launchd")
         self.assertEqual(install_payload["interval_seconds"], 120)
         self.assertTrue(install_payload["loaded"])
-        self.assertIn("projects-run", install_payload["command"])
+        self.assertIn("automation-run", install_payload["command"])
 
         status = run_cli(
             "service-status",
@@ -2284,6 +2284,117 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(len(payload["write_targets"]), 1)
         self.assertIn("graphify", " ".join(payload["build_command"]))
         self.assertFalse((self.workspace / "inbox" / "promoted" / "palace-pipeline-preview.json").exists())
+
+    def test_automation_run_closes_feed_process_consume_loop_without_build(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        sessions_root = self.workspace / "sessions"
+        sessions_root.mkdir(parents=True, exist_ok=True)
+        project_docs = self.workspace / "docs"
+        project_docs.mkdir(parents=True, exist_ok=True)
+        (project_docs / "plan.md").write_text("# Plan\n\nDecision: automate the full memark cycle.\n", encoding="utf-8")
+        raw_docs = project_docs / "raw"
+        raw_docs.mkdir(parents=True, exist_ok=True)
+        (raw_docs / "draft.md").write_text("# Draft\n\nRisk: stale archive should not feed automation.\n", encoding="utf-8")
+        build_docs = self.workspace / "build"
+        build_docs.mkdir(parents=True, exist_ok=True)
+        (build_docs / "generated.md").write_text("# Generated\n\nDecision: generated output should stay out.\n", encoding="utf-8")
+        experiments_docs = self.workspace / ".experiments"
+        experiments_docs.mkdir(parents=True, exist_ok=True)
+        (experiments_docs / "scratch.md").write_text("# Scratch\n\nRisk: experiments should stay out.\n", encoding="utf-8")
+        pytest_docs = self.workspace / ".pytest_cache"
+        pytest_docs.mkdir(parents=True, exist_ok=True)
+        (pytest_docs / "README.md").write_text("# Cache\n\nRisk: cache docs should stay out.\n", encoding="utf-8")
+        egg_info = self.workspace / "memark.egg-info"
+        egg_info.mkdir(parents=True, exist_ok=True)
+        (egg_info / "PKG-INFO").write_text("Metadata-Version: 2.1\n", encoding="utf-8")
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--path",
+            str(self.workspace),
+            "--sessions-root",
+            str(sessions_root),
+            "--json",
+            cwd=ROOT,
+        )
+
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (1, 'seg-a', 'drawer_auto', X'01')"
+            )
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (1, "chroma:document", "Decision: installation should finish the setup. Risk: manual follow-up breaks adoption.", None, None, None),
+                    (1, "wing", "codex_project", None, None, None),
+                    (1, "room", "automation_loop", None, None, None),
+                    (1, "source_file", str(self.workspace / ".memark" / "staging" / "memark" / "sessions" / "rollout-auto.md"), None, None, None),
+                    (1, "filed_at", "2026-04-10T03:00:00Z", None, None, None),
+                    (1, "ingest_mode", "convos", None, None, None),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli(
+            "automation-run",
+            "--workspace",
+            str(self.workspace),
+            "--no-build",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(len(payload), 1)
+        project = payload[0]
+        self.assertEqual(project["project"], "memark")
+        self.assertEqual(project["documents"]["copied"], 1)
+        self.assertEqual(project["packages"], 1)
+        self.assertEqual(project["graphify"]["status"], "not_requested")
+        self.assertEqual(len(project["artifacts"]), 5)
+
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-automation-loop-rollout-auto.md"
+        self.assertTrue(promoted.exists())
+        copied_doc = self.workspace / "corpus" / "memark" / "documents" / "docs" / "plan.md"
+        self.assertTrue(copied_doc.exists())
+        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / "docs" / "raw" / "draft.md").exists())
+        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / "build" / "generated.md").exists())
+        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / ".experiments" / "scratch.md").exists())
+        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / ".pytest_cache" / "README.md").exists())
+        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / "memark.egg-info" / "PKG-INFO").exists())
+        imports_dir = self.workspace / "corpus" / "memark" / "imports" / "automation"
+        self.assertTrue((imports_dir / "latest-summary.md").exists())
+        self.assertTrue((imports_dir / "decisions-digest.md").exists())
+        self.assertTrue((imports_dir / "risks-digest.md").exists())
+        self.assertTrue((imports_dir / "ai-context.md").exists())
+        self.assertTrue((imports_dir / "graphify-status.md").exists())
 
 
 if __name__ == "__main__":

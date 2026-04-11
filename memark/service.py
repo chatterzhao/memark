@@ -167,7 +167,7 @@ def _launchd_payload(
 ) -> tuple[str, Path, Path, Path, list[str], dict[str, str], bytes]:
     label, plist_path, stdout_path, stderr_path = _launchd_paths(workspace, project)
     program_args, environment = _service_invocation()
-    command = [*program_args, "projects-run", "--workspace", str(workspace)]
+    command = [*program_args, "automation-run", "--workspace", str(workspace)]
     if project:
         command.extend(["--project", project])
     payload = {

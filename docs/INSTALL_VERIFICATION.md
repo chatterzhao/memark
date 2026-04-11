@@ -363,7 +363,7 @@ launchctl kickstart -k gui/$(id -u)/io.memark.projects-run.memark.3897640fdb
 - 生成的真实 plist 路径为：
   - [`/Users/zhaoyu/Library/LaunchAgents/io.memark.projects-run.memark.3897640fdb.plist`](/Users/zhaoyu/Library/LaunchAgents/io.memark.projects-run.memark.3897640fdb.plist)
 - `launchctl print` 可见：
-  - `ProgramArguments = /Users/zhaoyu/.memark/venv/bin/memark projects-run --workspace /Users/zhaoyu/Downloads/code/my-memark/memark`
+  - `ProgramArguments = /Users/zhaoyu/.memark/venv/bin/memark automation-run --workspace /Users/zhaoyu/Downloads/code/my-memark/memark`
   - `WorkingDirectory = /Users/zhaoyu/Downloads/code/my-memark/memark`
   - `StartInterval = 300`
 - 卸载后 `service-uninstall` 返回：
@@ -376,7 +376,7 @@ launchctl kickstart -k gui/$(id -u)/io.memark.projects-run.memark.3897640fdb
 这次验证能确认：
 
 - `launchd` 用户级 job 的安装、状态查询、卸载都已在真实机器上跑过
-- plist 内容与 `projects-run` 调用参数一致
+- plist 内容与 `automation-run` 调用参数一致
 
 但这次验证也暴露了一个真实问题：
 
@@ -410,6 +410,42 @@ env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin \
 
 - `projects-run` 本身在接近 `launchd` 的最小环境下可以跑通
 - 但 `launchd` 后台持续 intake 的真实闭环，还不能因为“job 已注册”就判定为完成
+
+### 4.1 当前仓库 `automation-run` 单次真实烟测
+
+执行时间：
+
+- `2026-04-10`
+
+执行：
+
+```bash
+python3 -m memark automation-run --workspace . --no-build --json
+```
+
+结果：
+
+- 命令成功完成
+- 实测得到：
+  - `matched: 17`
+  - `updated: 1`
+  - `mined: true`
+  - `mine_elapsed_seconds: 6.034`
+  - `packages: 17`
+  - 自动生成了：
+    - `latest-summary.md`
+    - `decisions-digest.md`
+    - `risks-digest.md`
+    - `ai-context.md`
+    - `graphify-status.md`
+- `graphify.status = not_requested`
+  - 这次 smoke 只验证自动喂数、自动加工、自动消费产物生成
+  - 没把 mixed-corpus Graphify 编译误记成已真实吃通
+
+这次 smoke 同时暴露并促成修正了一条实现边界：
+
+- 自动文档同步原先会把 `.experiments/`、`build/`、`.pytest_cache/`、`*.egg-info/`、`docs/raw/` 也带进 `documents/`
+- 当前已补过滤，自动消费语料会优先保持在“正式项目文档”范围内
 
 ### 5. 新 worktree 中的 `codex exec` 验证
 

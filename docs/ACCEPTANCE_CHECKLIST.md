@@ -135,7 +135,9 @@
 - [x] 能执行单次 `projects-run` cycle，把 `codex-sync` 与 `mempalace mine` 按目录配置串起来
 - [x] 能在 `projects-run` 中对 `resume` 后同一路径 session 增长维持正确同步
 - [x] 能在 `projects-run` 中对目录级 `mine_interval_seconds` 做最小间隔控制
+- [x] 能执行单次 `automation-run` cycle，把 intake、文档同步、promotion、消费产物生成串起来
 - [x] 能通过 `memark service-install` 安装用户级 intake 调度，而不是只靠手工执行 `projects-run`
+- [x] `service-install` 默认调度的是 `automation-run`，而不是只调度 intake 半链路
 - [x] 能通过 `memark service-status` / `memark service-uninstall` 检查和移除已安装的 intake 调度
 - [x] 即使 workspace 里配置的是默认命令名，也能在当前 `PATH` 不完整时回退到 `~/.memark/venv/bin/mempalace` / `graphify`
 - [x] 能在 `palace-package` / `palace-run` 中对同一逻辑 session 的旧 snapshot 做下游去重
@@ -148,6 +150,7 @@
 - [x] `memark query` 能在 `corpus/<project>/promoted|documents|imports` 上提供不依赖 `Graphify` 的本地搜索入口
 - [x] `memark graphify-handoff` 能输出当前项目 corpus 的绝对路径、scope 规模和推荐 `/graphify <path> --update` 命令
 - [x] `memark graphify-handoff --json` 能输出可直接喂给 AI 的 prompt 与 machine-readable payload
+- [x] `automation-run` 能自动生成 `latest-summary`、`decisions-digest`、`risks-digest`、`ai-context`、`graphify-status`
 
 ## K. 产品目标验收项
 

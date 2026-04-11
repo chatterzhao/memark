@@ -140,6 +140,10 @@
 - `memark-work/`
 - `.mempalace/`
 - `.experiments/`
+- `build/`
+- `dist/`
+- `.pytest_cache/`
+- `*.egg-info/`
 - `docs/raw/`
 - `entities.json`
 - `.graphify_detect.json`
@@ -246,7 +250,10 @@
 - 已实现 `memark service-install`
 - 已实现 `memark service-status`
 - 已实现 `memark service-uninstall`
+- 已实现 `memark automation-run` 作为默认自动闭环 cycle
+- 当前 `service-install` 默认调度的是 `automation-run`，而不是只调度 `projects-run`
 - 当前首个正式支持的调度后端是 macOS `launchd`
+- 当前自动文档同步已排除研究归档、构建产物和缓存，避免把噪音重新喂进消费侧
 - 当前仍未实现跨平台统一 scheduler backend
 
 ### F10.1. 本地项目语料消费入口
@@ -265,6 +272,25 @@
   - `--limit`
   - `--json`
 - 该命令不依赖 `Graphify`，是当前阶段项目 AI 直接读取晋升知识的最小可用入口
+
+### F10.3. 自动消费产物
+
+说明：
+
+- 安装完成后，系统不应只把知识写到 `promoted/*.md`
+- 还应自动产出 AI / 管理者可直接读取的项目级消费文件
+
+当前状态：
+
+- 已实现 `memark automation-run`
+- 每轮自动 cycle 现在会自动生成：
+  - `corpus/<project>/imports/automation/latest-summary.md`
+  - `corpus/<project>/imports/automation/decisions-digest.md`
+  - `corpus/<project>/imports/automation/risks-digest.md`
+  - `corpus/<project>/imports/automation/ai-context.md`
+  - `corpus/<project>/imports/automation/graphify-status.md`
+- 这些文件当前主要基于 promoted/documents 语料做启发式整理
+- 因此它们已经构成自动消费基线，但还不能等同于“高质量项目治理智能体”
 
 ### F10.2. Graphify skill handoff
 

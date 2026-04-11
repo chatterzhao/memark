@@ -17,6 +17,7 @@
 - `喂数据`：真实狗粮已验证
 - `加工数据`：真实狗粮已验证
 - `本地消费`：部分真实狗粮已验证
+- `自动消费产物生成`：真实狗粮已验证
 - `Graphify 统一消费闭环`：尚未闭环验证
 
 更短地说：
@@ -173,6 +174,7 @@
 - `memark service-install --workspace . --scheduler launchd --interval-seconds 300 --json` 成功安装用户级 `launchd` job
 - `memark service-status --workspace . --scheduler launchd --json` 能正确返回 `installed: true`、`loaded: true`
 - `launchctl print gui/501/io.memark.projects-run.memark.3897640fdb` 可看到真实 `ProgramArguments`、`WorkingDirectory`、`StartInterval: 300`
+- 当前 `ProgramArguments` 已对齐到 `memark automation-run --workspace ...`
 - `memark service-uninstall --workspace . --scheduler launchd --json` 成功返回 `removed: true`、`unloaded: true`
 - 卸载后再次执行 `service-status`，已回到 `installed: false`、`loaded: false`
 
@@ -192,9 +194,34 @@
 结论：
 
 - 可以说“`launchd` 的安装 / 状态查询 / 卸载已在真实机器上验证”
+- 可以说“默认调度目标已经从 intake 半链路升级到 `automation-run`”
 - 也可以说“前台最小环境下的单次 cycle 没问题”
 - 但还不能说“当前仓库已经稳定靠后台 `launchd` 持续喂数”
 - 目前更准确的表述是：真实狗粮已经把后台调度问题暴露出来，但持续 intake 闭环仍未验证完
+
+### C3. 自动消费产物
+
+在 `2026-04-10` 的当前仓库真实 smoke 里，已执行：
+
+- `python3 -m memark automation-run --workspace . --no-build --json`
+
+已真实成立：
+
+- 单次自动 cycle 能串起 intake、palace package、promotion、消费产物生成
+- 当前仓库真实落出了：
+  - `latest-summary.md`
+  - `decisions-digest.md`
+  - `risks-digest.md`
+  - `ai-context.md`
+  - `graphify-status.md`
+- 同一轮 smoke 也确认了一个重要治理边界：
+  - 自动文档同步若不加限制，会把 `.experiments/`、`build/`、`.pytest_cache/`、`*.egg-info/`、`docs/raw/` 这类噪音一起带进消费侧
+  - 当前实现已补过滤，自动消费优先基于正式项目文档
+
+结论：
+
+- 可以说“自动消费产物生成已在当前仓库真实跑通”
+- 但还不宜说“AI runtime 已自动读取这些产物并因此持续变好”
 
 ## 四、尚未闭环验证
 
