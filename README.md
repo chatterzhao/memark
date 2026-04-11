@@ -37,6 +37,7 @@
 - [`docs/RESEARCH_GRAPHIFY_USAGE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RESEARCH_GRAPHIFY_USAGE.md)
 - [`docs/MEMARK_REASSESSMENT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MEMARK_REASSESSMENT.md)
 - [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)
+- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
 
 ## 两个上游到底怎么用，才能发挥它们的强项
 
@@ -76,7 +77,7 @@
 - 最适合桥接层消费的表面，是 Chroma 里的 drawer metadata 加 `chroma:document`
 - 对 `Codex` 来说，默认主入口应是 `~/.codex/sessions/**/*.jsonl`，因为 session 文件首行 `session_meta` 带 `cwd`
 - 这次按 `cwd=/Users/zhaoyu/Downloads/code/my-memark/memark` 筛出 `11` 个 session 文件后，实际 mine 出 `216 drawers`
-- `~/.codex/history.jsonl` 只是全局扁平索引，不应被当成项目级主入口
+- `~/.codex/history.jsonl` 只是全局扁平索引，不应被当成目录级主入口
 - 虽然 metadata 里存在 `filed_at`
 - 但这次没有验证到一个稳定公开的“按时间戳取增量” CLI 或 MCP 接口
 
@@ -105,6 +106,10 @@
 - 裸安装 `graphify` CLI 主要暴露的是 query、hook、平台安装等入口
 - 代码图重建是可运行的
 - 但“完整 mixed-corpus semantic pipeline”更多依赖官方 skill 路径，而不是安装版 CLI 的帮助输出
+- 当前进一步核实到：
+  - `graphify.detect()` 能发现 `promoted/*.md`
+  - 但公开 Python 提取入口 `graphify.extract()` 只处理代码
+  - `graphify.watch()` 对文档变化只会写 `needs_update`，要求上游 AI skill 再执行 `/graphify --update`
 
 ## MemArk 该做什么
 
@@ -113,8 +118,9 @@
 1. 从 `MemPalace` 的 Chroma drawer text + metadata 中识别哪些内容值得晋升为项目知识
 2. 默认优先从项目相关会话记忆里筛选内容，并以 `project wing` 为边界按 `room` 组织
 3. 保留原文证据与来源，而不是伪造新的记忆层
-4. 落成 `Graphify` 可直接消费的 Markdown 语料
-5. 触发 `Graphify` 对 corpus 做 `--update`、`--wiki` 或其他编译
+4. 落成 `Graphify-ready` Markdown 语料
+5. 在可用时触发兼容的 `Graphify` 执行入口，并清楚区分 code-only fallback 与真实 mixed-corpus build
+6. 在 `Graphify` 统一入图尚未打通前，先提供本地项目 corpus 的直接消费入口
 
 当前更稳妥的设计假设不是整个宫殿，也不是裸数据库，而是：
 
@@ -150,15 +156,23 @@
 
 - 经过收敛的项目定义
 - `MemPalace -> MemArk -> Graphify` 的治理和接口说明
-- 一个只负责安装上游工具的 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
+- 一个用户级生产安装入口 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
+- 一份开发期安装测试入口 [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)
+- 一个真实可执行的用户级安装命令：`memark install`
+- 一个真实可执行的健康检查命令：`memark doctor`
+- 一套会被安装到用户 AI 工具目录的 `MemArk` skill bundle
 - 基于真实命令执行结果的安装验证记录
 - 一个真实可运行的 Python CLI：`memark`
-- 一个针对 `graphifyy 0.3.12` 的兼容策略：当顶层 `graphify <folder>` 不可用时，退回 `graphify.watch._rebuild_code`
+- 一个针对安装版 `graphify` CLI 差异的兼容策略：当顶层 `graphify <folder>` 不可用时，退回 `graphify.watch._rebuild_code`
+- 一个不依赖 `Graphify` 入图的项目语料消费入口：`memark query`
+- 一个把 `MemArk` 语料边界明确交给上游 `Graphify` skill 的桥接入口：`memark graphify-handoff`
 
 当前 CLI 已支持：
 
 - `memark init`
 - `memark validate`
+- `memark query`
+- `memark graphify-handoff`
 - `memark promote`
 - `memark add-documents`
 - `memark build`
@@ -177,19 +191,28 @@
 - `memark palace-run`
 - `memark status`
 
+新增一条已经过当前仓库 dogfood 验证的实践：
+
+- 对 `Codex` / `Claude Code` 这类会话型 palace，`palace-package` / `palace-run` 当前更推荐加 `--group-by session`
+- 原因是 `MemPalace` 在当前仓库里真实只产出了 `sessions/technical` 与 `sessions/architecture` 两个粗 room
+- 不加分组治理时，当前仓库只会得到 2 个很大的 promoted room；加上 `--group-by session` 后，当前仓库实测会得到 14 个更细的 promoted Markdown
+- 这一步已经能真实改善“记忆晋升”的可读性与可挑选性，但还不等于 Graphify 已把这些 Markdown 吃进完整图谱
+
 仍然没有提供：
 
 - 直接从 `MemPalace` 数据库或 MCP 自动抽取增量的实现
 - 后台监控或同步服务
+- “安装后自动发现项目并自动执行项目接入”的完整闭环
 
 另一个重要事实是：
 
-- 当前在 `.venv-skill-check` 中验证到的 `graphifyy 0.3.12` 顶层 `graphify --help` 暴露的是 `install`、`query`、`hook`、`claude/codex install` 等入口
+- 早期 CLI 探测时，在 `.venv-skill-check` 中验证到的 `graphifyy 0.3.12` 顶层 `graphify --help` 暴露的是 `install`、`query`、`hook`、`claude/codex install` 等入口
 - 它不是一个稳定公开的“任何版本都支持 `graphify <folder>`”接口
 - 因此 `MemArk build` 当前应被理解为“调用兼容的 Graphify 构建入口”，而不是保证所有 `graphifyy` 安装都可直接按同一命令消费目录
 - 当前实现里，当顶层 CLI 报 `unknown command` 时，会优先尝试在当前执行 `memark` 的 Python 环境里导入并调用 `graphify.watch._rebuild_code`
 - 这个 fallback 只覆盖 code graph 重建，不等价于包含文档 / paper / image 语料的完整 semantic build
 - 这意味着当前 `memark build` 虽然已经可以真实产出 `graph.json`，但还不能把“晋升后的 Markdown 记忆”表述成已经进入完整 Graphify 图谱
+- 当前仓库实测也再次证明了这一点：`graphify detect()` 能看到 `corpus/memark/promoted/*.md`，但 `_rebuild_code` 产出的 `graph.json` 里主要仍是代码节点
 
 还需要把“安装位置”和“项目产物位置”区分开：
 
@@ -200,6 +223,27 @@
 - 而真正的图谱产物，例如 `graphify-out/graph.json`、`graphify-out/GRAPH_REPORT.md`，则落在你运行 `graphify` 的那个项目目录里
 
 所以之前如果看到当前仓库里出现 `graphify-out/`，那表示“`memark` 被当成 Graphify 的当前语料目录”，不是“Graphify skill 被安装进了 `memark` 仓库本身”。
+
+## 当前安装闭环
+
+当前已经实测通过的生产安装路径是：
+
+1. 用当前仓库做 bootstrap 安装源
+2. 执行 `memark install --platform <platform> --source-spec <repo-root>`
+3. 让 `MemArk` 自己创建用户级 runtime：`~/.memark/venv`
+4. 让 `MemArk` 把运行时 skill bundle 写入：
+   - `~/.agents/skills/memark/`
+   - `~/.claude/skills/memark/`
+5. 用安装后的 launcher 执行 `memark doctor`
+
+在 2026-04-09 的 fake-`HOME` 实测里，当前闭环确认到了：
+
+- `mempalace 3.1.0`
+- `graphifyy 0.3.27`
+- 安装后的 `bin/memark` 可直接调用 `doctor`
+- skill bundle 已实际落到 Codex skill 目录
+- runtime 会自动选择兼容 Python；当前实测使用的是 `Python 3.13.6`
+- 当前 workspace 即使 `PATH` 没手工加上 `mempalace` / `graphify`，也会优先回退到 `~/.memark/venv/bin/*`
 
 ## 当前 CLI 怎么用
 
@@ -235,25 +279,25 @@ python3 -m memark promote --workspace ./memark-work
 
 如果已经有 room package JSON，也可以直接放进去执行同一条主路径。
 
-如果要把 `Codex` 项目会话同步到项目级 staging，再触发 `MemPalace` 对这些会话做 `convos` ingest，可以直接执行：
+如果要把 `Codex` 目录会话同步到目录级 staging，再触发 `MemPalace` 对这些会话做 `convos` ingest，可以直接执行：
 
 ```bash
 python3 -m memark codex-sync \
   --workspace ./memark-work \
-  --project-root /abs/path/to/project \
+  --path /abs/path/to/directory \
   --sessions-root ~/.codex/sessions
 
 python3 -m memark mempalace-mine \
   --workspace ./memark-work
 ```
 
-如果要把这条链路变成“配置一次，之后反复执行的单次调度 cycle”，可以先登记项目：
+如果要把这条链路变成“配置一次，之后反复执行的单次调度 cycle”，可以先登记目录工作单元：
 
 ```bash
 python3 -m memark project-set \
   --workspace ./memark-work \
   --project myproject \
-  --root /abs/path/to/project \
+  --path /abs/path/to/directory \
   --sessions-root ~/.codex/sessions \
   --mine-interval-seconds 120
 ```
@@ -266,11 +310,36 @@ python3 -m memark projects-run --workspace ./memark-work
 
 `projects-run` 的行为是：
 
-- 先按 `projects.toml` 执行项目级 `codex-sync`
+- 先按 `projects.toml` 执行目录级 `codex-sync`
 - `codex-sync` 会把每次检测到的新版本 session 写成不可变 snapshot 路径
-- 如果该项目 staging 有新增或更新，会记为 `pending_mine`
-- 当达到项目的 `mine_interval_seconds` 后，自动执行一次 `mempalace mine --mode convos`
-- 非 `--json` 模式下会输出项目级阶段提示；JSON 输出也会带 `mine_started_at`、`mine_finished_at`、`mine_elapsed_seconds`
+- 如果该目录 staging 有新增或更新，会记为 `pending_mine`
+- 当达到该目录的 `mine_interval_seconds` 后，自动执行一次 `mempalace mine --mode convos`
+- 非 `--json` 模式下会输出目录级阶段提示；JSON 输出也会带 `mine_started_at`、`mine_finished_at`、`mine_elapsed_seconds`
+
+如果用户使用 `git worktree`，当前建议做法不是把 `git` 引入主模型，而是把它只当作一个自动发现触发器。对应目录复制可以直接执行：
+
+```bash
+python3 -m memark worktree-attach \
+  --source-dir /abs/path/to/repo \
+  --target-dir /abs/path/to/worktree
+```
+
+这条命令会把当前仓库目录下已有的目录级配置复制到目标 worktree，包括：
+
+- `.memark/config.json`
+- `.memark/projects.toml`
+- `.mempalace/`
+- `.codex/`
+- `.claude/`
+- `AGENTS.md`
+
+后续如果要接 `git worktree add`，可以直接执行：
+
+```bash
+python3 -m memark worktree-hook-install --source-dir /abs/path/to/repo
+```
+
+这个 hook 只负责发现新 worktree 并调用 `worktree-attach`。
 
 这样做不是多此一举，而是为了绕开 `mempalace 3.0.0` 当前 `convos` ingest 的一个实测限制：
 
@@ -303,7 +372,7 @@ mempalace --palace ./memark-work/.memark/palaces/<project> \
 其中 `staging/<project>/sessions/` 里的文件名默认类似：
 
 ```text
-2026/04/09/rollout-a--1775741877453319499-03f00be8b810.jsonl
+2026/04/09/rollout-a--1775741877453319499-03f00be8b810.md
 ```
 
 也就是“原 session 逻辑名 + mtime_ns + 内容 hash 前缀”的 snapshot 形式。
@@ -323,6 +392,7 @@ python3 -m memark palace-rebuild --workspace ./memark-work
 - `palace-rebuild` 先 clean，再对当前 staging 重新执行 `mempalace mine --mode convos`
 - `palace-retry` 不清空 palace，只重试一次当前 mine
 - `mempalace-mine`、`palace-rebuild`、`palace-retry` 现在会在遇到明确的 SQLite 锁冲突时自动 backoff 重试
+- 如果旧 palace 目录触发 Chroma 兼容错误，例如 `KeyError: '_type'`，CLI 会直接提示使用 `palace-rebuild`
 - `mempalace-mine` 的 JSON / 文本输出会带开始时间、结束时间和耗时秒数
 
 如果要把项目 palace 里已经 ingest 的 drawer 原样读出来做后续适配，可以执行：
@@ -444,7 +514,8 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 ## 文档
 
 - [`README.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/README.md)：项目入口
-- [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)：安装 `MemPalace` 与 `Graphify` 的 AI Skill
+- [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)：默认生产入口 Skill
+- [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)：开发期安装测试 Skill
 - [`docs/PROJECT_SCOPE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PROJECT_SCOPE.md)：项目边界、组件关系、当前状态
 - [`docs/GOVERNANCE_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/GOVERNANCE_MODEL.md)：闲聊、项目对话、产出文档的隔离与晋升模型
 - [`docs/INTERFACE_CONTRACT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INTERFACE_CONTRACT.md)：推荐输入契约、输出契约与 Markdown 包格式
@@ -452,6 +523,7 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 - [`docs/IMPLEMENTATION_PLAN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/IMPLEMENTATION_PLAN.md)：当前 Python CLI 的实现范围与后续分层
 - [`docs/ACCEPTANCE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/ACCEPTANCE_CHECKLIST.md)：当前版本的验收标准与完成状态
 - [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)：基于 `MemPalace` 与 `Graphify` 能力面收敛出的具体需求
+- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)：项目 AI 当前应如何实际消费 `MemPalace`、`Graphify` 与 `MemArk` 产物
 - [`docs/DOCUMENT_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOCUMENT_STATUS.md)：正式文档与研究归档的关系
 - [`docs/MAINTAINER_SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MAINTAINER_SKILL.md)：旧的维护型 Skill 说明
 - [`examples/sample_room_package.json`](/Users/zhaoyu/Downloads/code/my-memark/memark/examples/sample_room_package.json)：可直接试跑的 room package 示例

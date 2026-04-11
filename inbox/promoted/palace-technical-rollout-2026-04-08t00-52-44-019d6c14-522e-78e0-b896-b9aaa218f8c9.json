@@ -1,0 +1,46 @@
+{
+  "wing_id": "project/memark",
+  "wing_kind": "project",
+  "hall_id": "discoveries",
+  "room_id": "technical-rollout-2026-04-08t00-52-44-019d6c14-522e-78e0-b896-b9aaa218f8c9",
+  "room_title": "\u200b/Users/zhaoyu/Downloads/code/my-memark/memark/\u8bc4\u5ba1\u5458codex-gpt5.4.md,/Us...",
+  "room_summary": "Collected 1 memory drawer(s) from logical session 'rollout-2026-04-08T00-52-44-019d6c14-522e-78e0-b896-b9aaa218f8c9' in room 'technical' and wing 'sessions'.",
+  "closets": [
+    {
+      "closet_id": "closet-1",
+      "summary": "Collected 1 memory drawer(s) from logical session 'rollout-2026-04-08T00-52-44-019d6c14-522e-78e0-b896-b9aaa218f8c9' in room 'technical' and wing 'sessions'.",
+      "key_points": [
+        "> \u7ee7\u7eed \u6211\u518d\u68c0\u67e5\u4e00\u904d\u4fee\u6539\u540e\u7684\u6700\u7ec8\u8bc4\u5ba1\uff0c\u786e\u8ba4\u7b2c 3 \u6761\u5df2\u7ecf\u6309\u4f60\u7684\u6f84\u6e05\u843d\u5230\u6587\u6863\u91cc\uff0c\u6ca1\u6709\u5f15\u5165\u65b0\u7684\u8868\u8ff0\u504f\u5dee\u3002 \u5df2\u4fee\u6539\uff0c\u66f4\u65b0\u540e\u7684\u6587\u6863\u5728 [\u6700\u7ec8\u8bc4\u5ba1.md](/Users/zhaoyu/Downloads/code/my-memark/memark/\u6700\u7ec8\u8bc4\u5ba1.md)\u3002 \u7b2c 3 \u6761\u73b0\u5728\u6539\u6210\u4e86\u66f4\u51c6\u786e\u7684\u8868\u8ff0\uff1a`LLM Wiki` \u662f\u7406\u5ff5\uff0c`Graphify` \u662f\u5176\u5177\u4f53..."
+      ],
+      "tags": [
+        "codex_session",
+        "mempalace",
+        "rollout_2026_04_08t00_52_44_019d6c14_522e_78e0_b896_b9aaa218f8c9",
+        "sessions",
+        "technical"
+      ],
+      "evidence_refs": [
+        "drawer_sessions_technical_0b78851a9233d0fceeafe964"
+      ]
+    }
+  ],
+  "drawer_refs": [
+    {
+      "drawer_id": "drawer_sessions_technical_0b78851a9233d0fceeafe964",
+      "timestamp": "2026-04-09T20:12:28.897476",
+      "speaker": null,
+      "excerpt": "> \u7ee7\u7eed \u6211\u518d\u68c0\u67e5\u4e00\u904d\u4fee\u6539\u540e\u7684\u6700\u7ec8\u8bc4\u5ba1\uff0c\u786e\u8ba4\u7b2c 3 \u6761\u5df2\u7ecf\u6309\u4f60\u7684\u6f84\u6e05\u843d\u5230\u6587\u6863\u91cc\uff0c\u6ca1\u6709\u5f15\u5165\u65b0\u7684\u8868\u8ff0\u504f\u5dee\u3002 \u5df2\u4fee\u6539\uff0c\u66f4\u65b0\u540e\u7684\u6587\u6863\u5728 [\u6700\u7ec8\u8bc4\u5ba1.md](/Users/zhaoyu/Downloads/code/my-memark/memark/\u6700\u7ec8\u8bc4\u5ba1.md)\u3002 \u7b2c 3 \u6761\u73b0\u5728\u6539\u6210\u4e86\u66f4\u51c6\u786e\u7684\u8868\u8ff0\uff1a`LLM Wiki` \u662f\u7406\u5ff5\uff0c`Graphify` \u662f\u5176\u5177\u4f53...",
+      "source_uri": "/Users/zhaoyu/Downloads/code/my-memark/memark/.memark/staging/memark/sessions/2026/04/08/rollout-2026-04-08T00-52-44-019d6c14-522e-78e0-b896-b9aaa218f8c9.md"
+    }
+  ],
+  "participants": [],
+  "related_entities": [
+    "File: rollout-2026-04-08T00-52-44-019d6c14-522e-78e0-b896-b9aaa218f8c9.md"
+  ],
+  "source_timestamps": {
+    "start": "2026-04-09T20:12:28.897476",
+    "end": "2026-04-09T20:12:28.897476"
+  },
+  "updated_at": "2026-04-09T20:12:28.897476",
+  "project": "memark"
+}

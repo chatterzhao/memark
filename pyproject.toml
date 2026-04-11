@@ -19,10 +19,13 @@ dev = ["pytest>=8.0"]
 memark = "memark.cli:main"
 
 [tool.setuptools]
-include-package-data = false
+include-package-data = true
 
 [tool.setuptools.packages.find]
 include = ["memark*"]
+
+[tool.setuptools.package-data]
+memark = ["skill_bundle/*.md", "skill_bundle/bin/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

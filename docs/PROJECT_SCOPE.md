@@ -25,6 +25,13 @@ MemArk 关心的正是这条链路：
 
 所以，MemArk 的重点不是“再造一个记忆系统”，而是把“记忆内容”晋升成“项目知识输入”，再交给 `Graphify` 编译成知识视图。
 
+还要再加一个更直接的目标定义：
+
+- 前半段：让工具吃进项目相关数据
+- 后半段：让项目内 AI 在需要时能把这些数据消费出来
+
+如果只有 ingest，没有后续消费，`MemArk` 只完成了半个问题。
+
 ## 组件关系
 
 ### MemPalace
@@ -83,6 +90,14 @@ MemArk 关心的正是这条链路：
 - 从 `MemPalace` 获取待处理内容
 - 把内容整理为 `Graphify` 最适合处理的项目语料
 - 定义这条处理管线的入口、格式和工作流
+- 以用户级 AI skill bundle 的方式暴露安装与运行入口
+- 定义“项目 AI 在需要时该先读什么、怎么读”的消费面
+
+对应消费面至少包括：
+
+- `MemPalace` 的 search / wake-up / MCP
+- `MemArk` 晋升后的 `promoted/*.md`
+- `Graphify` 的 `GRAPH_REPORT.md`、`graph.json`、query、wiki、MCP
 
 ## 治理原则
 
@@ -122,7 +137,11 @@ MemArk 关心的正是这条链路：
 
 - 正式 README
 - 项目治理模型
-- 安装 `MemPalace` 与 `Graphify` 的 AI Skill
+- 一个生产安装入口 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
+- 一个开发期安装测试入口 [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)
+- 一个用户级 runtime 安装器：`memark install`
+- 一个用户级健康检查入口：`memark doctor`
+- 一套可下发到 AI 工具目录的 `MemArk` skill bundle
 - 真实安装验证记录
 - 一个 Python CLI-first 的最小实现
 - 文档分层说明
@@ -132,6 +151,7 @@ MemArk 关心的正是这条链路：
 
 - 稳定的 `MemPalace -> MemArk` 增量抽取实现
 - 后台监控或守护进程
+- 安装后“AI 在任意项目都自动开始项目接入与调度”的最终闭环
 
 因此，任何面向用户的正式表述都不应把本仓库描述为“已经完成所有自动抽取能力的产品仓库”。
 
@@ -144,12 +164,14 @@ MemArk 关心的正是这条链路：
 - `GOVERNANCE_MODEL.md`：负责定义三类材料的隔离、晋升与输入治理
 - `INTERFACE_CONTRACT.md`：负责定义 `MemPalace -> MemArk -> Graphify` 的数据与目录契约
 - `CODEX_SESSION_INGEST_DESIGN.md`：负责定义 `Codex sessions -> project staging -> MemPalace` 的 intake 设计
-- `SKILL.md`：负责指导 AI 助手安装与验证 `MemPalace`、`Graphify`
+- `SKILL.md`：负责作为用户级生产安装入口，安装 `MemArk` skill bundle 与依赖
+- `skill-dev.md`：负责开发期隔离试装、重装与验收
 - `INSTALL_VERIFICATION.md`：负责记录已经真实执行过的安装与验证结果
 - `IMPLEMENTATION_PLAN.md`：负责定义当前 CLI 的实现边界与下一阶段路线
 - `ACCEPTANCE_CHECKLIST.md`：负责定义当前版本的验收标准
 - `PRODUCT_REQUIREMENTS.md`：负责定义基于上游能力面收敛出的具体产品需求
 - `FEATURE_LIST.md`：负责定义应实现与暂不应声称实现的功能列表
+- `AI_CONSUMPTION_MODEL.md`：负责定义项目 AI 当前应如何消费 `MemPalace`、`Graphify` 与 `MemArk` 产物
 - `DOCUMENT_STATUS.md`：负责定义正式文档与研究归档的关系
 
 ## 后续应补的文档
