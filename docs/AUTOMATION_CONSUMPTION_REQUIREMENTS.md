@@ -47,6 +47,7 @@
   - `risks-digest.md`
   - `ai-context.md`
   - `graphify-status.md`
+- 已实现 `memark context`，把这些自动消费产物收成一个统一消费入口
 
 ### 仍然缺失
 

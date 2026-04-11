@@ -452,6 +452,85 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload["hits"][0]["scope"], "promoted")
         self.assertEqual(payload["hits"][0]["title"], "Bridge Governance")
 
+    def test_context_refreshes_automation_and_returns_combined_payload(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        sessions_root = self.workspace / "sessions"
+        sessions_root.mkdir(parents=True, exist_ok=True)
+        project_docs = self.workspace / "docs"
+        project_docs.mkdir(parents=True, exist_ok=True)
+        (project_docs / "plan.md").write_text("# Plan\n\nDecision: prefer one context entrypoint.\n", encoding="utf-8")
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--path",
+            str(self.workspace),
+            "--sessions-root",
+            str(sessions_root),
+            "--json",
+            cwd=ROOT,
+        )
+
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        db_path = palace_dir / "chroma.sqlite3"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                "CREATE TABLE embeddings (id INTEGER PRIMARY KEY, segment_id TEXT NOT NULL, embedding_id TEXT NOT NULL, seq_id BLOB NOT NULL)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE embedding_metadata (
+                  id INTEGER NOT NULL,
+                  key TEXT NOT NULL,
+                  string_value TEXT,
+                  int_value INTEGER,
+                  float_value REAL,
+                  bool_value INTEGER,
+                  PRIMARY KEY (id, key)
+                )
+                """
+            )
+            conn.execute(
+                "INSERT INTO embeddings (id, segment_id, embedding_id, seq_id) VALUES (1, 'seg-a', 'drawer_ctx', X'01')"
+            )
+            conn.executemany(
+                """
+                INSERT INTO embedding_metadata (id, key, string_value, int_value, float_value, bool_value)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (1, "chroma:document", "Decision: use one context entrypoint. Risk: manual multi-step reads break continuity.", None, None, None),
+                    (1, "wing", "codex_project", None, None, None),
+                    (1, "room", "context_flow", None, None, None),
+                    (1, "source_file", str(self.workspace / ".memark" / "staging" / "memark" / "sessions" / "rollout-context.md"), None, None, None),
+                    (1, "filed_at", "2026-04-10T05:00:00Z", None, None, None),
+                    (1, "ingest_mode", "convos", None, None, None),
+                ],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        result = run_cli(
+            "context",
+            "--workspace",
+            str(self.workspace),
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["project"], "memark")
+        self.assertTrue(payload["refreshed"])
+        self.assertIn("ai-context", payload["files"])
+        self.assertIn("# AI Context", payload["sections"]["ai-context"])
+        self.assertIn("Decision", payload["sections"]["decisions-digest"])
+        self.assertIn("Risk", payload["sections"]["risks-digest"])
+        self.assertIn("recommended_command", payload["sections"]["graphify-status"])
+
     def test_graphify_handoff_renders_prompt_and_command(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"

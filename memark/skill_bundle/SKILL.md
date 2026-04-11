@@ -35,10 +35,18 @@ For project intake and cycle runs, prefer:
 ```bash
 __MEMARK_BIN__ project-set --workspace <workspace> --project <name> --path <directory-path> --sessions-root ~/.codex/sessions
 __MEMARK_BIN__ service-install --workspace <workspace>
-__MEMARK_BIN__ projects-run --workspace <workspace>
+__MEMARK_BIN__ automation-run --workspace <workspace>
 ```
 
-For project memory promotion and graph compilation, prefer:
+When starting a concrete task inside one project, load the prepared context first:
+
+```bash
+__MEMARK_BIN__ context --workspace <workspace> --project <name>
+```
+
+That command refreshes the automatic feed/process/consume cycle by default, then returns the current `ai-context`, latest summary, decision digest, risk digest, and Graphify status as one consumption surface.
+
+For explicit promotion and graph compilation control, prefer:
 
 ```bash
 __MEMARK_BIN__ palace-run --workspace <workspace> --project <name> --wiki
@@ -60,6 +68,7 @@ __MEMARK_BIN__ graphify-handoff --workspace <workspace> --project <name>
 
 Important boundary:
 
+- `memark context` is the preferred automatic consumption entrypoint for one project
 - `memark query` searches local project corpus files directly
 - current `memark build` / `palace-run --wiki` does not prove promoted markdown has already entered the Graphify graph
 - if the task truly requires mixed-corpus Graphify semantic extraction, use the upstream Graphify skill / platform flow separately

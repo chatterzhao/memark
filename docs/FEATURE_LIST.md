@@ -292,6 +292,25 @@
 - 这些文件当前主要基于 promoted/documents 语料做启发式整理
 - 因此它们已经构成自动消费基线，但还不能等同于“高质量项目治理智能体”
 
+### F10.4. 自动消费统一入口
+
+说明：
+
+- 自动消费不能停在“文件已经写出来了”
+- AI 和人类管理者需要一个统一入口，把当前项目最该读的自动产物一次性拿到
+
+当前状态：
+
+- 已实现 `memark context`
+- 默认会先刷新一轮 `automation-run`
+- 然后统一输出：
+  - `ai-context`
+  - `latest-summary`
+  - `decisions-digest`
+  - `risks-digest`
+  - `graphify-status`
+- 运行时 skill bundle 现在也已把 `memark context` 提升为默认项目消费入口
+
 ### F10.2. Graphify skill handoff
 
 说明：

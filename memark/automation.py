@@ -114,6 +114,22 @@ class AutomationProjectResult:
         }
 
 
+@dataclass(slots=True)
+class AutomationContextResult:
+    project: str
+    refreshed: bool
+    files: dict[str, str]
+    sections: dict[str, str]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "project": self.project,
+            "refreshed": self.refreshed,
+            "files": dict(self.files),
+            "sections": dict(self.sections),
+        }
+
+
 def _documents_ledger_path(config: WorkspaceConfig, project: str) -> Path:
     return config.state_dir / f"{slugify(project)}-documents.json"
 
@@ -413,6 +429,73 @@ def _graphify_automation_result(
         command=None,
         error=error,
         recommended_command=handoff.recommended_command,
+    )
+
+
+def _load_text_if_exists(path: Path) -> str:
+    if not path.exists() or not path.is_file():
+        return ""
+    return path.read_text(encoding="utf-8", errors="ignore").strip()
+
+
+def _render_context_markdown(project: str, sections: dict[str, str], files: dict[str, str]) -> str:
+    lines = [
+        f"# MemArk Context: {project}",
+        "",
+        "## Files",
+        "",
+    ]
+    for name, path in files.items():
+        lines.append(f"- {name}: {path}")
+    for name, content in sections.items():
+        lines.extend(["", f"## {name.replace('-', ' ').title()}", ""])
+        if content:
+            lines.append(content)
+        else:
+            lines.append("_missing_")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def load_automation_context(
+    config: WorkspaceConfig,
+    *,
+    project: str,
+    refresh: bool = True,
+    retry_attempts: int = 3,
+    retry_delay_seconds: float = 0.2,
+    graphify_bin: str | None = None,
+    build_graph: bool = False,
+) -> AutomationContextResult:
+    project_slug = slugify(project)
+    refreshed = False
+    if refresh:
+        run_automation_cycle(
+            config,
+            project_filter=project_slug,
+            retry_attempts=retry_attempts,
+            retry_delay_seconds=retry_delay_seconds,
+            graphify_bin=graphify_bin,
+            build_graph=build_graph,
+        )
+        refreshed = True
+
+    imports_dir = _automation_imports_dir(config, project_slug)
+    file_map = {
+        "ai-context": str(imports_dir / "ai-context.md"),
+        "latest-summary": str(imports_dir / "latest-summary.md"),
+        "decisions-digest": str(imports_dir / "decisions-digest.md"),
+        "risks-digest": str(imports_dir / "risks-digest.md"),
+        "graphify-status": str(imports_dir / "graphify-status.md"),
+    }
+    sections = {
+        name: _load_text_if_exists(Path(path))
+        for name, path in file_map.items()
+    }
+    return AutomationContextResult(
+        project=project_slug,
+        refreshed=refreshed,
+        files=file_map,
+        sections=sections,
     )
 
 

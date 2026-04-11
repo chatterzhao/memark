@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .automation import run_automation_cycle
+from .automation import _render_context_markdown, load_automation_context, run_automation_cycle
 from .corpus import search_payload, search_project_corpus
 from .codex import sync_codex_sessions
 from .graphify import GraphifyError, run_graphify
@@ -306,6 +306,25 @@ def _build_parser() -> argparse.ArgumentParser:
     query_parser.add_argument("--limit", type=int, default=10, help="Maximum number of hits to return")
     query_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     query_parser.set_defaults(func=cmd_query)
+
+    context_parser = subparsers.add_parser(
+        "context",
+        help="Refresh and render the current automatic consumption context for one project",
+    )
+    context_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    context_parser.add_argument("--project", help="Target project slug")
+    context_parser.add_argument("--no-refresh", action="store_true", help="Read existing automation artifacts without running a fresh cycle")
+    context_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
+    context_parser.add_argument(
+        "--retry-delay-seconds",
+        type=float,
+        default=0.2,
+        help="Initial retry delay for lock errors; doubles after each retry",
+    )
+    context_parser.add_argument("--graphify-bin", help="Override graphify executable name")
+    context_parser.add_argument("--build", action="store_true", help="Attempt Graphify update during the refresh")
+    context_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    context_parser.set_defaults(func=cmd_context)
 
     handoff_parser = subparsers.add_parser(
         "graphify-handoff",
@@ -927,6 +946,26 @@ def cmd_query(args: argparse.Namespace) -> int:
         print(f"   Path: {hit.path}")
         print(f"   Line: {hit.line_number}  Occurrences: {hit.occurrences}")
         print(f"   Snippet: {hit.snippet}")
+    return 0
+
+
+def cmd_context(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    payload = load_automation_context(
+        config,
+        project=project,
+        refresh=not args.no_refresh,
+        retry_attempts=args.retry_attempts,
+        retry_delay_seconds=args.retry_delay_seconds,
+        graphify_bin=args.graphify_bin,
+        build_graph=args.build,
+    )
+    if args.json:
+        print(json.dumps(payload.to_dict(), indent=2, ensure_ascii=True))
+        return 0
+
+    print(_render_context_markdown(payload.project, payload.sections, payload.files), end="")
     return 0
 
 

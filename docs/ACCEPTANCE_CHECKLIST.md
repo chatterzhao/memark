@@ -151,6 +151,7 @@
 - [x] `memark graphify-handoff` 能输出当前项目 corpus 的绝对路径、scope 规模和推荐 `/graphify <path> --update` 命令
 - [x] `memark graphify-handoff --json` 能输出可直接喂给 AI 的 prompt 与 machine-readable payload
 - [x] `automation-run` 能自动生成 `latest-summary`、`decisions-digest`、`risks-digest`、`ai-context`、`graphify-status`
+- [x] `memark context` 能把自动消费产物收成一个统一入口，并默认先刷新一轮 `automation-run`
 
 ## K. 产品目标验收项
 
