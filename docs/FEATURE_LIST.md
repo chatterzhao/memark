@@ -233,6 +233,22 @@
 - `codex-sync` 与 `mempalace-mine` 已能输出对应统计和命令
 - 晋升与 `Graphify` 路径也已有 CLI 输出
 
+### F10.2. Intake 调度安装入口
+
+说明：
+
+- `projects-run` 不应只停留在手工命令
+- 需要有正式的系统调度器安装入口
+- 同时仍然保持 `MemArk` 自身是单次 cycle，而不是自写常驻 daemon
+
+当前状态：
+
+- 已实现 `memark service-install`
+- 已实现 `memark service-status`
+- 已实现 `memark service-uninstall`
+- 当前首个正式支持的调度后端是 macOS `launchd`
+- 当前仍未实现跨平台统一 scheduler backend
+
 ### F10.1. 本地项目语料消费入口
 
 说明：

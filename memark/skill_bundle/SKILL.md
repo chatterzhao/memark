@@ -34,6 +34,7 @@ For project intake and cycle runs, prefer:
 
 ```bash
 __MEMARK_BIN__ project-set --workspace <workspace> --project <name> --path <directory-path> --sessions-root ~/.codex/sessions
+__MEMARK_BIN__ service-install --workspace <workspace>
 __MEMARK_BIN__ projects-run --workspace <workspace>
 ```
 

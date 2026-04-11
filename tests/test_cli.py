@@ -185,6 +185,142 @@ class MemArkCliTests(unittest.TestCase):
         self.assertNotEqual(doctor.returncode, 0)
         self.assertIn("unsupported runtime python version", doctor.stderr)
 
+    def test_service_install_status_and_uninstall_manage_launchd_scheduler(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_home = Path(self.tmpdir.name) / "home"
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        launchctl_log = self.workspace / "launchctl.log"
+        state_dir = self.workspace / "launchctl-state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        fake_launchctl = fake_bin_dir / "launchctl"
+        fake_launchctl.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                LOG_FILE="{launchctl_log}"
+                STATE_DIR="{state_dir}"
+                cmd="$1"
+                shift
+                case "$cmd" in
+                  bootstrap)
+                    plist="$2"
+                    touch "$STATE_DIR/$(basename "$plist").loaded"
+                    echo "bootstrap $plist" >> "$LOG_FILE"
+                    exit 0
+                    ;;
+                  bootout)
+                    target="$2"
+                    base=$(basename "$target")
+                    rm -f "$STATE_DIR/$base.loaded"
+                    echo "bootout $target" >> "$LOG_FILE"
+                    exit 0
+                    ;;
+                  enable)
+                    echo "enable $1" >> "$LOG_FILE"
+                    exit 0
+                    ;;
+                  kickstart)
+                    echo "kickstart $2" >> "$LOG_FILE"
+                    exit 0
+                    ;;
+                  print)
+                    label="${{1##*/}}"
+                    if [ -f "$STATE_DIR/$label.plist.loaded" ]; then
+                      echo "service = $label"
+                      exit 0
+                    fi
+                    echo "could not find service" >&2
+                    exit 113
+                    ;;
+                esac
+                echo "unexpected $cmd" >&2
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_launchctl.chmod(fake_launchctl.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+        }
+
+        install = run_cli(
+            "service-install",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--interval-seconds",
+            "120",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+        install_payload = json.loads(install.stdout)
+        plist_path = Path(install_payload["plist_path"])
+        self.assertTrue(plist_path.exists())
+        self.assertEqual(install_payload["scheduler"], "launchd")
+        self.assertEqual(install_payload["interval_seconds"], 120)
+        self.assertTrue(install_payload["loaded"])
+        self.assertIn("projects-run", install_payload["command"])
+
+        status = run_cli(
+            "service-status",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(status.returncode, 0, status.stderr)
+        status_payload = json.loads(status.stdout)
+        self.assertTrue(status_payload["installed"])
+        self.assertTrue(status_payload["loaded"])
+        self.assertEqual(status_payload["plist_path"], str(plist_path))
+
+        uninstall = run_cli(
+            "service-uninstall",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(uninstall.returncode, 0, uninstall.stderr)
+        uninstall_payload = json.loads(uninstall.stdout)
+        self.assertTrue(uninstall_payload["removed"])
+        self.assertTrue(uninstall_payload["unloaded"])
+        self.assertFalse(plist_path.exists())
+
+    def test_service_install_dry_run_does_not_write_plist(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_home = Path(self.tmpdir.name) / "home"
+        env = {"HOME": str(fake_home)}
+
+        result = run_cli(
+            "service-install",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--dry-run",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["dry_run"])
+        self.assertFalse(Path(payload["plist_path"]).exists())
+        self.assertFalse(payload["loaded"])
+
     def test_validate_and_promote_room_package(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         package = {
