@@ -304,7 +304,8 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(install.returncode, 0, install.stderr)
 
         doctor = run_cli("doctor", "--platform", "codex", cwd=ROOT, env=env)
-        self.assertNotEqual(doctor.returncode, 0)
+        self.assertEqual(doctor.returncode, 0, doctor.stderr)
+        self.assertIn("Doctor summary: ok", doctor.stdout)
         self.assertIn("missing mempal executable in PATH", doctor.stderr)
 
     def test_service_install_status_and_uninstall_manage_launchd_scheduler(self) -> None:
@@ -3081,6 +3082,35 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn(str(self.workspace / ".memark" / "staging" / "memark" / "sessions"), logged)
         self.assertIn('db_path = "', logged)
         self.assertIn(str(self.workspace / ".memark" / "palaces" / "memark" / "palace.db"), logged)
+
+    def test_mempal_mine_reports_embedder_bootstrap_hint(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempal = fake_bin_dir / "mempal"
+        fake_mempal.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                echo "error: failed to initialize embedder" >&2
+                echo "  caused by: embedding runtime error: failed to load model2vec model 'minishlab/potion-multilingual-128M': request error: https://huggingface.co/minishlab/potion-multilingual-128M/resolve/main/tokenizer.json: Connection Failed: tls connection init failed: unexpected end of file" >&2
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempal.chmod(fake_mempal.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("mem-tool-mine", "--workspace", str(self.workspace), cwd=ROOT, env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("failed to initialize embedder", result.stderr)
+        self.assertIn("first-run model download access", result.stderr)
+        self.assertIn("~/.mempal/config.toml", result.stderr)
 
     def test_palace_rebuild_uses_selected_mempal_tool(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
