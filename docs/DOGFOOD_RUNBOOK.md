@@ -8,6 +8,28 @@
 - 当前仓库可以留下一段连续后台运行证据
 - 维护者可以快速判断系统是在 intake、promotion、消费，还是 scheduler 这一层出了问题
 
+## Git 工作方式
+
+当前仓库长期 dogfood 时，优先按下面方式保持版本控制干净：
+
+- 功能开发先开分支，再改代码
+- 需要并行推进另一块功能时，优先新开 worktree，而不是把多个主题堆在同一个工作树
+- 连续后台 dogfood 最好放在专用 worktree，避免主工作树持续生成运行时产物
+
+一个可直接复用的方式是：
+
+```bash
+git worktree add ../memark-dogfood feature/dogfood-runtime
+cd ../memark-dogfood
+python3 -m memark automation-run --workspace . --no-build --json
+```
+
+如果只是要保留当前仓库的 dogfood 运行，不想新开 worktree，也至少保持：
+
+- `.memark/`、`.mempalace/`、`graphify-out/` 这类运行时目录不入库
+- `corpus/<project>/documents/`、`imports/`、`.codex/`、`AGENTS.md` 这类自动生成产物不入库
+- 时间戳型 dogfood rollout 文件默认不入库；如果确实要保留，显式挑选后再提交
+
 ## 日常入口
 
 先确认机器级安装健康：
