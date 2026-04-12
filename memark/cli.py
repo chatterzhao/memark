@@ -171,10 +171,34 @@ def _install_worktree_hook(source_dir: Path) -> Path:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="memark",
-        description="Promote MemPalace room packages into a Graphify-ready corpus.",
+        description="Feed, process, and consume project memory into a Graphify-ready corpus.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    def add_mem_tool_mine_arguments(target: argparse.ArgumentParser) -> None:
+        target.add_argument("--workspace", default=".", help="Workspace directory")
+        target.add_argument("--project", help="Target project slug")
+        target.add_argument("--mem-tool", choices=("mempalace", "mempal"), help="Override workspace memory tool")
+        target.add_argument("--mem-tool-bin", help="Override memory tool executable name")
+        target.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
+        target.add_argument(
+            "--palace-dir",
+            help="Override palace directory. Defaults to .memark/palaces/<project>",
+        )
+        target.add_argument(
+            "--staging-dir",
+            help="Override staging directory. Defaults to .memark/staging/<project>/sessions",
+        )
+        target.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
+        target.add_argument(
+            "--retry-delay-seconds",
+            type=float,
+            default=0.2,
+            help="Initial retry delay for lock errors; doubles after each retry",
+        )
+        target.add_argument("--dry-run", action="store_true", help="Print the memory-tool command without executing it")
+        target.add_argument("--json", action="store_true", help="Render machine-readable JSON")
 
     init_parser = subparsers.add_parser("init", help="Create a MemArk workspace")
     init_parser.add_argument("workspace", nargs="?", default=".", help="Workspace directory")
@@ -564,7 +588,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--mine-interval-seconds",
         type=int,
         default=120,
-        help="Minimum interval between automatic mempalace mine runs for this project",
+        help="Minimum interval between automatic memory-tool ingest runs for this project",
     )
     project_set_parser.add_argument("--no-auto-mine", action="store_true", help="Record pending changes without auto-running mine")
     project_set_parser.add_argument("--disabled", action="store_true", help="Keep the project in config but skip it during projects-run")
@@ -573,7 +597,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     worktree_attach_parser = subparsers.add_parser(
         "worktree-attach",
-        help="Copy MemArk, MemPalace, and Graphify-facing config files from one directory into another",
+        help="Copy MemArk, memory-tool, and Graphify-facing config files from one directory into another",
     )
     worktree_attach_parser.add_argument("--source-dir", required=True, help="Source directory to copy config from")
     worktree_attach_parser.add_argument("--target-dir", required=True, help="Target directory to receive copied config")
@@ -595,7 +619,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     projects_run_parser = subparsers.add_parser(
         "projects-run",
-        help="Run one configured Codex sync + optional MemPalace mine cycle across enabled projects",
+        help="Run one configured Codex sync + optional memory-tool ingest cycle across enabled projects",
     )
     projects_run_parser.add_argument("--workspace", default=".", help="Workspace directory")
     projects_run_parser.add_argument("--project", help="Only run one configured project")
@@ -632,37 +656,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "mem-tool-mine",
         help="Run the selected memory tool against a project's staged Codex sessions",
     )
-    mem_tool_mine_parser.add_argument("--workspace", default=".", help="Workspace directory")
-    mem_tool_mine_parser.add_argument("--project", help="Target project slug")
-    mem_tool_mine_parser.add_argument("--mem-tool", choices=("mempalace", "mempal"), help="Override workspace memory tool")
-    mem_tool_mine_parser.add_argument("--mem-tool-bin", help="Override memory tool executable name")
-    mem_tool_mine_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
-    mem_tool_mine_parser.add_argument(
-        "--palace-dir",
-        help="Override palace directory. Defaults to .memark/palaces/<project>",
-    )
-    mem_tool_mine_parser.add_argument(
-        "--staging-dir",
-        help="Override staging directory. Defaults to .memark/staging/<project>/sessions",
-    )
-    mem_tool_mine_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
-    mem_tool_mine_parser.add_argument(
-        "--retry-delay-seconds",
-        type=float,
-        default=0.2,
-        help="Initial retry delay for lock errors; doubles after each retry",
-    )
-    mem_tool_mine_parser.add_argument("--dry-run", action="store_true", help="Print the memory-tool command without executing it")
-    mem_tool_mine_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    add_mem_tool_mine_arguments(mem_tool_mine_parser)
     mem_tool_mine_parser.set_defaults(func=cmd_mempalace_mine)
 
     mempalace_parser = subparsers.add_parser(
         "mempalace-mine",
         help="Backward-compatible alias for 'mem-tool-mine'",
     )
-    for action in mem_tool_mine_parser._actions[1:]:
-        if not any(existing.dest == action.dest for existing in mempalace_parser._actions):
-            mempalace_parser._add_action(action)
+    add_mem_tool_mine_arguments(mempalace_parser)
     mempalace_parser.set_defaults(func=cmd_mempalace_mine)
 
     palace_status_parser = subparsers.add_parser(
@@ -688,7 +689,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     palace_rebuild_parser = subparsers.add_parser(
         "palace-rebuild",
-        help="Clean a project's palace, then rerun MemPalace convo mine from staging",
+        help="Clean a project's palace, then rerun memory-tool ingest from staging",
     )
     palace_rebuild_parser.add_argument("--workspace", default=".", help="Workspace directory")
     palace_rebuild_parser.add_argument("--project", help="Target project slug")
@@ -710,7 +711,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     palace_retry_parser = subparsers.add_parser(
         "palace-retry",
-        help="Retry MemPalace convo mine against the current project staging without cleaning",
+        help="Retry memory-tool ingest against the current project staging without cleaning",
     )
     palace_retry_parser.add_argument("--workspace", default=".", help="Workspace directory")
     palace_retry_parser.add_argument("--project", help="Target project slug")
@@ -726,13 +727,13 @@ def _build_parser() -> argparse.ArgumentParser:
         default=0.2,
         help="Initial retry delay for lock errors; doubles after each retry",
     )
-    palace_retry_parser.add_argument("--dry-run", action="store_true", help="Render the MemPalace command without executing it")
+    palace_retry_parser.add_argument("--dry-run", action="store_true", help="Render the memory-tool command without executing it")
     palace_retry_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     palace_retry_parser.set_defaults(func=cmd_palace_retry)
 
     palace_parser = subparsers.add_parser(
         "palace-export",
-        help="Read staged MemPalace drawers from a project palace using a read-only adapter",
+        help="Read staged memory-tool drawers from a project palace using a read-only adapter",
     )
     palace_parser.add_argument("--workspace", default=".", help="Workspace directory")
     palace_parser.add_argument("--project", help="Target project slug")
@@ -760,7 +761,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--group-by",
         choices=("room", "session"),
         default="room",
-        help="Package drawers by MemPalace room or by logical source session",
+        help="Package drawers by room or by logical source session",
     )
     package_parser.add_argument(
         "--write-inbox",
@@ -786,7 +787,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--group-by",
         choices=("room", "session"),
         default="room",
-        help="Package drawers by MemPalace room or by logical source session",
+        help="Package drawers by room or by logical source session",
     )
     palace_run_parser.add_argument("--graphify-bin", help="Override graphify executable name")
     palace_run_parser.add_argument("--update", action="store_true", help="Pass --update to graphify")

@@ -35,7 +35,7 @@ def _frontmatter(package: RoomPackage, project: str) -> str:
 
     lines = [
         "---",
-        'source: "mempalace"',
+        'source: "memark"',
         'source_kind: "promoted_room"',
         f"project: {_yaml_scalar(project)}",
         f"wing_id: {_yaml_scalar(package.wing_id)}",

@@ -41,7 +41,7 @@ Important boundary:
 Consumption order:
 
 1. `memark context` for the current automatic summary / decisions / risks / graphify status bundle
-2. `MemPalace search` / `wake-up` for deeper history
+2. the configured memory tool for deeper history, for example `MemPalace search` / `wake-up`
 3. `memark query` for promoted project knowledge
 4. `memark build`, `memark slash`, or `automation-run` to refresh the corpus graph when needed
 5. `Graphify` report / query for code structure, with `memark graphify-handoff` reserved for upstream interop

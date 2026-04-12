@@ -48,7 +48,7 @@ def milestone_catalog() -> dict[str, object]:
                 {
                     "name": "Palace Ops",
                     "commands": [
-                        "memark mempalace-mine",
+                        "memark mem-tool-mine",
                         "memark palace-status",
                         "memark palace-clean",
                         "memark palace-rebuild",
