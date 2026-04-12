@@ -79,6 +79,7 @@ class DoctorResult:
     graphify_bin: Path
     targets: list[InstallTarget]
     issues: list[str]
+    warnings: list[str]
 
     def ok(self) -> bool:
         return not self.issues
@@ -102,6 +103,7 @@ class DoctorResult:
                 for target in self.targets
             ],
             "issues": list(self.issues),
+            "warnings": list(self.warnings),
         }
 
 
@@ -368,6 +370,7 @@ def run_doctor(*, platform: str, memark_home: Path | None = None) -> DoctorResul
     venv_dir, python_bin, memark_bin, mempalace_bin, graphify_bin = _venv_paths(resolved_home)
     targets = bundle_targets(platform)
     issues: list[str] = []
+    warnings: list[str] = []
 
     if not venv_dir.exists():
         issues.append(f"missing runtime environment: {venv_dir}")
@@ -390,7 +393,7 @@ def run_doctor(*, platform: str, memark_home: Path | None = None) -> DoctorResul
         issues.append(f"missing mempalace executable: {mempalace_bin}")
     mempal_bin = resolve_mempal_bin()
     if shutil.which(mempal_bin) is None:
-        issues.append(
+        warnings.append(
             "missing mempal executable in PATH. Install it separately with 'cargo install mempal' "
             "if you want to use mem_tool=mempal."
         )
@@ -422,4 +425,5 @@ def run_doctor(*, platform: str, memark_home: Path | None = None) -> DoctorResul
         graphify_bin=graphify_bin,
         targets=targets,
         issues=issues,
+        warnings=warnings,
     )

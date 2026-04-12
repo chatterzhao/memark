@@ -383,7 +383,8 @@ python3 -m memark install --platform codex --source-spec "$(pwd)"
 - runtime Python 只支持 `3.10` 到 `3.13`
 - 不要显式把 `--python-command` 指到不兼容的 `python3`
 - 默认让 `memark install` 自动选择兼容解释器即可
-- 如果 `doctor` 仅提示缺少 `mempal`，表示默认 `mempalace` 安装可用，但 `mem_tool=mempal` 还未就绪
+- 如果 `doctor` 仅警告缺少 `mempal`，表示默认 `mempalace` 安装可用，但 `mem_tool=mempal` 还未就绪
+- `mempal` 首次 ingest 可能需要引导默认 embedder 下载模型；若网络或 TLS 不通，`memark mem-tool-mine` 现在会给出明确提示，要求先处理 `~/.mempal/config.toml` 或在可联网环境预热模型
 
 如果你接下来要让某个目录变成 MemArk workspace，再初始化一个工作区：
 

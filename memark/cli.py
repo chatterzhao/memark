@@ -961,6 +961,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         for issue in result.issues:
             print(f"- {issue}", file=sys.stderr)
         return 1
+    if result.warnings:
+        print("Doctor warnings:", file=sys.stderr)
+        for warning in result.warnings:
+            print(f"- {warning}", file=sys.stderr)
     print("Doctor summary: ok")
     return 0
 

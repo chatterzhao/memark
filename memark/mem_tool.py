@@ -67,6 +67,22 @@ def _is_lock_error(stdout: str, stderr: str) -> bool:
     return "database is locked" in combined or ("sqlite" in combined and "locked" in combined)
 
 
+def _mempal_failure_hint(stdout: str, stderr: str) -> str | None:
+    combined = f"{stdout}\n{stderr}".lower()
+    if "failed to initialize embedder" not in combined:
+        return None
+    if "huggingface.co" in combined or "tokenizer.json" in combined or "tls connection init failed" in combined:
+        return (
+            "MemPal default embedder needs first-run model download access. "
+            "If the network is restricted or TLS bootstrap fails, pre-install the model in a working environment "
+            "or configure ~/.mempal/config.toml to use a different embed backend before retrying."
+        )
+    return (
+        "MemPal embedder initialization failed. Check ~/.mempal/config.toml and verify the configured embed backend "
+        "can initialize in this environment before retrying."
+    )
+
+
 def _run_mem_tool_command(
     command: list[str],
     *,
@@ -100,9 +116,15 @@ def _run_mem_tool_command(
         time.sleep(delay)
         delay *= 2
     assert last_completed is not None
+    hint = ""
+    if tool_label == "MemPal":
+        mempal_hint = _mempal_failure_hint(last_completed.stdout, last_completed.stderr)
+        if mempal_hint is not None:
+            hint = f"\nHint: {mempal_hint}"
     raise MemToolError(
         f"{tool_label} {action} failed with exit code {last_completed.returncode} after {attempts} attempt(s)\n"
         f"STDOUT:\n{last_completed.stdout}\nSTDERR:\n{last_completed.stderr}"
+        f"{hint}"
     )
 
 

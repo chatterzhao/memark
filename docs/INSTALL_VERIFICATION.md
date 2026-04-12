@@ -225,7 +225,7 @@ python3 -m venv /tmp/memark-bootstrap
 
 - 用户级 runtime 成功重建在 [`/Users/zhaoyu/.memark/venv`](/Users/zhaoyu/.memark/venv)
 - Codex skill bundle 成功重建在 [`/Users/zhaoyu/.agents/skills/memark`](/Users/zhaoyu/.agents/skills/memark)
-- `doctor` 对默认 `mempalace` 路径可通过；若机器尚未单独安装 `mempal`，则会额外提示 `mem_tool=mempal` 尚未就绪
+- `doctor` 对默认 `mempalace` 路径可通过；若机器尚未单独安装 `mempal`，则会额外给出 `mem_tool=mempal` 尚未就绪的 warning
 - runtime 实际版本：
   - `Python 3.13.6`
   - `mempalace 3.1.0`
@@ -238,6 +238,7 @@ python3 -m venv /tmp/memark-bootstrap
 - 当前会自动选择兼容的 runtime Python
 - 这次实际避开了系统 `Python 3.14`，改用 `Python 3.13`
 - 如果手工覆盖 `--python-command`，调用方自己要保证该解释器仍在 `3.10` 到 `3.13`
+- 如果后续启用 `mem_tool=mempal`，首次 ingest 还取决于 `mempal` embedder bootstrap 是否成功；若默认模型下载失败，`memark` 现在会把上游错误归因为 embedder 初始化问题并提示检查 `~/.mempal/config.toml`
 
 ### 2. 当前仓库会话重喂成功
 
