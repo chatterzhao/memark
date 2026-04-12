@@ -1,4 +1,4 @@
-"""Read-only adapters for extracting drawers from a MemPalace palace."""
+"""Read-only adapters for extracting drawers from supported memory-tool stores."""
 
 from __future__ import annotations
 
@@ -190,6 +190,70 @@ def _read_with_sqlite(
     return results
 
 
+def _read_mempal_sqlite(
+    palace_dir: Path,
+    *,
+    ingest_mode: str | None,
+    wing: str | None,
+    room: str | None,
+    limit: int | None,
+) -> list[PalaceDrawer]:
+    db_path = palace_dir / "palace.db"
+    if not db_path.exists():
+        raise PalaceReadError(f"MemPal palace.db not found at {db_path}")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        filters = ["deleted_at IS NULL"]
+        params: list[object] = []
+        if ingest_mode == "convos":
+            filters.append("source_type = ?")
+            params.append("conversation")
+        if wing:
+            filters.append("wing = ?")
+            params.append(wing)
+        if room:
+            filters.append("room = ?")
+            params.append(room)
+        where_clause = " AND ".join(filters)
+        sql = (
+            "SELECT id, content, wing, room, source_file, added_at, chunk_index "
+            f"FROM drawers WHERE {where_clause} ORDER BY added_at, id"
+        )
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(sql, params).fetchall()
+    except sqlite3.Error as exc:
+        raise PalaceReadError(f"unable to read {db_path}") from exc
+    finally:
+        conn.close()
+
+    results: list[PalaceDrawer] = []
+    for row in rows:
+        chunk_index = row["chunk_index"]
+        if isinstance(chunk_index, bool):
+            chunk_index = int(chunk_index)
+        elif not isinstance(chunk_index, int):
+            chunk_index = None
+        results.append(
+            PalaceDrawer(
+                drawer_id=str(row["id"]),
+                document=str(row["content"]),
+                wing=str(row["wing"]) if row["wing"] is not None else None,
+                room=str(row["room"]) if row["room"] is not None else None,
+                source_file=str(row["source_file"]) if row["source_file"] is not None else None,
+                filed_at=str(row["added_at"]) if row["added_at"] is not None else None,
+                ingest_mode="convos" if ingest_mode == "convos" else None,
+                extract_mode=None,
+                added_by="mempal",
+                chunk_index=chunk_index,
+            )
+        )
+    return results
+
+
 def read_palace_drawers(
     palace_dir: Path,
     *,
@@ -203,18 +267,29 @@ def read_palace_drawers(
         raise PalaceReadError(f"MemPalace directory does not exist: {normalized_palace}")
 
     try:
-        return _read_with_chromadb(
-            normalized_palace,
-            ingest_mode=ingest_mode,
-            wing=wing,
-            room=room,
-            limit=limit,
-        )
-    except PalaceReadError:
-        return _read_with_sqlite(
-            normalized_palace,
-            ingest_mode=ingest_mode,
-            wing=wing,
-            room=room,
-            limit=limit,
-        )
+        if (normalized_palace / "palace.db").exists():
+            return _read_mempal_sqlite(
+                normalized_palace,
+                ingest_mode=ingest_mode,
+                wing=wing,
+                room=room,
+                limit=limit,
+            )
+        try:
+            return _read_with_chromadb(
+                normalized_palace,
+                ingest_mode=ingest_mode,
+                wing=wing,
+                room=room,
+                limit=limit,
+            )
+        except PalaceReadError:
+            return _read_with_sqlite(
+                normalized_palace,
+                ingest_mode=ingest_mode,
+                wing=wing,
+                room=room,
+                limit=limit,
+            )
+    except PalaceReadError as exc:
+        raise PalaceReadError(f"unable to read memory store at {normalized_palace}") from exc
