@@ -42,6 +42,7 @@ from .project_registry import (
     load_cycle_state,
     load_project_profiles,
     run_projects_cycle,
+    save_project_profiles,
     upsert_project_profile,
 )
 from .promote import load_room_packages, promote_file, promote_path
@@ -88,6 +89,37 @@ def _copy_attach_candidate(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
+def _remap_attached_path(path: Path, *, source_dir: Path, target_dir: Path) -> Path:
+    try:
+        relative = path.resolve().relative_to(source_dir)
+    except ValueError:
+        return path.resolve()
+    return (target_dir / relative).resolve()
+
+
+def _rewrite_attached_project_registry(projects_file: Path, *, source_dir: Path, target_dir: Path) -> None:
+    if not projects_file.exists():
+        return
+    profiles = load_project_profiles(projects_file)
+    rewritten: list[ProjectProfile] = []
+    for profile in profiles:
+        rewritten.append(
+            ProjectProfile(
+                name=profile.normalized_name(),
+                path=str(_remap_attached_path(profile.normalized_path(), source_dir=source_dir, target_dir=target_dir)),
+                sessions_root=profile.sessions_root,
+                extra_paths=[
+                    str(_remap_attached_path(value, source_dir=source_dir, target_dir=target_dir))
+                    for value in profile.normalized_extra_paths()
+                ],
+                mine_interval_seconds=profile.mine_interval_seconds,
+                auto_mine=profile.auto_mine,
+                enabled=profile.enabled,
+            )
+        )
+    save_project_profiles(projects_file, rewritten)
+
+
 def _attach_worktree_configs(source_dir: Path, target_dir: Path) -> dict[str, list[str]]:
     copied: list[str] = []
     skipped: list[str] = []
@@ -98,6 +130,8 @@ def _attach_worktree_configs(source_dir: Path, target_dir: Path) -> dict[str, li
             skipped.append(name)
             continue
         _copy_attach_candidate(source, destination)
+        if name == ".memark":
+            _rewrite_attached_project_registry(destination / "projects.toml", source_dir=source_dir, target_dir=target_dir)
         copied.append(name)
     return {"copied": copied, "skipped": skipped}
 
