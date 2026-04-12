@@ -60,18 +60,61 @@ __MEMARK_BIN__ query "<topic>" --workspace <workspace> --project <name>
 
 Use `--scope promoted` when you specifically want promoted session knowledge, and `--json` when the result should be fed into another AI step.
 
-When the user wants Graphify to semantically compile the full prepared corpus, generate the handoff first:
+When the user wants the prepared corpus graph refreshed, use MemArk directly first:
+
+```bash
+__MEMARK_BIN__ build --workspace <workspace> --project <name>
+```
+
+That path now writes a local mixed-corpus `graphify-out/graph.json` even when the installed `graphify` CLI does not expose a direct folder-build entrypoint.
+
+When the user specifically wants upstream Graphify interop or platform-installed AGENTS/hooks, generate the handoff first:
 
 ```bash
 __MEMARK_BIN__ graphify-handoff --workspace <workspace> --project <name>
 ```
 
+Prefer direct MemArk CLI commands first. MemArk-owned commands are designed to support both interactive and non-interactive use, but the default execution contract is non-interactive first with automatic approval.
+
+MemArk CLI commands now keep one official command name per capability. Do not invent abbreviations or alternate spellings for existing commands.
+
+If the task arrives as a slash-only request or the caller explicitly requires slash syntax, use:
+
+```bash
+__MEMARK_BIN__ slash --workspace <workspace> /graphify <workspace-or-corpus> --update
+__MEMARK_BIN__ slash --workspace <workspace> /context <workspace> --no-refresh --json
+__MEMARK_BIN__ slash --workspace <workspace> /milestones <workspace> --json
+__MEMARK_BIN__ slash --workspace <workspace> /automation-status <workspace> --json
+__MEMARK_BIN__ slash --workspace <workspace> /status <workspace> --json
+__MEMARK_BIN__ slash --workspace <workspace> /query <terms...> --json
+__MEMARK_BIN__ slash --workspace <workspace> /graphify-proof <workspace> --json
+```
+
+If you first need to discover which slash adapters MemArk currently supports, use:
+
+```bash
+__MEMARK_BIN__ slash --catalog --json
+```
+
+If an upstream Graphify flow really ingests that corpus separately, persist the proof back into MemArk:
+
+```bash
+__MEMARK_BIN__ graphify-proof --workspace <workspace> --project <name> --record-ingested --evidence-path <path-to-proof-file>
+```
+
+If either MemArk or an upstream Graphify flow writes `graphify-out/graph.json` inside `corpus/<project>` and that graph contains nodes sourced from `promoted/`, `documents/`, or `imports/`, MemArk can auto-detect the proof later via `graphify-proof` or `milestones`.
+
 Important boundary:
 
 - `memark context` is the preferred automatic consumption entrypoint for one project
 - `memark query` searches local project corpus files directly
-- current `memark build` / `palace-run --wiki` does not prove promoted markdown has already entered the Graphify graph
-- if the task truly requires mixed-corpus Graphify semantic extraction, use the upstream Graphify skill / platform flow separately
+- current `memark build` / `automation-run` can produce a local mixed-corpus graph without requiring a slash-command client
+- current `memark slash` is the slash-compatible adapter surface for slash-only workflows
+- current `memark slash --catalog` is the discovery surface for supported slash adapters
+- current slash catalog also declares: direct CLI is preferred, execution is non-interactive first, and approval mode is auto
+- current MemArk CLI keeps one official command name per capability to avoid AI routing drift across duplicate spellings
+- current slash catalog includes `/graphify`, `/context`, `/milestones`, `/automation-status`, `/status`, `/query`, and `/graphify-proof`
+- `memark graphify-handoff` and `memark graphify-onboard` are optional interop paths, not prerequisites for normal MemArk automation
 
 If the user creates a new `git worktree`, do not re-install everything manually. Prefer:
 

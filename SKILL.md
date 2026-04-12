@@ -55,11 +55,28 @@ description: Production installer skill that bootstraps MemArk into a user-level
 
 - `memark project-set`
 - `memark projects-run`
+- `memark automation-run`
 - `mempalace mine`
 - `graphify codex install`
 - `graphify claude install`
 - 手写目录级配置
 - 假设安装后已经完成项目接入
+
+要特别明确：
+
+- `memark install` 可以在任何目录执行
+- 它不要求当前目录是项目目录
+- 它也不会自动替某个项目执行 `memark init`
+- 安装完成只代表这台机器有了可用 runtime，不代表任何项目已经接入
+
+如果用户接着问“新项目怎么接”，再切到项目接入说明：
+
+1. 选择“独立 workspace”或“复用已有 workspace”
+2. 需要新 workspace 时执行 `memark init <workspace>`
+3. 需要把项目纳入该 workspace 时执行 `memark project-set`
+4. 需要立即跑一轮时执行 `memark automation-run`
+5. 需要周期运行时执行 `memark service-install`
+6. 当前命令面每项能力只保留一个唯一正式命令名，不要自己发明缩写或别名
 
 ## 已确认的上游事实
 
@@ -197,12 +214,23 @@ py -m venv .memark-bootstrap
 1. 需要历史讨论与上下文时，优先 `mempalace search` / `mempalace wake-up`
 2. 需要读晋升后的项目知识时，优先 `memark query "<topic>" --workspace <workspace> --project <name>`
 3. 需要看代码结构和图谱导航时，再使用 `Graphify` 的 report / query
-4. 需要把当前 `MemArk` 语料继续交给 `Graphify` skill 做 mixed-corpus 编译时，先运行 `memark graphify-handoff --workspace <workspace> --project <name>`
+4. 需要刷新当前项目的 mixed-corpus 图时，优先 `memark build --workspace <workspace> --project <name>`
+5. `MemArk` 自己的入口默认优先直接走 CLI，而不是 slash；这些 CLI 入口设计目标是免交互、自动批准、适合 AI 自动执行
+6. 如果任务本身是 slash-only 语义，或调用方明确要求 slash 语法，再走 `memark slash --workspace <workspace> /graphify <workspace-or-corpus> --update`
+7. 只有任务明确要求走上游 `Graphify` skill / AGENTS/hooks 互操作时，才运行 `memark graphify-handoff --workspace <workspace> --project <name>`
+8. 如果需要先判断当前 `MemArk` 已支持哪些 slash adapter，先运行 `memark slash --catalog --json`
+9. 如果任务语义更接近“读取当前项目统一上下文”，优先 `memark context --workspace <workspace> --project <name>`；只有 slash-only 时才用 `memark slash --workspace <workspace> /context <workspace> --no-refresh --json`
+10. 如果任务语义更接近“读取当前阶段、阻塞项、下一步”，优先 `memark milestones --workspace <workspace> --json`；只有 slash-only 时才用 `memark slash --workspace <workspace> /milestones <workspace> --json`
+11. 如果任务语义更接近“读取当前项目状态与 graphify corpus 状态”，优先 `memark status --workspace <workspace> --json`；只有 slash-only 时才用 `memark slash --workspace <workspace> /status <workspace> --json`
+12. 如果任务语义更接近“在本地 corpus 里直接搜主题”，优先 `memark query "<topic>" --workspace <workspace> --project <name>`；只有 slash-only 时才用 `memark slash --workspace <workspace> /query <terms...> --json`
+13. 如果任务语义更接近“读取最近自动化周期状态”，优先 `memark automation-status --workspace <workspace> --json`；只有 slash-only 时才用 `memark slash --workspace <workspace> /automation-status <workspace> --json`
+14. 如果任务语义更接近“读取或记录 mixed-corpus graph proof”，优先 `memark graphify-proof --workspace <workspace> --json`；只有 slash-only 时才用 `memark slash --workspace <workspace> /graphify-proof <workspace> --json`
+15. 不要对现有正式命令再造缩写；如果未来要新增更短命令，应该在设计时直接定为唯一正式名，而不是并存双入口
 
 当前不要把安装结果表述成：
 
 - promoted markdown 已自动进入 `Graphify` 图
-- `memark build` 已自动完成 mixed-corpus semantic extraction
+- 安装后任何项目都已自动接入 `MemArk`
 
 ## 何时切到开发版
 

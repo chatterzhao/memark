@@ -26,6 +26,111 @@
 - `MemArk promoted corpus + memark query` 这条消费链已经吃到
 - `promoted markdown -> Graphify graph -> AI 统一消费` 这条链还没有吃到
 
+补充一条 `2026-04-11` 的最新真实状态：
+
+- 当前仓库再次执行 `python3 -m memark automation-run --workspace . --no-build --json`
+- 本轮状态为 `completed`
+- `palace_drawers` 已推进到 `1033`
+- `packages` 为 `18`
+- `promoted_changed` 为 `1`
+- 自动消费产物继续刷新
+- `graphify_status` 仍然是 `not_requested`
+
+这说明当前仓库“持续自己吃自己”的单次前台自动 cycle 仍然是活的，但也再次说明 mixed-corpus `Graphify` 闭环还没有被这条链自动接住
+
+同一天又补到一段新的后台证据：
+
+- 当前仓库重新安装了 `launchd` job
+- 手动 `kickstart` 后，`launchctl print` 显示：
+  - `runs = 2`
+  - `last exit code = 0`
+- `automation-status` 推进到新的后台时间戳：
+  - `started_at = 2026-04-11T07:15:30.282252+00:00`
+  - `finished_at = 2026-04-11T07:15:33.372408+00:00`
+- `palace_drawers` 进一步推进到 `1043`
+- 当前选择是不卸载该 job，让当前仓库继续进入持续 dogfood 观察
+
+对应时间线已追加到 [`docs/DOGFOOD_LOG.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_LOG.md)
+
+同一天还补了一个直接从真实 dogfood 中长出来的运维需求：
+
+- 之前的 `service-status` 只能回答“装没装”
+- 但对持续 dogfood 来说，更需要回答“后台现在健不健康、有没有 stale”
+- 当前已补到：
+  - 实际 `interval_seconds`
+  - `stdout_bytes`
+  - `stderr_bytes`
+  - `health`
+  - `observations`
+
+当前仓库真实输出已能直接看到：
+
+- `installed = true`
+- `loaded = true`
+- `interval_seconds = 300`
+- `health = ok`
+- `observations = ["last completed cycle age: ...s"]`
+
+同一天又把这层观测继续收口成里程碑判断入口：
+
+- 当前执行 `python3 -m memark milestones --workspace .`
+- 现可直接返回 `Current milestone assessment: ready`
+- 当前真实检查已全部通过：
+  - 后台 scheduler 健康
+  - automation 最近完成
+  - 本地 mixed corpus 已存在
+  - 自动消费产物已生成
+  - mixed-corpus graph closure 已被自动识别
+
+这让 `M1` 不再只是文档判断，而是 CLI 可直接读出的实时阶段判断。
+
+同一天又补上一层更接近产品闭环的状态面：
+
+- 当前新增 `python3 -m memark graphify-proof --workspace .`
+- 它用于在上游 `Graphify` skill 真实 ingest 当前 `corpus/<project>` 后，把证据写回 `.memark/state`
+- 现在即使不走上游 slash skill，`python3 -m memark build --workspace .` 也会在 `corpus/<project>/graphify-out/` 生成 mixed-corpus graph
+- 同时现在也能通过 `python3 -m memark slash --workspace . /graphify . --update` 走 `MemArk` 自己的 slash-compatible adapter surface
+- 只要该 graph 里真实包含来自 `promoted/documents/imports` 的节点，系统就会自动识别这条 proof
+- 当前仓库已实测进入：
+  - `graphify_proof.status = ingested`
+  - `M1 = ready`
+
+这样后续一旦补到真实 mixed-corpus ingestion 证据，里程碑判断会直接变成系统状态，而不是再改文档口径。
+
+同一天又把 mixed-corpus `Graphify` 的前置接入做成了真实可执行入口：
+
+- 新增 `python3 -m memark graphify-onboard --workspace .`
+- 当前仓库已真实执行成功，目标目录是：
+  - `corpus/memark`
+- 当前真实落盘结果：
+  - `corpus/memark/AGENTS.md`
+  - `corpus/memark/.codex/hooks.json`
+
+这说明当前仓库已经不只是“知道应该对 corpus 跑 Graphify”，而是已经把上游 Graphify 的项目级接入真正装到了正确目录。
+
+当前状态已经变成：
+
+- `corpus/memark/graphify-out/graph.json` 已存在
+- `corpus/memark/graphify-out/GRAPH_REPORT.md` 已存在
+- `graphify_corpus_status = ingested`
+- workspace root 仍保留旧的 code-only graph，但 corpus graph 已是 mixed-corpus
+- `M1 = ready`
+
+同一天又把这条 blocker 推进到了默认消费面：
+
+- 当前重新执行 `python3 -m memark automation-run --workspace . --no-build --json`
+- 随后 `python3 -m memark context --workspace . --no-refresh` 已可直接看到：
+  - `graphify_corpus_status: ingested`
+  - `graphify_onboarding_status: onboarded`
+  - `graphify_proof_diagnostics: mixed_corpus_detected`
+- `graphify-status` artifact 也已直接写出：
+  - `corpus_status`
+  - `onboarding_status`
+  - `graph_path`
+  - 推荐上游命令 `/graphify /Users/zhaoyu/Downloads/code/my-memark/memark/corpus/memark --update`
+
+这意味着当前仓库日常“自己吃自己”时，不用再额外翻 `status` 或 `milestones`，只读 `context` 就能看见 mixed-corpus graph 已经吃通。
+
 ## 一、真实狗粮已验证
 
 ### A1. 用户级安装闭环
@@ -178,26 +283,51 @@
 - `memark service-uninstall --workspace . --scheduler launchd --json` 成功返回 `removed: true`、`unloaded: true`
 - 卸载后再次执行 `service-status`，已回到 `installed: false`、`loaded: false`
 
-同一次验证里，也明确看到一个尚未解决的真实问题：
+后续又补到一段更强的真实验证：
 
-- 对该 job 执行 `launchctl kickstart -k` 后，`runs` 计数会增长
-- 但本次观察窗口里，`.memark/state/projects-run.json` 没有跟着更新
-- 对应 stdout/stderr 日志文件仍是 `0 bytes`
-- 当时的后台 Python 进程一度持续存活，没有形成可直接引用的 cycle 完成证据
-
-对照验证：
-
-- 用接近 `launchd` 的最小环境前台执行
-- `env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin ~/.memark/venv/bin/memark projects-run --workspace ... --json`
-- 这条命令在同一台机器上是可完成的，并且能更新 `projects-run.json`
+- 先执行前台 `python3 -m memark automation-run --workspace . --no-build --json`
+- 再执行 `memark service-install --workspace . --scheduler launchd --interval-seconds 300 --json`
+- `service-status --json` 已能返回 `last_cycle.status = completed`
+- `last_cycle.started_at` / `finished_at` 会推进到新的后台运行时间
+- `launchctl print gui/501/io.memark.projects-run.memark.3897640fdb` 可见：
+  - `runs = 3`
+  - `last exit code = 0`
+- 手动 `launchctl kickstart -k ...` 后，`.memark/state/automation-run.json` 会更新为新的时间戳
+- 同一次后台 cycle 里，`palace_drawers` 从 `1014` 推进到 `1024`
+- `intake.mined` 也重新回到 `true`
+- 对应 stdout / stderr 日志文件不再是 `0 bytes`
 
 结论：
 
 - 可以说“`launchd` 的安装 / 状态查询 / 卸载已在真实机器上验证”
 - 可以说“默认调度目标已经从 intake 半链路升级到 `automation-run`”
-- 也可以说“前台最小环境下的单次 cycle 没问题”
-- 但还不能说“当前仓库已经稳定靠后台 `launchd` 持续喂数”
-- 目前更准确的表述是：真实狗粮已经把后台调度问题暴露出来，但持续 intake 闭环仍未验证完
+- 现在也可以说“当前仓库已经拿到真实后台 `launchd -> automation-run -> automation-run.json` 完成证据”
+- 但还不能说“当前仓库已经稳定靠后台 `launchd` 长期持续喂数”
+- 目前更准确的表述是：单次后台自动 cycle 已真实打通，长期稳定性仍未验证完
+
+### C2.1. 后台健康观测面已补齐一层
+
+在 `2026-04-11` 的真实后台运行基础上，又补了 `service-status` 的健康观测：
+
+- 读取已安装 plist 的实际 `StartInterval`
+- 暴露 stdout / stderr 日志字节数
+- 根据 `last_cycle.finished_at` 判断是否 stale
+- 把结果收敛成 `health`
+
+当前可用的健康状态至少包括：
+
+- `ok`
+- `stale`
+- `failing`
+- `running`
+- `not_loaded`
+- `not_installed`
+
+结论：
+
+- 当前后台 dogfood 已不只是“有无安装”
+- 维护者已经可以直接看“后台是否健康”
+- 这对下一阶段长期稳定性里程碑是实打实的推进
 
 ### C3. 自动消费产物
 
@@ -223,6 +353,53 @@
 - 可以说“自动消费产物生成已在当前仓库真实跑通”
 - 但还不宜说“AI runtime 已自动读取这些产物并因此持续变好”
 
+在 `2026-04-11` 又补了一轮真实前台 dogfood：
+
+- `python3 -m memark automation-run --workspace . --no-build --json`
+- `python3 -m memark automation-status --workspace . --json`
+- `python3 -m memark context --workspace . --json`
+
+本轮实测结果：
+
+- `automation-status.status = completed`
+- `project_count = 1`
+- `documents.unchanged = 26`
+- `intake.updated = 1`
+- `intake.mined = true`
+- `palace_drawers = 1033`
+- `packages = 18`
+- `promoted_changed = 1`
+- `context` 仍可一次读到 `latest-summary`、`decisions-digest`、`risks-digest`、`ai-context`、`graphify-status`
+
+结论补充：
+
+- 当前仓库不仅在 `2026-04-10` 跑通过，也在 `2026-04-11` 继续跑通
+- 这更接近“持续自己吃自己”的状态
+- 但仍然属于单机受控 dogfood，不应夸大成长期无人值守稳定性已完成验证
+
+### C4. 当前后台 dogfood 已重新挂起
+
+在 `2026-04-11` 又执行：
+
+- `python3 -m memark service-install --workspace . --scheduler launchd --interval-seconds 300 --json`
+- `launchctl kickstart -k gui/$(id -u)/io.memark.projects-run.memark.3897640fdb`
+- `python3 -m memark service-status --workspace . --scheduler launchd --json`
+
+本轮实测结果：
+
+- `installed = true`
+- `loaded = true`
+- `service-status.last_cycle` 已推进到新的后台 cycle
+- `launchctl print` 返回 `last exit code = 0`
+- stdout / stderr 日志都已是非零字节
+- 当前没有执行 `service-uninstall`
+
+结论：
+
+- 当前仓库现在不是“验证完就拆掉”
+- 而是已经重新进入持续后台 dogfood 观察阶段
+- 但还需要连续多天证据，才能升级成“长期稳定性已验证”
+
 ## 四、尚未闭环验证
 
 ### D1. `promoted markdown -> Graphify graph`
@@ -235,14 +412,15 @@
 
 当前已知事实：
 
-- `graphify.detect()` 能看到 `promoted/*.md`
-- 但 `graphify.extract()` 公开入口只处理代码
-- 当前 `graphify-out/graph.json` 里 `document_nodes = 0`
-- 当前 `graphify-out/graph.json` 里 `promoted_nodes = 0`
+- `corpus/memark/graphify-out/graph.json` 已被 `MemArk` 本地 mixed-corpus builder 更新
+- 当前 dogfood 状态里：
+  - `total_nodes = 548`
+  - `mixed_corpus_nodes = 474`
+- workspace root 旧 `graphify-out/graph.json` 仍是 code-only graph
 
 结论：
 
-- 还不能声称 `Graphify` 已稳定消费 `MemArk` 晋升文档
+- 当前仓库已经真实证明 `MemArk` 可在 corpus 级别完成 mixed-corpus graph 更新
 
 ### D2. AI 因此明显变好
 

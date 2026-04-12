@@ -10,14 +10,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .automation import _render_context_markdown, load_automation_context, run_automation_cycle
+from .automation import _render_context_markdown, load_automation_context, load_automation_cycle_state, run_automation_cycle
 from .corpus import search_payload, search_project_corpus
 from .codex import sync_codex_sessions
 from .graphify import GraphifyError, run_graphify
+from .graphify_proof import (
+    graphify_corpus_status,
+    graphify_proof_diagnostics,
+    load_graphify_proof,
+    record_graphify_proof,
+)
 from .handoff import build_graphify_handoff
 from .install import InstallError, install_memark, run_doctor
 from .io import copy_document
 from .mempalace import MemPalaceError, reset_palace_dir, run_mempalace_convo_mine
+from .milestones import assess_current_milestone, milestone_catalog
 from .models import ValidationError
 from .package_builder import (
     build_session_package_from_drawers,
@@ -43,6 +50,7 @@ from .service import (
     status_launchd_service,
     uninstall_launchd_service,
 )
+from .slash import SlashContext, SlashError, available_slash_commands, dispatch_slash_command, slash_catalog
 from .version import __version__
 from .workspace import create_workspace, load_workspace, resolve_workspace, slugify
 
@@ -241,6 +249,28 @@ def _build_parser() -> argparse.ArgumentParser:
     service_status_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     service_status_parser.set_defaults(func=cmd_service_status)
 
+    automation_status_parser = subparsers.add_parser(
+        "automation-status",
+        help="Show the last persisted automation-run cycle state for a workspace",
+    )
+    automation_status_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    automation_status_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    automation_status_parser.set_defaults(func=cmd_automation_status)
+
+    milestones_parser = subparsers.add_parser(
+        "milestones",
+        help="Show rollout milestones and the commands/features attached to each stage",
+    )
+    milestones_parser.add_argument("--workspace", help="Optional workspace directory to attach live project evidence")
+    milestones_parser.add_argument("--project", help="Target project slug when attaching live workspace evidence")
+    milestones_parser.add_argument(
+        "--scheduler",
+        default="auto",
+        help="Scheduler backend used for live workspace evidence: auto or launchd",
+    )
+    milestones_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    milestones_parser.set_defaults(func=cmd_milestones)
+
     service_uninstall_parser = subparsers.add_parser(
         "service-uninstall",
         help="Remove a user-level automation-run scheduler for a workspace",
@@ -335,6 +365,44 @@ def _build_parser() -> argparse.ArgumentParser:
     handoff_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     handoff_parser.set_defaults(func=cmd_graphify_handoff)
 
+    graphify_proof_parser = subparsers.add_parser(
+        "graphify-proof",
+        help="Show or record real mixed-corpus Graphify ingestion proof for a workspace project",
+    )
+    graphify_proof_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    graphify_proof_parser.add_argument("--project", help="Target project slug")
+    graphify_proof_parser.add_argument(
+        "--record-ingested",
+        action="store_true",
+        help="Persist proof that the prepared corpus was really ingested by the upstream Graphify flow",
+    )
+    graphify_proof_parser.add_argument("--command", help="The actual upstream Graphify command or skill action used")
+    graphify_proof_parser.add_argument(
+        "--evidence-path",
+        action="append",
+        default=[],
+        help="File path that serves as ingestion evidence; repeat for multiple files",
+    )
+    graphify_proof_parser.add_argument("--notes", help="Short notes about what was verified")
+    graphify_proof_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    graphify_proof_parser.set_defaults(func=cmd_graphify_proof)
+
+    graphify_onboard_parser = subparsers.add_parser(
+        "graphify-onboard",
+        help="Install Graphify project-level integration into the prepared corpus project directory",
+    )
+    graphify_onboard_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    graphify_onboard_parser.add_argument("--project", help="Target project slug")
+    graphify_onboard_parser.add_argument(
+        "--platform",
+        default="codex",
+        help="Graphify project integration target: codex, claude, opencode, aider, claw, droid, trae, trae-cn, cursor, or gemini",
+    )
+    graphify_onboard_parser.add_argument("--graphify-bin", help="Override graphify executable name")
+    graphify_onboard_parser.add_argument("--dry-run", action="store_true", help="Show the target corpus dir and command without executing it")
+    graphify_onboard_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    graphify_onboard_parser.set_defaults(func=cmd_graphify_onboard)
+
     build_parser = subparsers.add_parser(
         "build",
         help="Run a compatible Graphify step for a project corpus",
@@ -348,6 +416,24 @@ def _build_parser() -> argparse.ArgumentParser:
     build_parser.add_argument("--mcp", action="store_true", help="Pass --mcp to graphify")
     build_parser.add_argument("--dry-run", action="store_true", help="Print the graphify command without executing it")
     build_parser.set_defaults(func=cmd_build)
+
+    slash_parser = subparsers.add_parser(
+        "slash",
+        help="Execute a slash-compatible command through MemArk adapters",
+    )
+    slash_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    slash_parser.add_argument("--project", help="Target project slug")
+    slash_parser.add_argument("--graphify-bin", help="Override graphify executable name for graphify-backed adapters")
+    slash_parser.add_argument("--catalog", action="store_true", help="List available slash adapters and their MemArk mappings")
+    slash_parser.add_argument("--json", action="store_true", help="Render machine-readable adapter output")
+    slash_parser.add_argument("--dry-run", action="store_true", help="Render the adapter mapping without executing it")
+    slash_parser.add_argument("slash_command", nargs="?", help=f"Slash command to execute, e.g. {', '.join(available_slash_commands())}")
+    slash_parser.add_argument(
+        "slash_args",
+        nargs=argparse.REMAINDER,
+        help="Arguments forwarded to the slash adapter. Put MemArk flags before the slash command.",
+    )
+    slash_parser.set_defaults(func=cmd_slash)
 
     run_parser = subparsers.add_parser(
         "run",
@@ -839,9 +925,79 @@ def cmd_service_status(args: argparse.Namespace) -> int:
     print(f"Label: {result.label}")
     print(f"Installed: {result.installed}")
     print(f"Loaded: {result.loaded}")
+    print(f"Interval seconds: {result.interval_seconds}")
+    print(f"Health: {result.health}")
     print(f"Plist path: {result.plist_path}")
+    print(f"Stdout log: {result.stdout_path} ({result.stdout_bytes} bytes)")
+    print(f"Stderr log: {result.stderr_path} ({result.stderr_bytes} bytes)")
     print("Command:", " ".join(result.command))
+    for note in result.observations:
+        print(f"Observation: {note}")
+    if result.last_cycle is not None:
+        print(f"Last cycle status: {result.last_cycle.get('status')}")
+        if result.last_cycle.get("started_at"):
+            print(f"Last cycle started at: {result.last_cycle.get('started_at')}")
+        if result.last_cycle.get("finished_at"):
+            print(f"Last cycle finished at: {result.last_cycle.get('finished_at')}")
     return 0
+
+
+def cmd_automation_status(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    return _execute_automation_status(config=config, json_output=args.json)
+
+
+def _execute_automation_status(
+    *,
+    config: object,
+    json_output: bool,
+) -> int:
+    payload = load_automation_cycle_state(config)
+    if payload is None:
+        if json_output:
+            print(json.dumps({"exists": False, "state_file": str(config.automation_cycle_state_file)}, indent=2, ensure_ascii=True))
+            return 0
+        print(f"No automation cycle state found at {config.automation_cycle_state_file}")
+        return 0
+    enriched = {
+        "exists": True,
+        "state_file": str(config.automation_cycle_state_file),
+        **payload,
+    }
+    if json_output:
+        print(json.dumps(enriched, indent=2, ensure_ascii=True))
+        return 0
+    print(f"State file: {config.automation_cycle_state_file}")
+    print(f"Status: {enriched.get('status')}")
+    if enriched.get("started_at"):
+        print(f"Started at: {enriched.get('started_at')}")
+    if enriched.get("finished_at"):
+        print(f"Finished at: {enriched.get('finished_at')}")
+    print(f"Build graph: {enriched.get('build_graph')}")
+    print(f"Project count: {enriched.get('project_count')}")
+    if enriched.get("project_filter"):
+        print(f"Project filter: {enriched.get('project_filter')}")
+    if enriched.get("error"):
+        print(f"Error: {enriched.get('error')}")
+    for item in enriched.get("results", []):
+        if not isinstance(item, dict):
+            continue
+        print(
+            "Project:"
+            f" {item.get('project')}"
+            f" packages={item.get('packages')}"
+            f" graphify={item.get('graphify_status')}"
+        )
+    return 0
+
+
+def cmd_milestones(args: argparse.Namespace) -> int:
+    return _execute_milestones(
+        workspace=args.workspace,
+        project=args.project,
+        scheduler=args.scheduler,
+        json_output=args.json,
+    )
 
 
 def cmd_service_uninstall(args: argparse.Namespace) -> int:
@@ -915,32 +1071,39 @@ def _query_scopes(scope: str) -> tuple[str, ...]:
     return (scope,)
 
 
-def cmd_query(args: argparse.Namespace) -> int:
-    config = load_workspace(args.workspace)
-    scopes = _query_scopes(args.scope)
-    if args.json:
+def _execute_query(
+    *,
+    config: object,
+    project: str,
+    query: str,
+    scope: str,
+    limit: int,
+    json_output: bool,
+) -> int:
+    scopes = _query_scopes(scope)
+    if json_output:
         payload = search_payload(
             config,
-            project=args.project,
-            query=args.query,
+            project=project,
+            query=query,
             scopes=scopes,
-            limit=max(args.limit, 1),
+            limit=max(limit, 1),
         )
         print(json.dumps(payload, indent=2, ensure_ascii=True))
         return 0
 
     hits = search_project_corpus(
         config,
-        project=args.project,
-        query=args.query,
+        project=project,
+        query=query,
         scopes=scopes,
-        limit=max(args.limit, 1),
+        limit=max(limit, 1),
     )
     if not hits:
-        print(f'No corpus hits for "{args.query}"')
+        print(f'No corpus hits for "{query}"')
         return 0
 
-    print(f'Corpus hits for "{args.query}":')
+    print(f'Corpus hits for "{query}":')
     for index, hit in enumerate(hits, start=1):
         print(f"{index}. [{hit.scope}] {hit.title}")
         print(f"   Path: {hit.path}")
@@ -949,24 +1112,32 @@ def cmd_query(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_query(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    return _execute_query(
+        config=config,
+        project=project,
+        query=args.query,
+        scope=args.scope,
+        limit=args.limit,
+        json_output=args.json,
+    )
+
+
 def cmd_context(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
     project = slugify(args.project or config.default_project)
-    payload = load_automation_context(
-        config,
+    return _execute_context(
+        config=config,
         project=project,
-        refresh=not args.no_refresh,
+        graphify_bin=args.graphify_bin,
+        no_refresh=args.no_refresh,
+        build=args.build,
+        json_output=args.json,
         retry_attempts=args.retry_attempts,
         retry_delay_seconds=args.retry_delay_seconds,
-        graphify_bin=args.graphify_bin,
-        build_graph=args.build,
     )
-    if args.json:
-        print(json.dumps(payload.to_dict(), indent=2, ensure_ascii=True))
-        return 0
-
-    print(_render_context_markdown(payload.project, payload.sections, payload.files), end="")
-    return 0
 
 
 def cmd_graphify_handoff(args: argparse.Namespace) -> int:
@@ -990,6 +1161,157 @@ def cmd_graphify_handoff(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_graphify_proof(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    return _execute_graphify_proof(
+        config=config,
+        project=project,
+        record_ingested=args.record_ingested,
+        command=args.command,
+        evidence_paths=args.evidence_path,
+        notes=args.notes,
+        json_output=args.json,
+    )
+
+
+def _execute_graphify_proof(
+    *,
+    config: object,
+    project: str,
+    record_ingested: bool,
+    command: str | None,
+    evidence_paths: list[str],
+    notes: str | None,
+    json_output: bool,
+) -> int:
+    proof = (
+        record_graphify_proof(
+            config,
+            project=project,
+            command=command,
+            evidence_paths=evidence_paths,
+            notes=notes,
+        )
+        if record_ingested
+        else load_graphify_proof(config, project)
+    )
+    diagnostics = graphify_proof_diagnostics(config, project)
+
+    if json_output:
+        print(json.dumps({"exists": proof is not None, "proof": proof, "diagnostics": diagnostics}, indent=2, ensure_ascii=True))
+        return 0
+
+    if proof is None:
+        print(f"No Graphify proof recorded for project '{project}'.")
+        print(
+            "Diagnostics: "
+            f"{diagnostics.get('status')} "
+            f"(total_nodes={diagnostics.get('total_nodes')}, mixed_corpus_nodes={diagnostics.get('mixed_corpus_nodes')})"
+        )
+        if diagnostics.get("workspace_graph_path"):
+            print(
+                "Workspace root graph: "
+                f"{diagnostics.get('workspace_graph_status')} "
+                f"(total_nodes={diagnostics.get('workspace_total_nodes')}, mixed_corpus_nodes={diagnostics.get('workspace_mixed_corpus_nodes')})"
+            )
+        return 0
+
+    print(f"Graphify proof project: {proof['project']}")
+    print(f"Status: {proof['status']}")
+    print(f"Recorded at: {proof['recorded_at']}")
+    print(f"Corpus dir: {proof['corpus_dir']}")
+    print(f"Recommended command: {proof['recommended_command']}")
+    print(
+        "Diagnostics: "
+        f"{diagnostics.get('status')} "
+        f"(total_nodes={diagnostics.get('total_nodes')}, mixed_corpus_nodes={diagnostics.get('mixed_corpus_nodes')})"
+    )
+    if diagnostics.get("workspace_graph_path"):
+        print(
+            "Workspace root graph: "
+            f"{diagnostics.get('workspace_graph_status')} "
+            f"(total_nodes={diagnostics.get('workspace_total_nodes')}, mixed_corpus_nodes={diagnostics.get('workspace_mixed_corpus_nodes')})"
+        )
+    if proof.get("command"):
+        print(f"Recorded command: {proof['command']}")
+    evidence_paths = proof.get("evidence_paths")
+    if isinstance(evidence_paths, list) and evidence_paths:
+        print("Evidence paths:")
+        for item in evidence_paths:
+            print(f"  {item}")
+    if proof.get("notes"):
+        print(f"Notes: {proof['notes']}")
+    inventories = proof.get("inventories")
+    if isinstance(inventories, list) and inventories:
+        print("Inventories:")
+        for item in inventories:
+            if not isinstance(item, dict):
+                continue
+            print(f"  {item.get('scope')}: {item.get('files')} files, ~{item.get('words')} words")
+    return 0
+
+
+def cmd_graphify_onboard(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    corpus_dir = config.corpus_project_dir(project)
+    graphify_bin = args.graphify_bin or config.graphify_bin
+    platform = args.platform.strip()
+    if not platform:
+        print("Graphify platform must not be empty.", file=sys.stderr)
+        return 1
+    command = [graphify_bin, platform, "install"]
+    payload = {
+        "workspace": str(config.workspace),
+        "project": project,
+        "corpus_dir": str(corpus_dir),
+        "platform": platform,
+        "command": command,
+        "dry_run": args.dry_run,
+        "recommended_update_command": f"/graphify {corpus_dir.resolve()} --update",
+    }
+    if args.dry_run:
+        if args.json:
+            print(json.dumps(payload, indent=2, ensure_ascii=True))
+            return 0
+        print(f"Corpus dir: {payload['corpus_dir']}")
+        print(f"Platform: {platform}")
+        print("Command:", " ".join(command))
+        print(f"Recommended update command: {payload['recommended_update_command']}")
+        return 0
+
+    completed = subprocess.run(
+        command,
+        cwd=corpus_dir,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    payload["returncode"] = completed.returncode
+    payload["stdout"] = completed.stdout
+    payload["stderr"] = completed.stderr
+    payload["ok"] = completed.returncode == 0
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0 if completed.returncode == 0 else 1
+    print(f"Corpus dir: {payload['corpus_dir']}")
+    print(f"Platform: {platform}")
+    print("Command:", " ".join(command))
+    if completed.returncode == 0:
+        print("Graphify project integration installed into corpus dir.")
+        print(f"Recommended update command: {payload['recommended_update_command']}")
+        if completed.stdout.strip():
+            print(completed.stdout.rstrip())
+        return 0
+    print(f"Graphify project integration failed with exit code {completed.returncode}.", file=sys.stderr)
+    if completed.stdout.strip():
+        print(completed.stdout.rstrip())
+    if completed.stderr.strip():
+        print(completed.stderr.rstrip(), file=sys.stderr)
+    return 1
+
+
 def _graphify_command(graphify_bin: str, project_dir: Path, args: argparse.Namespace) -> list[str]:
     command = [graphify_bin, str(project_dir)]
     if args.update:
@@ -1003,38 +1325,475 @@ def _graphify_command(graphify_bin: str, project_dir: Path, args: argparse.Names
     return command
 
 
-def cmd_build(args: argparse.Namespace) -> int:
-    config = load_workspace(args.workspace)
-    project = slugify(args.project or config.default_project)
+def _print_graphify_result(result: object) -> None:
+    if not hasattr(result, "mode") or not hasattr(result, "command"):
+        return
+    print("Graphify step completed")
+    print("Mode:", result.mode)
+    print("Command:", " ".join(result.command))
+    if result.mode == "memark-mixed-corpus":
+        print(
+            "Note: MemArk built a local mixed-corpus graph autonomously because the "
+            "installed Graphify CLI in this environment is not a direct folder-build entrypoint."
+        )
+    elif result.mode == "watch-fallback":
+        print(
+            "Note: Graphify folder build was unavailable; MemArk used "
+            "graphify.watch._rebuild_code instead. This path rebuilds code graphs "
+            "only and does not prove promoted markdown entered the graph."
+        )
+    if getattr(result, "stdout", "").strip():
+        print(result.stdout.rstrip())
+    if getattr(result, "stderr", "").strip():
+        print(result.stderr.rstrip(), file=sys.stderr)
+
+
+def _execute_build(
+    *,
+    config: object,
+    project: str,
+    graphify_bin: str,
+    update: bool,
+    wiki: bool,
+    obsidian: bool,
+    mcp: bool,
+    dry_run: bool,
+) -> int:
     project_dir = config.corpus_project_dir(project)
-    graphify_bin = args.graphify_bin or config.graphify_bin
-    command = _graphify_command(graphify_bin, project_dir, args)
-    if args.dry_run:
+    command_args = argparse.Namespace(update=update, wiki=wiki, obsidian=obsidian, mcp=mcp)
+    command = _graphify_command(graphify_bin, project_dir, command_args)
+    if dry_run:
         print(" ".join(command))
         return 0
 
     result = run_graphify(
         graphify_bin=graphify_bin,
         project_dir=project_dir,
+        update=update,
+        wiki=wiki,
+        obsidian=obsidian,
+        mcp=mcp,
+    )
+    _print_graphify_result(result)
+    return 0
+
+
+def _execute_context(
+    *,
+    config: object,
+    project: str,
+    graphify_bin: str | None,
+    no_refresh: bool,
+    build: bool,
+    json_output: bool,
+    retry_attempts: int,
+    retry_delay_seconds: float,
+) -> int:
+    payload = load_automation_context(
+        config,
+        project=project,
+        refresh=not no_refresh,
+        retry_attempts=retry_attempts,
+        retry_delay_seconds=retry_delay_seconds,
+        graphify_bin=graphify_bin,
+        build_graph=build,
+    )
+    if json_output:
+        print(json.dumps(payload.to_dict(), indent=2, ensure_ascii=True))
+        return 0
+    print(_render_context_markdown(payload.project, payload.sections, payload.files), end="")
+    return 0
+
+
+def _build_milestones_payload(
+    *,
+    workspace: str | None,
+    project: str | None,
+    scheduler: str,
+) -> dict[str, object]:
+    payload = milestone_catalog()
+    if workspace:
+        config = load_workspace(workspace)
+        resolved_project = slugify(project or config.default_project)
+        project_dir = config.corpus_project_dir(resolved_project)
+        promoted_files = list(config.promoted_dir(resolved_project).glob("*.md"))
+        document_files = [item for item in config.documents_dir(resolved_project).rglob("*") if item.is_file()]
+        import_files = [item for item in config.imports_dir(resolved_project).rglob("*") if item.is_file()]
+        automation = load_automation_cycle_state(config)
+        workspace_snapshot: dict[str, object] = {
+            "workspace": str(config.workspace),
+            "project": resolved_project,
+            "project_dir": str(project_dir),
+            "promoted_rooms": len(promoted_files),
+            "documents": len(document_files),
+            "imports": len(import_files),
+            "automation": automation,
+        }
+        try:
+            resolved_scheduler = resolve_scheduler(scheduler)
+            if resolved_scheduler != "launchd":
+                raise InstallError(f"Unsupported scheduler '{resolved_scheduler}'")
+            service = status_launchd_service(config.workspace, project=None)
+            workspace_snapshot["service"] = service.to_dict()
+        except InstallError as exc:
+            workspace_snapshot["service_error"] = str(exc)
+        graphify = graphify_corpus_status(config, resolved_project)
+        graphify_proof = graphify.get("proof")
+        workspace_snapshot["graphify_corpus"] = graphify
+        workspace_snapshot["graphify_proof_diagnostics"] = graphify["diagnostics"]
+        if graphify_proof is not None:
+            workspace_snapshot["graphify_proof"] = graphify_proof
+        payload["workspace_snapshot"] = workspace_snapshot
+    payload["assessment"] = assess_current_milestone(payload)
+    return payload
+
+
+def _execute_milestones(
+    *,
+    workspace: str | None,
+    project: str | None,
+    scheduler: str,
+    json_output: bool,
+) -> int:
+    payload = _build_milestones_payload(
+        workspace=workspace,
+        project=project,
+        scheduler=scheduler,
+    )
+    if json_output:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+
+    print(f"Achieved milestone: {payload['achieved']}")
+    print(f"Current milestone: {payload['current']}")
+    assessment = payload.get("assessment")
+    if isinstance(assessment, dict):
+        print(f"Current milestone assessment: {assessment.get('status')}")
+    snapshot = payload.get("workspace_snapshot")
+    if isinstance(snapshot, dict):
+        print("Workspace snapshot:")
+        print(f"  Workspace: {snapshot['workspace']}")
+        print(f"  Project: {snapshot['project']}")
+        print(f"  Promoted rooms: {snapshot['promoted_rooms']}")
+        print(f"  Documents: {snapshot['documents']}")
+        print(f"  Imports: {snapshot['imports']}")
+        automation = snapshot.get("automation")
+        if isinstance(automation, dict):
+            print(f"  Automation status: {automation.get('status')}")
+            if automation.get("finished_at"):
+                print(f"  Automation finished at: {automation.get('finished_at')}")
+        service = snapshot.get("service")
+        if isinstance(service, dict):
+            print(f"  Service health: {service.get('health')}")
+        elif snapshot.get("service_error"):
+            print(f"  Service error: {snapshot['service_error']}")
+        diagnostics = snapshot.get("graphify_proof_diagnostics")
+        if isinstance(diagnostics, dict):
+            print(
+                "  Graphify proof diagnostics: "
+                f"{diagnostics.get('status')} "
+                f"(total_nodes={diagnostics.get('total_nodes')}, mixed_corpus_nodes={diagnostics.get('mixed_corpus_nodes')})"
+            )
+    if isinstance(assessment, dict):
+        checks = assessment.get("checks")
+        if isinstance(checks, list) and checks:
+            print("Assessment checks:")
+            for item in checks:
+                if not isinstance(item, dict):
+                    continue
+                print(f"  {item.get('status')}: {item.get('label')} ({item.get('detail')})")
+        blockers = assessment.get("blockers")
+        if isinstance(blockers, list) and blockers:
+            print("Current blockers:")
+            for blocker in blockers:
+                print(f"  {blocker}")
+        next_actions = assessment.get("next_actions")
+        if isinstance(next_actions, list) and next_actions:
+            print("Next actions:")
+            for action in next_actions:
+                print(f"  {action}")
+    for item in payload["milestones"]:
+        print(f"{item['id']} [{item['status']}]: {item['name']}")
+        print(f"  Summary: {item['summary']}")
+        for focus in item["focus"]:
+            print(f"  Focus: {focus}")
+        for feature in item["features"]:
+            commands = ", ".join(feature["commands"])
+            print(f"  Feature: {feature['name']} -> {commands}")
+    return 0
+
+
+def _build_slash_payload(
+    *,
+    dispatch: object,
+    workspace_dir: Path,
+    project: str,
+    graphify_bin: str,
+) -> dict[str, object]:
+    payload = dispatch.to_dict()
+    payload["workspace"] = str(workspace_dir)
+    payload["project"] = project
+    if dispatch.memark_command == "build":
+        payload["build_command"] = _graphify_command(
+            graphify_bin,
+            Path(dispatch.target.path),
+            argparse.Namespace(**dispatch.mapped_args),
+        )
+    return payload
+
+
+def _render_slash_dry_run(payload: dict[str, object]) -> None:
+    print(f"Slash command: {payload['slash_command']}")
+    print(f"Mapped command: memark {payload['memark_command']}")
+    target = payload.get("target")
+    if isinstance(target, dict):
+        print(f"Target mode: {target.get('mode')}")
+    memark_argv = payload.get("memark_argv")
+    if isinstance(memark_argv, list):
+        print("MemArk argv:", " ".join(str(part) for part in memark_argv))
+    build_command = payload.get("build_command")
+    if isinstance(build_command, list):
+        print("Build command:", " ".join(str(part) for part in build_command))
+
+
+def _render_slash_catalog(entries: list[dict[str, object]]) -> None:
+    print("Available slash adapters:")
+    for entry in entries:
+        print(f"- {entry['slash_command']} -> memark {entry['memark_command']}")
+        print("  policy: prefer direct memark CLI; slash is compatibility for slash-only workflows")
+        print("  execution: non-interactive first, approval=auto")
+        positionals = entry.get("positionals")
+        if isinstance(positionals, list) and positionals:
+            rendered_positionals = ", ".join(
+                str(positional["name"])
+                for positional in positionals
+                if isinstance(positional, dict)
+            )
+            print(f"  positionals: {rendered_positionals}")
+        options = entry.get("options")
+        if isinstance(options, list) and options:
+            rendered = ", ".join(
+                f"{'/'.join(option['flags'])} -> {option['memark_flag']}"
+                for option in options
+                if isinstance(option, dict)
+            )
+            print(f"  options: {rendered}")
+
+
+def _execute_slash_build(
+    *,
+    config: object,
+    project: str,
+    workspace_dir: Path,
+    graphify_bin: str,
+    mapped_args: dict[str, object],
+) -> int:
+    del workspace_dir
+    return _execute_build(
+        config=config,
+        project=project,
+        graphify_bin=graphify_bin,
+        update=bool(mapped_args.get("update")),
+        wiki=bool(mapped_args.get("wiki")),
+        obsidian=bool(mapped_args.get("obsidian")),
+        mcp=bool(mapped_args.get("mcp")),
+        dry_run=False,
+    )
+
+
+def _execute_slash_context(
+    *,
+    config: object,
+    project: str,
+    workspace_dir: Path,
+    graphify_bin: str,
+    mapped_args: dict[str, object],
+) -> int:
+    del workspace_dir
+    return _execute_context(
+        config=config,
+        project=project,
+        graphify_bin=graphify_bin,
+        no_refresh=bool(mapped_args.get("no_refresh")),
+        build=bool(mapped_args.get("build")),
+        json_output=bool(mapped_args.get("json")),
+        retry_attempts=3,
+        retry_delay_seconds=0.2,
+    )
+
+
+def _execute_slash_milestones(
+    *,
+    config: object,
+    project: str,
+    workspace_dir: Path,
+    graphify_bin: str,
+    mapped_args: dict[str, object],
+) -> int:
+    del config, project, graphify_bin
+    return _execute_milestones(
+        workspace=str(workspace_dir),
+        project=None,
+        scheduler="auto",
+        json_output=bool(mapped_args.get("json")),
+    )
+
+
+def _execute_slash_query(
+    *,
+    config: object,
+    project: str,
+    workspace_dir: Path,
+    graphify_bin: str,
+    mapped_args: dict[str, object],
+) -> int:
+    del workspace_dir, graphify_bin
+    return _execute_query(
+        config=config,
+        project=project,
+        query=str(mapped_args["query"]),
+        scope=str(mapped_args.get("scope", "all")),
+        limit=int(mapped_args.get("limit", 10)),
+        json_output=bool(mapped_args.get("json")),
+    )
+
+
+def _execute_slash_status(
+    *,
+    config: object,
+    project: str,
+    workspace_dir: Path,
+    graphify_bin: str,
+    mapped_args: dict[str, object],
+) -> int:
+    del workspace_dir, graphify_bin
+    return _execute_status(
+        config=config,
+        project=project,
+        json_output=bool(mapped_args.get("json")),
+    )
+
+
+def _execute_slash_automation_status(
+    *,
+    config: object,
+    project: str,
+    workspace_dir: Path,
+    graphify_bin: str,
+    mapped_args: dict[str, object],
+) -> int:
+    del project, workspace_dir, graphify_bin
+    return _execute_automation_status(
+        config=config,
+        json_output=bool(mapped_args.get("json")),
+    )
+
+
+def _execute_slash_graphify_proof(
+    *,
+    config: object,
+    project: str,
+    workspace_dir: Path,
+    graphify_bin: str,
+    mapped_args: dict[str, object],
+) -> int:
+    del workspace_dir, graphify_bin
+    return _execute_graphify_proof(
+        config=config,
+        project=project,
+        record_ingested=bool(mapped_args.get("record_ingested")),
+        command=str(mapped_args["command"]) if mapped_args.get("command") is not None else None,
+        evidence_paths=list(mapped_args.get("evidence_path") or []),
+        notes=str(mapped_args["notes"]) if mapped_args.get("notes") is not None else None,
+        json_output=bool(mapped_args.get("json")),
+    )
+
+
+_SLASH_EXECUTORS = {
+    "build": _execute_slash_build,
+    "automation-status": _execute_slash_automation_status,
+    "context": _execute_slash_context,
+    "graphify-proof": _execute_slash_graphify_proof,
+    "milestones": _execute_slash_milestones,
+    "query": _execute_slash_query,
+    "status": _execute_slash_status,
+}
+
+
+def cmd_build(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    graphify_bin = args.graphify_bin or config.graphify_bin
+    return _execute_build(
+        config=config,
+        project=project,
+        graphify_bin=graphify_bin,
         update=args.update,
         wiki=args.wiki,
         obsidian=args.obsidian,
         mcp=args.mcp,
+        dry_run=args.dry_run,
     )
-    print("Graphify step completed")
-    print("Mode:", result.mode)
-    print("Command:", " ".join(result.command))
-    if result.mode == "watch-fallback":
-        print(
-            "Note: Graphify folder build was unavailable; MemArk used "
-            "graphify.watch._rebuild_code instead. This path rebuilds code graphs "
-            "only and does not prove promoted markdown entered the graph."
-        )
-    if result.stdout.strip():
-        print(result.stdout.rstrip())
-    if result.stderr.strip():
-        print(result.stderr.rstrip(), file=sys.stderr)
-    return 0
+
+
+def cmd_slash(args: argparse.Namespace) -> int:
+    if args.catalog:
+        entries = slash_catalog()
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "routing_policy": {
+                            "preferred_invocation": "cli",
+                            "interaction_mode": "non_interactive_first",
+                            "approval_mode": "auto",
+                            "usage_policy": "Prefer direct MemArk CLI commands. Use slash adapters only when the caller requires slash syntax or the upstream workflow is slash-only.",
+                        },
+                        "adapters": entries,
+                    },
+                    indent=2,
+                    ensure_ascii=True,
+                )
+            )
+            return 0
+        _render_slash_catalog(entries)
+        return 0
+    if not args.slash_command:
+        raise SlashError("slash_command is required unless --catalog is used")
+
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    context = SlashContext(
+        workspace_dir=Path(args.workspace).expanduser().resolve(),
+        project=project,
+        corpus_dir=config.corpus_project_dir(project),
+    )
+    dispatch = dispatch_slash_command(args.slash_command, args.slash_args, context=context)
+    graphify_bin = args.graphify_bin or config.graphify_bin
+    payload = _build_slash_payload(
+        dispatch=dispatch,
+        workspace_dir=context.workspace_dir,
+        project=project,
+        graphify_bin=graphify_bin,
+    )
+    if args.json:
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        if args.dry_run:
+            return 0
+    elif args.dry_run:
+        _render_slash_dry_run(payload)
+        return 0
+
+    executor = _SLASH_EXECUTORS.get(dispatch.memark_command)
+    if executor is None:
+        raise SlashError(f"unsupported memark command mapping: {dispatch.memark_command}")
+    return executor(
+        config=config,
+        project=project,
+        workspace_dir=context.workspace_dir,
+        graphify_bin=graphify_bin,
+        mapped_args=dispatch.mapped_args,
+    )
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -1079,19 +1838,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         obsidian=args.obsidian,
         mcp=args.mcp,
     )
-    print("Graphify step completed")
-    print("Mode:", result.mode)
-    print("Command:", " ".join(result.command))
-    if result.mode == "watch-fallback":
-        print(
-            "Note: Graphify folder build was unavailable; MemArk used "
-            "graphify.watch._rebuild_code instead. This path rebuilds code graphs "
-            "only and does not prove promoted markdown entered the graph."
-        )
-    if result.stdout.strip():
-        print(result.stdout.rstrip())
-    if result.stderr.strip():
-        print(result.stderr.rstrip(), file=sys.stderr)
+    _print_graphify_result(result)
     return 0
 
 
@@ -1803,6 +2550,7 @@ def cmd_palace_run(args: argparse.Namespace) -> int:
             mcp=args.mcp,
         )
         build_payload = {
+            "mode": result.mode,
             "command": result.command,
             "stdout": result.stdout,
             "stderr": result.stderr,
@@ -1849,6 +2597,15 @@ def cmd_palace_run(args: argparse.Namespace) -> int:
 def cmd_status(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
     project = slugify(args.project or config.default_project)
+    return _execute_status(config=config, project=project, json_output=args.json)
+
+
+def _execute_status(
+    *,
+    config: object,
+    project: str,
+    json_output: bool,
+) -> int:
     project_dir = config.corpus_project_dir(project)
     promoted_files = list(config.promoted_dir(project).glob("*.md"))
     document_files = [item for item in config.documents_dir(project).rglob("*") if item.is_file()]
@@ -1877,8 +2634,15 @@ def cmd_status(args: argparse.Namespace) -> int:
             "bin": config.mempalace_bin,
             "available": mempalace_available,
         },
+        "milestones": {
+            "achieved": milestone_catalog()["achieved"],
+            "current": milestone_catalog()["current"],
+        },
+        "graphify_corpus": graphify_corpus_status(config, project),
     }
-    if args.json:
+    payload["graphify_proof"] = payload["graphify_corpus"]["proof"]
+    payload["graphify_proof_diagnostics"] = payload["graphify_corpus"]["diagnostics"]
+    if json_output:
         print(json.dumps(payload, indent=2, ensure_ascii=True))
         return 0
 
@@ -1895,6 +2659,22 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"Codex staged sessions: {payload['codex_staged_sessions']}")
     print(f"Graphify available: {'yes' if graphify_available else 'no'} ({config.graphify_bin})")
     print(f"MemPalace available: {'yes' if mempalace_available else 'no'} ({config.mempalace_bin})")
+    print(f"Graphify corpus status: {payload['graphify_corpus']['status']}")
+    onboarding = payload["graphify_corpus"]["onboarding"]
+    print(
+        "Graphify onboarding:"
+        f" {onboarding['status']}"
+        f" (AGENTS={onboarding['agents_installed']}, hooks={onboarding['codex_hooks_installed']})"
+    )
+    print(f"Graphify recommended update: {onboarding['recommended_command']}")
+    diagnostics = payload["graphify_proof_diagnostics"]
+    print(
+        "Graphify proof diagnostics:"
+        f" {diagnostics['status']}"
+        f" (total_nodes={diagnostics['total_nodes']}, mixed_corpus_nodes={diagnostics['mixed_corpus_nodes']})"
+    )
+    print(f"Achieved milestone: {payload['milestones']['achieved']}")
+    print(f"Current milestone: {payload['milestones']['current']}")
     return 0
 
 
@@ -1903,7 +2683,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (FileNotFoundError, ValidationError, ValueError, GraphifyError, MemPalaceError, PalaceReadError, InstallError) as exc:
+    except (FileNotFoundError, ValidationError, ValueError, SlashError, GraphifyError, MemPalaceError, PalaceReadError, InstallError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

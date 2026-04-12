@@ -4,9 +4,15 @@
 
 ## 最新设计入口
 
-如果要理解当前最新口径，请先读下面三份文档：
+如果要理解当前最新口径，请先读下面几份文档：
 
 - [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)
+- [`docs/MILESTONE_BETA.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_BETA.md)
+- [`docs/MILESTONES.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONES.md)
+- [`docs/MILESTONE_NEXT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_NEXT.md)
+- [`docs/RELEASE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RELEASE_CHECKLIST.md)
+- [`docs/DOGFOOD_RUNBOOK.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_RUNBOOK.md)
+- [`docs/DOGFOOD_LOG.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_LOG.md)
 - [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
 - [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)
 - [`docs/DOGFOOD_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_STATUS.md)
@@ -14,6 +20,12 @@
 其中：
 
 - `PRODUCT_REQUIREMENTS.md` 定义产品需求边界
+- `MILESTONE_BETA.md` 定义当前仓库自己吃自己的 Beta 里程碑与出站条件
+- `MILESTONES.md` 作为阶段能力账本，汇总各里程碑已经做成的功能
+- `MILESTONE_NEXT.md` 定义 Beta 之后下一条更合理的里程碑
+- `RELEASE_CHECKLIST.md` 定义当前 Beta 口径对外说明前必须执行的发布检查
+- `DOGFOOD_RUNBOOK.md` 定义当前仓库持续自己吃自己时的运维与排障入口
+- `DOGFOOD_LOG.md` 记录按时间推进的真实 dogfood 证据
 - `AI_CONSUMPTION_MODEL.md` 定义当前 AI 应如何消费这些产物
 - `AUTOMATION_CONSUMPTION_REQUIREMENTS.md` 定义下一阶段“自动喂数据、自动加工、自动消费”的目标
 - `DOGFOOD_STATUS.md` 定义哪些能力已经在当前仓库上真实吃过狗粮，哪些还只是测试通过
@@ -29,6 +41,12 @@
 - [`docs/GOVERNANCE_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/GOVERNANCE_MODEL.md)
 - [`docs/INTERFACE_CONTRACT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INTERFACE_CONTRACT.md)
 - [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)
+- [`docs/MILESTONE_BETA.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_BETA.md)
+- [`docs/MILESTONES.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONES.md)
+- [`docs/MILESTONE_NEXT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_NEXT.md)
+- [`docs/RELEASE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RELEASE_CHECKLIST.md)
+- [`docs/DOGFOOD_RUNBOOK.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_RUNBOOK.md)
+- [`docs/DOGFOOD_LOG.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_LOG.md)
 - [`docs/FEATURE_LIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/FEATURE_LIST.md)
 - [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
 - [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)

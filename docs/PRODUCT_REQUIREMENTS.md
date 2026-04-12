@@ -11,6 +11,12 @@
 
 如果只有第一段，没有第二段，`MemArk` 只是数据搬运层，还没有形成足够产品价值。
 
+还必须再加一条更硬的成功标准：
+
+- `MemArk` 不是因为把 `MemPalace` 和 `Graphify` 串起来就自动算成功
+- 自动喂数据、自动加工、自动消费这三段，都必须比单用上游更好，或者至少不能打折扣
+- 如果自动化之后，输入质量更差、消费更绕、噪音更多、结果更不可信，那么这条自动化主路径就不成立
+
 ## 上游能力结论
 
 以下结论以 2026-04-08 的实际使用结果为准，不再只基于 README 或源码推断。
@@ -50,7 +56,7 @@
 - `detect()` 能识别文档、论文、图片
 - 但当前公开 Python 提取入口 `extract()` 只处理代码 AST
 - `watch()` 对非代码变化只会写 `needs_update` 并提示去 AI 平台里执行 `/graphify --update`
-- 因此，当前 `Graphify` 的 mixed-corpus 语义提取主路径仍然是上游 skill 驱动，而不是一个可直接由 `MemArk` 本地复用的稳定纯 Python API
+- 因此，`MemArk` 不能把 mixed-corpus graph 更新建立在“上游 slash skill 一定会被再次人工触发”这个假设上
 
 ## 为什么要结合
 
@@ -223,23 +229,37 @@
 
 如果做不到这些，说明当前只完成了 ingest，没有完成产品目标。
 
+### R5.3. 自动化质量不能低于单用上游
+
+- 自动喂数据不能比单用 `MemPalace` 更容易漏项目上下文、混入噪音或失去溯源
+- 自动加工不能比直接读 `MemPalace` 原始搜索结果或直接读项目文档更差
+- 自动消费不能比直接用 `MemPalace wake-up/search` 或直接用 `Graphify` report/query 更绕、更慢、更误导
+
+至少要守住三条底线：
+
+- `MemPalace` 擅长的历史找回能力，不能被 `MemArk` 自动摘要稀释掉
+- `Graphify` 擅长的结构理解能力，不能被 `MemArk` 的桥接层遮蔽或降级
+- `MemArk` 自己新增的自动产物，必须是增强消费面，而不是制造新的噪音层
+
+如果任一自动化环节比“直接单用上游”更差，就应视为失败设计，而不是可接受折中。
+
 ### R6. Graphify 调用必须适配版本差异
 
 - `MemArk` 不能再假设任何安装版 `graphify` 都支持同一条顶层 build 命令
 - 必须允许“兼容的 Graphify 构建入口”作为外部依赖
-- 当遇到 helper/query 型 CLI 时，要明确提示接口不匹配，或退回已验证的兼容路径
+- 当遇到 helper/query 型 CLI 时，要明确提示接口不匹配，或退回 `MemArk` 自己的 autonomous mixed-corpus build
 - 同时不能要求用户手工先把 `~/.memark/venv/bin` 永久加进 shell `PATH`；workspace 在使用默认命令名时，应能回退到用户级 runtime 里的 `mempalace` / `graphify`
-- 当前仓库里已实现的兼容路径是 `graphify.watch._rebuild_code`
-- 但这个兼容路径只适用于 code graph 重建，不应伪装成完整 semantic build
+- 当前仓库里已实现的兼容路径是 `MemArk` 本地 mixed-corpus graph builder
+- `graphify.watch._rebuild_code` 可以保留为代码图应急路径，但不能再作为主闭环定义
 
 ### R6.1. 必须区分“语料已整理”与“语料已进图”
 
 - `promoted/` 和 `documents/` 可以先作为 Graphify-ready corpus 落盘
-- 但如果当前实际调用的是 `_rebuild_code` fallback，就不能宣称这些 Markdown 已经进入最终图谱
-- 只有在接上真实 mixed-corpus Graphify build 入口后，才能把“记忆晋升 -> 图谱编译”写成完整闭环
+- 只有当 `graphify-out/graph.json` 里真实出现来自 `promoted/`、`documents/` 或 `imports/` 的节点，才能宣称这些 Markdown 已进入最终图谱
 - 当前更准确的说法是：
   - `MemArk` 负责把会话整理成 `Graphify` 能消费的目录边界
-  - 上游 `Graphify` skill / AI 平台负责真正对这些文档做语义提取并更新图谱
+  - `MemArk` 默认也负责把这批 mixed-corpus 文件编译成一个本地图谱
+  - 上游 `Graphify` skill / AI 平台是可选互操作路径，不是默认前置条件
 
 ### R7. 运行方式必须 CLI-first
 

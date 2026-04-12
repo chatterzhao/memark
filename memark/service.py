@@ -8,11 +8,13 @@ import plistlib
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
+from .automation import load_automation_cycle_state
 from .install import InstallError, default_memark_home
-from .workspace import slugify
+from .workspace import WorkspaceConfig, slugify
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,7 @@ class ServiceStatus:
     workspace: Path
     project: str | None
     label: str
+    interval_seconds: int
     plist_path: Path
     stdout_path: Path
     stderr_path: Path
@@ -60,6 +63,11 @@ class ServiceStatus:
     environment: dict[str, str]
     installed: bool
     loaded: bool
+    stdout_bytes: int
+    stderr_bytes: int
+    health: str
+    observations: list[str]
+    last_cycle: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -67,6 +75,7 @@ class ServiceStatus:
             "workspace": str(self.workspace),
             "project": self.project,
             "label": self.label,
+            "interval_seconds": self.interval_seconds,
             "plist_path": str(self.plist_path),
             "stdout_path": str(self.stdout_path),
             "stderr_path": str(self.stderr_path),
@@ -74,6 +83,11 @@ class ServiceStatus:
             "environment": dict(self.environment),
             "installed": self.installed,
             "loaded": self.loaded,
+            "stdout_bytes": self.stdout_bytes,
+            "stderr_bytes": self.stderr_bytes,
+            "health": self.health,
+            "observations": list(self.observations),
+            "last_cycle": self.last_cycle,
         }
 
 
@@ -157,6 +171,100 @@ def _launchd_paths(workspace: Path, project: str | None) -> tuple[str, Path, Pat
     stdout_path = logs_dir / f"{label}.out.log"
     stderr_path = logs_dir / f"{label}.err.log"
     return label, plist_path, stdout_path, stderr_path
+
+
+def _load_launchd_runtime_config(
+    plist_path: Path,
+    *,
+    fallback_command: list[str],
+    fallback_environment: dict[str, str],
+    fallback_interval_seconds: int,
+) -> tuple[list[str], dict[str, str], int]:
+    if not plist_path.exists():
+        return fallback_command, fallback_environment, fallback_interval_seconds
+    try:
+        payload = plistlib.loads(plist_path.read_bytes())
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return fallback_command, fallback_environment, fallback_interval_seconds
+    if not isinstance(payload, dict):
+        return fallback_command, fallback_environment, fallback_interval_seconds
+
+    command = payload.get("ProgramArguments")
+    environment = payload.get("EnvironmentVariables")
+    interval_seconds = payload.get("StartInterval")
+    resolved_command = command if isinstance(command, list) and all(isinstance(item, str) for item in command) else fallback_command
+    resolved_environment = (
+        environment
+        if isinstance(environment, dict) and all(isinstance(key, str) and isinstance(value, str) for key, value in environment.items())
+        else fallback_environment
+    )
+    resolved_interval = int(interval_seconds) if isinstance(interval_seconds, int) and interval_seconds > 0 else fallback_interval_seconds
+    return resolved_command, resolved_environment, resolved_interval
+
+
+def _path_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
+def _parse_iso8601(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _service_health(
+    *,
+    installed: bool,
+    loaded: bool,
+    interval_seconds: int,
+    last_cycle: dict[str, object] | None,
+    stdout_bytes: int,
+    stderr_bytes: int,
+) -> tuple[str, list[str]]:
+    observations: list[str] = []
+    if not installed:
+        observations.append("scheduler plist is not installed")
+        return "not_installed", observations
+    if not loaded:
+        observations.append("scheduler is installed but not loaded")
+        return "not_loaded", observations
+    if last_cycle is None:
+        observations.append("no persisted automation cycle state found yet")
+        return "no_cycle_recorded", observations
+
+    status = str(last_cycle.get("status") or "unknown")
+    if status == "failed":
+        observations.append("last automation cycle failed")
+        return "failing", observations
+    if status == "running":
+        observations.append("automation cycle is currently marked running")
+        return "running", observations
+
+    finished_at = _parse_iso8601(last_cycle.get("finished_at"))
+    if finished_at is None:
+        observations.append("last cycle has no parseable finished_at timestamp")
+        return "unknown", observations
+
+    age_seconds = max(0, int((datetime.now(timezone.utc) - finished_at).total_seconds()))
+    observations.append(f"last completed cycle age: {age_seconds}s")
+    stale_threshold = max(interval_seconds * 2, interval_seconds + 120)
+    if age_seconds > stale_threshold:
+        observations.append(f"last completed cycle is older than stale threshold ({stale_threshold}s)")
+        return "stale", observations
+
+    if stdout_bytes == 0 and stderr_bytes == 0:
+        observations.append("stdout/stderr logs are both empty")
+    return "ok", observations
 
 
 def _launchd_payload(
@@ -251,16 +359,35 @@ def status_launchd_service(workspace: Path, *, project: str | None = None) -> Se
         interval_seconds=300,
     )
     installed = plist_path.exists()
+    command, environment, interval_seconds = _load_launchd_runtime_config(
+        plist_path,
+        fallback_command=command,
+        fallback_environment=environment,
+        fallback_interval_seconds=300,
+    )
     loaded = False
     if installed:
         domain = _launchctl_domain()
         completed = _run_launchctl(["print", f"{domain}/{label}"], check=False)
         loaded = completed.returncode == 0
+    config = WorkspaceConfig(workspace=resolved_workspace, default_project=project or "default")
+    last_cycle = load_automation_cycle_state(config)
+    stdout_bytes = _path_size(stdout_path)
+    stderr_bytes = _path_size(stderr_path)
+    health, observations = _service_health(
+        installed=installed,
+        loaded=loaded,
+        interval_seconds=interval_seconds,
+        last_cycle=last_cycle,
+        stdout_bytes=stdout_bytes,
+        stderr_bytes=stderr_bytes,
+    )
     return ServiceStatus(
         scheduler="launchd",
         workspace=resolved_workspace,
         project=project,
         label=label,
+        interval_seconds=interval_seconds,
         plist_path=plist_path,
         stdout_path=stdout_path,
         stderr_path=stderr_path,
@@ -268,6 +395,11 @@ def status_launchd_service(workspace: Path, *, project: str | None = None) -> Se
         environment=environment,
         installed=installed,
         loaded=loaded,
+        stdout_bytes=stdout_bytes,
+        stderr_bytes=stderr_bytes,
+        health=health,
+        observations=observations,
+        last_cycle=last_cycle,
     )
 
 
