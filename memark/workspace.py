@@ -13,6 +13,7 @@ from pathlib import Path
 CONFIG_DIR_NAME = ".memark"
 CONFIG_FILE_NAME = "config.json"
 PROJECTS_FILE_NAME = "projects.toml"
+SUPPORTED_MEM_TOOLS = {"mempalace", "mempal"}
 
 
 def _runtime_binary(name: str) -> str | None:
@@ -55,7 +56,8 @@ class WorkspaceConfig:
     workspace: Path
     default_project: str
     graphify_bin: str = "graphify"
-    mempalace_bin: str = "mempalace"
+    mem_tool: str = "mempalace"
+    mem_tool_bin: str = "mempalace"
 
     @property
     def config_dir(self) -> Path:
@@ -126,6 +128,10 @@ class WorkspaceConfig:
     def palace_dir(self, project: str | None = None) -> Path:
         return self.config_dir / "palaces" / slugify(project or self.default_project)
 
+    @property
+    def mempalace_bin(self) -> str:
+        return self.mem_tool_bin
+
     def ensure_layout(self, project: str | None = None) -> None:
         for path in [
             self.config_dir,
@@ -153,13 +159,20 @@ def create_workspace(
     workspace: Path,
     project: str,
     graphify_bin: str = "graphify",
-    mempalace_bin: str = "mempalace",
+    mem_tool: str = "mempalace",
+    mem_tool_bin: str | None = None,
+    mempalace_bin: str | None = None,
 ) -> WorkspaceConfig:
+    normalized_mem_tool = mem_tool.strip().lower()
+    if normalized_mem_tool not in SUPPORTED_MEM_TOOLS:
+        raise ValueError(f"Unsupported mem_tool '{mem_tool}'. Expected one of: {', '.join(sorted(SUPPORTED_MEM_TOOLS))}")
+    resolved_mem_tool_bin = (mem_tool_bin or mempalace_bin or normalized_mem_tool).strip()
     config = WorkspaceConfig(
         workspace=workspace,
         default_project=slugify(project),
         graphify_bin=graphify_bin,
-        mempalace_bin=mempalace_bin,
+        mem_tool=normalized_mem_tool,
+        mem_tool_bin=resolved_mem_tool_bin,
     )
     config.ensure_layout()
     config.config_file.write_text(
@@ -167,7 +180,8 @@ def create_workspace(
             {
                 "default_project": config.default_project,
                 "graphify_bin": graphify_bin,
-                "mempalace_bin": mempalace_bin,
+                "mem_tool": config.mem_tool,
+                "mem_tool_bin": config.mem_tool_bin,
             },
             indent=2,
             ensure_ascii=True,
@@ -195,15 +209,22 @@ def load_workspace(path: str | None) -> WorkspaceConfig:
     if not isinstance(graphify_bin, str) or not graphify_bin.strip():
         graphify_bin = "graphify"
     graphify_bin = resolve_workspace_binary(graphify_bin, default_name="graphify")
-    mempalace_bin = payload.get("mempalace_bin")
-    if not isinstance(mempalace_bin, str) or not mempalace_bin.strip():
-        mempalace_bin = "mempalace"
-    mempalace_bin = resolve_workspace_binary(mempalace_bin, default_name="mempalace")
+    mem_tool = payload.get("mem_tool", "mempalace")
+    if not isinstance(mem_tool, str) or not mem_tool.strip():
+        mem_tool = "mempalace"
+    mem_tool = mem_tool.strip().lower()
+    if mem_tool not in SUPPORTED_MEM_TOOLS:
+        raise ValueError(f"Invalid mem_tool '{mem_tool}' in {config_file}")
+    mem_tool_bin = payload.get("mem_tool_bin", payload.get("mempalace_bin"))
+    if not isinstance(mem_tool_bin, str) or not mem_tool_bin.strip():
+        mem_tool_bin = mem_tool
+    mem_tool_bin = resolve_workspace_binary(mem_tool_bin, default_name=mem_tool)
     config = WorkspaceConfig(
         workspace=workspace,
         default_project=slugify(default_project),
         graphify_bin=graphify_bin.strip(),
-        mempalace_bin=mempalace_bin.strip(),
+        mem_tool=mem_tool,
+        mem_tool_bin=mem_tool_bin.strip(),
     )
     config.ensure_layout()
     return config

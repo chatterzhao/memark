@@ -1,4 +1,4 @@
-"""Automated intake, processing, and consumption cycle helpers."""
+"""Automated MemArk feed/process/consume cycle helpers."""
 
 from __future__ import annotations
 
@@ -9,60 +9,22 @@ from pathlib import Path
 from .graphify import GraphifyError, GraphifyBuildResult, run_graphify
 from .graphify_proof import graphify_corpus_status
 from .handoff import GraphifyHandoff, build_graphify_handoff
-from .io import copy_document, dump_json_file, load_json_file, sha256_text
-from .package_builder import (
-    build_session_package_from_drawers,
-    group_drawers_by_logical_session,
-    package_to_dict,
-    write_package_payloads,
+from .io import dump_json_file, load_json_file
+from .pipeline import (
+    DocumentSyncResult,
+    FeedPhaseResult,
+    ProcessPhaseResult,
+    build_palace_packages,
+    run_feed_phase,
+    sync_project_documents,
 )
-from .palace import PalaceReadError, read_palace_drawers
 from .project_registry import (
     ProjectCycleResult,
     load_project_profiles,
-    run_projects_cycle,
 )
-from .promote import PromoteResult, promote_file
 from .workspace import WorkspaceConfig, slugify
-
-
-_DOC_SUFFIXES = {".md", ".mdx", ".rst", ".txt", ".adoc"}
-_DOC_IGNORE_PARTS = {
-    ".experiments",
-    ".git",
-    ".memark",
-    ".mempalace",
-    ".pytest_cache",
-    "corpus",
-    "build",
-    "dist",
-    "graphify-out",
-    "inbox",
-    "node_modules",
-    "raw",
-    ".venv",
-    ".venv-dev",
-    ".venv-skill-check",
-    "__pycache__",
-}
 _DECISION_MARKERS = ("decision", "decide", "adr", "chosen", "adopt")
 _RISK_MARKERS = ("risk", "blocker", "issue", "failed", "failure", "todo", "follow-up", "followup")
-
-
-@dataclass(slots=True)
-class DocumentSyncResult:
-    copied: int
-    updated: int
-    unchanged: int
-    files: list[str]
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "copied": self.copied,
-            "updated": self.updated,
-            "unchanged": self.unchanged,
-            "files": list(self.files),
-        }
 
 
 @dataclass(slots=True)
@@ -88,29 +50,61 @@ class GraphifyAutomationResult:
 @dataclass(slots=True)
 class AutomationProjectResult:
     project: str
-    intake: ProjectCycleResult | None
-    documents: DocumentSyncResult
-    palace_drawers: int
-    packages: int
-    promoted: list[PromoteResult]
+    feed: FeedPhaseResult
+    process: ProcessPhaseResult
+    consume: "ConsumePhaseResult"
+
+    @property
+    def intake(self) -> ProjectCycleResult | None:
+        return self.feed.intake
+
+    @property
+    def documents(self) -> DocumentSyncResult:
+        return self.process.documents
+
+    @property
+    def palace_drawers(self) -> int:
+        return self.process.palace_drawers
+
+    @property
+    def packages(self) -> int:
+        return self.process.packages
+
+    @property
+    def promoted(self):
+        return self.process.promoted
+
+    @property
+    def artifacts(self) -> list[str]:
+        return self.consume.artifacts
+
+    @property
+    def graphify(self) -> GraphifyAutomationResult:
+        return self.consume.graphify
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "project": self.project,
+            "feed": self.feed.to_dict(),
+            "process": self.process.to_dict(),
+            "consume": self.consume.to_dict(),
+            "intake": self.intake.to_dict() if self.intake is not None else None,
+            "documents": self.documents.to_dict(),
+            "palace_drawers": self.palace_drawers,
+            "packages": self.packages,
+            "promoted": self.process.to_dict()["promoted"],
+            "artifacts": list(self.artifacts),
+            "graphify": self.graphify.to_dict(),
+        }
+
+
+@dataclass(slots=True)
+class ConsumePhaseResult:
     artifacts: list[str]
     graphify: GraphifyAutomationResult
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "project": self.project,
-            "intake": self.intake.to_dict() if self.intake is not None else None,
-            "documents": self.documents.to_dict(),
-            "palace_drawers": self.palace_drawers,
-            "packages": self.packages,
-            "promoted": [
-                {
-                    "room_id": item.room_id,
-                    "output": str(item.output),
-                    "changed": item.changed,
-                }
-                for item in self.promoted
-            ],
             "artifacts": list(self.artifacts),
             "graphify": self.graphify.to_dict(),
         }
@@ -156,14 +150,6 @@ class AutomationCycleState:
         }
 
 
-def _documents_ledger_path(config: WorkspaceConfig, project: str) -> Path:
-    return config.state_dir / f"{slugify(project)}-documents.json"
-
-
-def _automation_packages_dir(config: WorkspaceConfig, project: str) -> Path:
-    return config.staging_dir / slugify(project) / "packages"
-
-
 def _automation_imports_dir(config: WorkspaceConfig, project: str) -> Path:
     return config.imports_dir(project) / "automation"
 
@@ -175,6 +161,32 @@ def _now_utc_iso() -> str:
 def _automation_summary(result: AutomationProjectResult) -> dict[str, object]:
     return {
         "project": result.project,
+        "feed": None
+        if result.intake is None
+        else {
+            "copied": result.intake.sync.copied,
+            "updated": result.intake.sync.updated,
+            "unchanged": result.intake.sync.unchanged,
+            "invalid": result.intake.sync.invalid,
+            "pending_mine": result.intake.pending_mine,
+            "mined": result.intake.mined,
+            "mine_skipped_reason": result.intake.mine_skipped_reason,
+        },
+        "process": {
+            "documents": {
+                "copied": result.documents.copied,
+                "updated": result.documents.updated,
+                "unchanged": result.documents.unchanged,
+            },
+            "palace_drawers": result.palace_drawers,
+            "packages": result.packages,
+            "promoted_changed": sum(1 for item in result.promoted if item.changed),
+            "promoted_unchanged": sum(1 for item in result.promoted if not item.changed),
+        },
+        "consume": {
+            "graphify_status": result.graphify.status,
+            "artifacts": list(result.artifacts),
+        },
         "documents": {
             "copied": result.documents.copied,
             "updated": result.documents.updated,
@@ -231,121 +243,6 @@ def load_automation_cycle_state(config: WorkspaceConfig) -> dict[str, object] | 
         return None
     payload = load_json_file(path)
     return payload if isinstance(payload, dict) else None
-
-
-def _load_documents_ledger(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-    payload = load_json_file(path)
-    if not isinstance(payload, dict):
-        return {}
-    return {str(key): str(value) for key, value in payload.items()}
-
-
-def _save_documents_ledger(path: Path, payload: dict[str, str]) -> None:
-    dump_json_file(path, payload)
-
-
-def _iter_project_documents(root: Path) -> list[Path]:
-    if not root.exists():
-        return []
-    results: list[Path] = []
-    for path in sorted(root.rglob("*")):
-        if not path.is_file():
-            continue
-        if path.suffix.lower() not in _DOC_SUFFIXES:
-            continue
-        relative = path.relative_to(root)
-        if any(part in _DOC_IGNORE_PARTS or part.endswith(".egg-info") for part in relative.parts):
-            continue
-        results.append(path)
-    return results
-
-
-def sync_project_documents(config: WorkspaceConfig, *, project: str, source_root: Path) -> DocumentSyncResult:
-    project_slug = slugify(project)
-    destination_root = config.documents_dir(project_slug)
-    ledger_path = _documents_ledger_path(config, project_slug)
-    ledger = _load_documents_ledger(ledger_path)
-    next_ledger = dict(ledger)
-    copied = 0
-    updated = 0
-    unchanged = 0
-    files: list[str] = []
-
-    sources = _iter_project_documents(source_root)
-    for source in sources:
-        relative = source.relative_to(source_root)
-        destination = destination_root / relative
-        fingerprint = sha256_text(source.read_text(encoding="utf-8", errors="ignore"))
-        key = str(relative)
-        existing = ledger.get(key)
-        if existing == fingerprint and destination.exists():
-            unchanged += 1
-            next_ledger[key] = fingerprint
-            files.append(str(destination))
-            continue
-        existed_before = destination.exists()
-        copy_document(source, destination)
-        if existing is None or not existed_before:
-            copied += 1
-        else:
-            updated += 1
-        next_ledger[key] = fingerprint
-        files.append(str(destination))
-
-    stale_keys = sorted(set(next_ledger) - {str(path.relative_to(source_root)) for path in sources})
-    for key in stale_keys:
-        next_ledger.pop(key, None)
-        destination = destination_root / key
-        if destination.exists():
-            destination.unlink()
-            parent = destination.parent
-            while parent != destination_root and parent.exists():
-                try:
-                    parent.rmdir()
-                except OSError:
-                    break
-                parent = parent.parent
-
-    _save_documents_ledger(ledger_path, next_ledger)
-    return DocumentSyncResult(copied=copied, updated=updated, unchanged=unchanged, files=files)
-
-
-def _build_palace_packages(config: WorkspaceConfig, *, project: str) -> tuple[int, int, list[PromoteResult]]:
-    palace_dir = config.palace_dir(project)
-    try:
-        drawers = read_palace_drawers(palace_dir, ingest_mode="convos")
-    except PalaceReadError:
-        return 0, 0, []
-    grouped = group_drawers_by_logical_session(drawers)
-    packages = [
-        build_session_package_from_drawers(
-            project=project,
-            wing=wing,
-            room=room,
-            session_key=session_key,
-            session_title=session_title,
-            drawers=group_drawers,
-            hall_id="discoveries",
-        )
-        for (wing, room, session_key, session_title), group_drawers in sorted(grouped.items())
-    ]
-    package_payloads = [package_to_dict(item) for item in packages]
-    package_dir = _automation_packages_dir(config, project)
-    written_paths = write_package_payloads(package_payloads, package_dir)
-    promote_results: list[PromoteResult] = []
-    for path in written_paths:
-        promote_results.extend(
-            promote_file(
-                config=config,
-                source=path,
-                project_override=project,
-                allow_non_project=False,
-                archive=False,
-            )
-        )
-    return len(drawers), len(package_payloads), promote_results
 
 
 def _extract_titles(paths: list[Path], *, limit: int) -> list[str]:
@@ -627,7 +524,7 @@ def run_automation_cycle(
     graphify_bin: str | None = None,
     build_graph: bool = True,
 ) -> list[AutomationProjectResult]:
-    intake_results = run_projects_cycle(
+    intake_results = run_feed_phase(
         config=config,
         project_filter=project_filter,
         dry_run=False,
@@ -660,7 +557,7 @@ def run_automation_cycle(
                 project=project,
                 source_root=profile.normalized_path(),
             )
-            palace_drawers, packages, promoted = _build_palace_packages(config, project=project)
+            palace_drawers, packages, promoted = build_palace_packages(config, project=project)
             handoff = build_graphify_handoff(project, config.corpus_project_dir(project))
 
             graphify_result: GraphifyBuildResult | None = None
@@ -691,13 +588,17 @@ def run_automation_cycle(
             results.append(
                 AutomationProjectResult(
                     project=project,
-                    intake=intake_by_project.get(project),
-                    documents=documents,
-                    palace_drawers=palace_drawers,
-                    packages=packages,
-                    promoted=promoted,
-                    artifacts=artifacts,
-                    graphify=graphify,
+                    feed=FeedPhaseResult(intake=intake_by_project.get(project)),
+                    process=ProcessPhaseResult(
+                        documents=documents,
+                        palace_drawers=palace_drawers,
+                        packages=packages,
+                        promoted=promoted,
+                    ),
+                    consume=ConsumePhaseResult(
+                        artifacts=artifacts,
+                        graphify=graphify,
+                    ),
                 )
             )
     except Exception as exc:
