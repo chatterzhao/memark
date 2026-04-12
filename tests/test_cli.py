@@ -976,6 +976,46 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload["diagnostics"]["status"], "code_only_graph")
         self.assertEqual(payload["diagnostics"]["mixed_corpus_nodes"], 0)
 
+    def test_consumption_proof_can_record_and_read_evidence(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        evidence = self.workspace / "notes.md"
+        evidence.write_text("# Notes\n\nMemArk avoided repeated context gathering.\n", encoding="utf-8")
+
+        record = run_cli(
+            "consumption-proof",
+            "--workspace",
+            str(self.workspace),
+            "--record-verified",
+            "--command",
+            "memark context --workspace . --no-refresh",
+            "--evidence-path",
+            str(evidence),
+            "--outcome",
+            "AI reused historical decisions",
+            "--outcome",
+            "AI avoided repeating previous discovery work",
+            "--notes",
+            "verified in real continuation task",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(record.returncode, 0, record.stderr)
+        payload = json.loads(record.stdout)
+        self.assertTrue(payload["exists"])
+        self.assertEqual(payload["proof"]["status"], "verified")
+        self.assertEqual(payload["proof"]["command"], "memark context --workspace . --no-refresh")
+        self.assertEqual(payload["proof"]["evidence_paths"], [str(evidence.resolve())])
+        self.assertEqual(
+            payload["proof"]["outcomes"],
+            ["AI reused historical decisions", "AI avoided repeating previous discovery work"],
+        )
+
+        read_back = run_cli("consumption-proof", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(read_back.returncode, 0, read_back.stderr)
+        read_payload = json.loads(read_back.stdout)
+        self.assertTrue(read_payload["exists"])
+        self.assertEqual(read_payload["proof"]["status"], "verified")
+
     def test_graphify_proof_reports_workspace_root_graph_separately(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         code_file = self.workspace / "sample.py"
@@ -1167,10 +1207,33 @@ class MemArkCliTests(unittest.TestCase):
         result = run_cli("milestones", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["assessment"]["status"], "ready")
+        self.assertEqual(payload["assessment"]["status"], "blocked")
         checks = {item["id"]: item for item in payload["assessment"]["checks"]}
         self.assertEqual(checks["graphify_closure"]["status"], "passed")
+        self.assertEqual(checks["consumption_proof"]["status"], "blocked")
         self.assertEqual(payload["workspace_snapshot"]["graphify_proof"]["status"], "ingested")
+        self.assertIn("AI auto-consumption improvement is proven", payload["assessment"]["blockers"])
+
+        consumption = run_cli(
+            "consumption-proof",
+            "--workspace",
+            str(self.workspace),
+            "--record-verified",
+            "--outcome",
+            "AI reused project context without repeating setup questions",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(consumption.returncode, 0, consumption.stderr)
+
+        rerun = run_cli("milestones", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(rerun.returncode, 0, rerun.stderr)
+        rerun_payload = json.loads(rerun.stdout)
+        rerun_checks = {item["id"]: item for item in rerun_payload["assessment"]["checks"]}
+        self.assertEqual(rerun_payload["assessment"]["status"], "ready")
+        self.assertEqual(rerun_checks["consumption_proof"]["status"], "passed")
+        self.assertEqual(rerun_payload["workspace_snapshot"]["consumption_proof"]["status"], "verified")
 
     def test_milestones_assessment_accepts_auto_detected_graphify_proof(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -1282,9 +1345,29 @@ class MemArkCliTests(unittest.TestCase):
         result = run_cli("milestones", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
-        self.assertEqual(payload["assessment"]["status"], "ready")
+        self.assertEqual(payload["assessment"]["status"], "blocked")
         self.assertEqual(payload["workspace_snapshot"]["graphify_proof"]["status"], "ingested")
         self.assertEqual(payload["workspace_snapshot"]["graphify_proof_diagnostics"]["status"], "mixed_corpus_detected")
+        self.assertIn("AI auto-consumption improvement is proven", payload["assessment"]["blockers"])
+
+        consumption = run_cli(
+            "consumption-proof",
+            "--workspace",
+            str(self.workspace),
+            "--record-verified",
+            "--outcome",
+            "AI continued from prior promoted decisions",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(consumption.returncode, 0, consumption.stderr)
+
+        rerun = run_cli("milestones", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(rerun.returncode, 0, rerun.stderr)
+        rerun_payload = json.loads(rerun.stdout)
+        self.assertEqual(rerun_payload["assessment"]["status"], "ready")
+        self.assertEqual(rerun_payload["workspace_snapshot"]["consumption_proof"]["status"], "verified")
 
     def test_build_uses_graphify_binary(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)

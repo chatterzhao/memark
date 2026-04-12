@@ -353,6 +353,21 @@ _ADAPTERS = (
         target_help="Optional managed workspace root",
     ),
     SlashAdapterSpec(
+        name="consumption-proof",
+        aliases=("consumption-proof",),
+        memark_command="consumption-proof",
+        options=(
+            SlashOption(flags=("--record-verified",), dest="record_verified", memark_flag="--record-verified", help="Persist proof that AI continuity measurably improved"),
+            SlashOption(flags=("--command",), dest="command", memark_flag="--command", help="Recorded verification command or workflow", action="store", default=None, metavar="COMMAND"),
+            SlashOption(flags=("--evidence-path",), dest="evidence_path", memark_flag="--evidence-path", help="Evidence file path; repeat for multiple paths", action="append", default=[], metavar="PATH"),
+            SlashOption(flags=("--outcome",), dest="outcome", memark_flag="--outcome", help="Observed improvement outcome; repeat for multiple outcomes", action="append", default=[], metavar="TEXT"),
+            SlashOption(flags=("--notes",), dest="notes", memark_flag="--notes", help="Short verification notes", action="store", default=None, metavar="TEXT"),
+            SlashOption(flags=("--json",), dest="json", memark_flag="--json", help="Render machine-readable proof state"),
+        ),
+        resolve_target=_resolve_workspace_target,
+        target_help="Optional managed workspace root",
+    ),
+    SlashAdapterSpec(
         name="graphify",
         aliases=("graphify",),
         memark_command="build",
