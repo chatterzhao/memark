@@ -12,6 +12,11 @@ graphify-out/
 memark-work/
 .memark/
 .mempalace/
+corpus/*/.codex/
+corpus/*/AGENTS.md
+corpus/*/documents/
+corpus/*/imports/
+corpus/*/promoted/room-*-rollout-*.md
 .graphify_python
 .graphify_detect.json
 entities.json

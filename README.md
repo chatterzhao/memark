@@ -17,11 +17,29 @@
 
 `MemArk` 不是新的记忆系统，也不是新的图谱引擎。
 
+`MemArk` 的成功标准也不是“把两者串起来”。
+
+必须满足：
+
+- 自动喂数据不能比单用 `MemPalace` 更差
+- 自动加工不能比直接读原始 session / 项目文档更差
+- 自动消费不能比直接用 `MemPalace` / `Graphify` 原生入口更差
+
+如果 `MemArk` 让上游已有价值打折扣，它就不是增强层，而是失败的中间层。
+
 基于真实运行，还需要补一个更保守的判断：
 
 - 只需要记忆找回时，`MemPalace` 单独就已经有价值
 - 只需要代码结构图时，`Graphify` 单独也已经有价值
 - `MemArk` 的价值只在“原始项目记忆 -> 可编译项目知识”这一段
+
+因此下一阶段真正应该收敛成默认体验的是五层自动化：
+
+1. 自动安装
+2. 自动配置
+3. 自动喂数据
+4. 自动加工
+5. 自动消费
 
 这不是保守表述，而是来自真实运行结果：
 
@@ -105,7 +123,7 @@
 
 - 裸安装 `graphify` CLI 主要暴露的是 query、hook、平台安装等入口
 - 代码图重建是可运行的
-- 但“完整 mixed-corpus semantic pipeline”更多依赖官方 skill 路径，而不是安装版 CLI 的帮助输出
+- 但安装版 CLI 不是一个稳定的 direct folder-build 入口
 - 当前进一步核实到：
   - `graphify.detect()` 能发现 `promoted/*.md`
   - 但公开 Python 提取入口 `graphify.extract()` 只处理代码
@@ -119,7 +137,7 @@
 2. 默认优先从项目相关会话记忆里筛选内容，并以 `project wing` 为边界按 `room` 组织
 3. 保留原文证据与来源，而不是伪造新的记忆层
 4. 落成 `Graphify-ready` Markdown 语料
-5. 在可用时触发兼容的 `Graphify` 执行入口，并清楚区分 code-only fallback 与真实 mixed-corpus build
+5. 在安装版 `graphify` CLI 不支持 direct folder build 时，自己完成本地 mixed-corpus graph build
 6. 在 `Graphify` 统一入图尚未打通前，先提供本地项目 corpus 的直接消费入口
 
 当前更稳妥的设计假设不是整个宫殿，也不是裸数据库，而是：
@@ -163,9 +181,13 @@
 - 一套会被安装到用户 AI 工具目录的 `MemArk` skill bundle
 - 基于真实命令执行结果的安装验证记录
 - 一个真实可运行的 Python CLI：`memark`
-- 一个针对安装版 `graphify` CLI 差异的兼容策略：当顶层 `graphify <folder>` 不可用时，退回 `graphify.watch._rebuild_code`
+- 一个针对安装版 `graphify` CLI 差异的兼容策略：当顶层 `graphify <folder>` 不可用或 `graphify` 缺失时，由 `MemArk` 自己构建 mixed-corpus 图
 - 一个不依赖 `Graphify` 入图的项目语料消费入口：`memark query`
-- 一个把 `MemArk` 语料边界明确交给上游 `Graphify` skill 的桥接入口：`memark graphify-handoff`
+- 一个把 `MemArk` 语料边界明确交给上游 `Graphify` skill 的可选桥接入口：`memark graphify-handoff`
+- 一个把真实 mixed-corpus `Graphify` ingestion evidence 记回 workspace state 的入口：`memark graphify-proof`
+- 一个把 Graphify 项目级接入直接安装到 `corpus/<project>` 的入口：`memark graphify-onboard`
+- 一个把 slash-only 命令语义稳定适配到 `MemArk` CLI 的入口：`memark slash`
+- 一个把 corpus graph 状态显式呈现为 `graph_missing` / `onboarded_graph_missing` / `ingested` 的状态面：`memark status`、`memark milestones`
 
 当前 CLI 已支持：
 
@@ -173,9 +195,20 @@
 - `memark validate`
 - `memark query`
 - `memark graphify-handoff`
+- `memark graphify-proof`
+- `memark graphify-onboard`
+- `memark slash`
 - `memark promote`
 - `memark add-documents`
 - `memark build`
+- `memark slash --workspace <workspace> /graphify <workspace-or-corpus> --update`
+- `memark slash --workspace <workspace> /context <workspace> --no-refresh --json`
+- `memark slash --workspace <workspace> /milestones <workspace> --json`
+- `memark slash --workspace <workspace> /automation-status <workspace> --json`
+- `memark slash --workspace <workspace> /status <workspace> --json`
+- `memark slash --workspace <workspace> /query <terms...> --json`
+- `memark slash --workspace <workspace> /graphify-proof <workspace> --json`
+- `memark slash --catalog --json`
 - `memark run`
 - `memark codex-sync`
 - `memark project-set`
@@ -184,6 +217,9 @@
 - `memark service-install`
 - `memark service-status`
 - `memark service-uninstall`
+- `memark automation-run`
+- `memark automation-status`
+- `memark context`
 - `memark mempalace-mine`
 - `memark palace-status`
 - `memark palace-clean`
@@ -211,11 +247,21 @@
 
 - 早期 CLI 探测时，在 `.venv-skill-check` 中验证到的 `graphifyy 0.3.12` 顶层 `graphify --help` 暴露的是 `install`、`query`、`hook`、`claude/codex install` 等入口
 - 它不是一个稳定公开的“任何版本都支持 `graphify <folder>`”接口
-- 因此 `MemArk build` 当前应被理解为“调用兼容的 Graphify 构建入口”，而不是保证所有 `graphifyy` 安装都可直接按同一命令消费目录
-- 当前实现里，当顶层 CLI 报 `unknown command` 时，会优先尝试在当前执行 `memark` 的 Python 环境里导入并调用 `graphify.watch._rebuild_code`
-- 这个 fallback 只覆盖 code graph 重建，不等价于包含文档 / paper / image 语料的完整 semantic build
-- 这意味着当前 `memark build` 虽然已经可以真实产出 `graph.json`，但还不能把“晋升后的 Markdown 记忆”表述成已经进入完整 Graphify 图谱
-- 当前仓库实测也再次证明了这一点：`graphify detect()` 能看到 `corpus/memark/promoted/*.md`，但 `_rebuild_code` 产出的 `graph.json` 里主要仍是代码节点
+- 因此 `MemArk build` 当前应被理解为“优先调用兼容的 Graphify 构建入口；若不可用，则由 MemArk 自己产出 mixed-corpus graph”
+- 当前实现里，当顶层 CLI 报 `unknown command` 或 `graphify` 缺失时，会直接在 `corpus/<project>/graphify-out/` 写出本地 mixed-corpus `graph.json`、`manifest.json`、`GRAPH_REPORT.md`
+- 这条本地构建路径不依赖 slash-command 客户端，因此更符合 `MemArk` 的自动化职责
+- `graphify-handoff` 与 `graphify-onboard` 仍保留，但现在是互操作入口，不再是正常自动化闭环的前置条件
+- `memark slash` 提供 slash-compatible adapter surface，把 slash 语义映射到 `MemArk` 的稳定 CLI，而不是假装 shell 原生支持 `/...`
+- `memark slash --catalog` 可直接枚举当前已支持的 slash adapter、参数和 `MemArk` 映射，方便 AI 自动发现能力
+- `memark slash --catalog --json` 现在还会明确给出路由策略：优先直接调用 `MemArk` CLI；slash 只用于上游是 slash-only，或调用方明确要求 slash 语法
+- `MemArk` 自己设计的入口同时支持交互式和免交互式，但当前默认面定义为：`non_interactive_first`、`approval=auto`
+- 当前 CLI 不提供并存别名；每项能力只保留一个唯一正式命令名，避免 AI 调用面出现双写法漂移
+- 当前除 `/graphify` 外，也已支持把 `/context` 映射到 `memark context`
+- 现在也已支持把 `/milestones` 映射到 `memark milestones`
+- 现在也已支持把 `/automation-status` 映射到 `memark automation-status`
+- 现在也已支持把 `/status` 映射到 `memark status`，用于 slash-only 语义下的状态观测
+- 现在也已支持把 `/query` 映射到 `memark query`，用于 slash-only 语义下的本地 corpus 搜索
+- 现在也已支持把 `/graphify-proof` 映射到 `memark graphify-proof`
 
 还需要把“安装位置”和“项目产物位置”区分开：
 
@@ -248,6 +294,74 @@
 - runtime 会自动选择兼容 Python；当前实测使用的是 `Python 3.13.6`
 - 当前 workspace 即使 `PATH` 没手工加上 `mempalace` / `graphify`，也会优先回退到 `~/.memark/venv/bin/*`
 
+## 安装和项目接入不是一回事
+
+当前最容易让人误解的点是：`memark install` 不是 `memark init`。
+
+两者职责不同：
+
+- `memark install`：安装用户级 runtime 和 skill bundle
+- `memark init`：初始化一个具体 workspace
+- `memark project-set`：把一个具体项目目录登记到该 workspace
+
+因此首次安装时：
+
+- 可以在任何目录执行 `memark install`
+- 不要求当前目录已经是项目目录
+- 不要求当前目录已经存在 `.memark/`
+
+更准确的理解是：
+
+- `install` 面向“这台机器”
+- `init` 面向“一个 workspace 目录”
+- `project-set` 面向“workspace 里要跟踪的项目”
+
+### 新项目要不要再执行 `memark init`
+
+不一定。关键看你是否已经有一个现成 workspace。
+
+如果你已经有一个长期使用的 workspace，比如 `~/memark-work`：
+
+- 不需要为每个新项目重复 `memark init`
+- 直接执行新的 `memark project-set --workspace ~/memark-work ...`
+
+如果你希望某个仓库自己带一份独立状态：
+
+- 就在该仓库根目录执行 `memark init . --project <name>`
+- 然后再执行 `memark project-set`
+
+所以更准确的结论是：
+
+- 一台机器通常只需要做一次 `memark install`
+- 一个新的 workspace 需要做一次 `memark init`
+- 一个新的项目目录需要做一次 `memark project-set`
+
+### 常见接法
+
+单仓库就地接入：
+
+```bash
+~/.memark/venv/bin/memark init . --project myproject
+~/.memark/venv/bin/memark project-set \
+  --workspace . \
+  --project myproject \
+  --path "$(pwd)" \
+  --sessions-root ~/.codex/sessions
+~/.memark/venv/bin/memark automation-run --workspace . --no-build
+```
+
+共享 workspace 管多个项目：
+
+```bash
+~/.memark/venv/bin/memark init ~/memark-work --project default
+~/.memark/venv/bin/memark project-set \
+  --workspace ~/memark-work \
+  --project myproject \
+  --path /abs/path/to/project \
+  --sessions-root ~/.codex/sessions
+~/.memark/venv/bin/memark automation-run --workspace ~/memark-work --project myproject --no-build
+```
+
 ## 当前 CLI 怎么用
 
 先安装当前仓库里的 CLI：
@@ -257,7 +371,14 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -e .
 ```
 
-先初始化一个工作区：
+如果你要验证用户级正式安装链路，`memark install` 可以在任何目录执行：
+
+```bash
+python3 -m memark install --platform codex --source-spec "$(pwd)"
+~/.memark/venv/bin/memark doctor --platform codex
+```
+
+如果你接下来要让某个目录变成 MemArk workspace，再初始化一个工作区：
 
 ```bash
 python3 -m memark init ./memark-work --project myproject
@@ -309,6 +430,7 @@ python3 -m memark project-set \
 
 ```bash
 python3 -m memark projects-run --workspace ./memark-work
+python3 -m memark automation-run --workspace ./memark-work --no-build
 ```
 
 如果要把这条 cycle 安装成用户级自动调度，而不是手工或自己写定时器，当前可以直接执行：
@@ -317,6 +439,13 @@ python3 -m memark projects-run --workspace ./memark-work
 python3 -m memark service-install \
   --workspace ./memark-work \
   --interval-seconds 300
+```
+
+如果要确认最近一轮自动 cycle 是否真的跑完，可以直接查看：
+
+```bash
+python3 -m memark automation-status --workspace ./memark-work --json
+python3 -m memark service-status --workspace ./memark-work --json
 ```
 
 `projects-run` 的行为是：
@@ -535,10 +664,41 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 - [`docs/IMPLEMENTATION_PLAN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/IMPLEMENTATION_PLAN.md)：当前 Python CLI 的实现范围与后续分层
 - [`docs/ACCEPTANCE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/ACCEPTANCE_CHECKLIST.md)：当前版本的验收标准与完成状态
 - [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)：基于 `MemPalace` 与 `Graphify` 能力面收敛出的具体需求
+- [`docs/MILESTONE_BETA.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_BETA.md)：当前仓库自己吃自己的 Beta 里程碑与出站条件
+- [`docs/MILESTONES.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONES.md)：按阶段整理的能力账本，方便直接看当前应用已实现什么、下一步做什么
+- [`docs/MILESTONE_NEXT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_NEXT.md)：Beta 之后下一阶段里程碑，优先收口长期稳定性与消费闭环，而不是先扩跨平台
+- [`docs/RELEASE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RELEASE_CHECKLIST.md)：按当前 Beta 口径对外说明或内部推广前的发布检查清单
+- [`docs/DOGFOOD_RUNBOOK.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_RUNBOOK.md)：当前仓库持续自己吃自己时的日常操作与排障入口
+- [`docs/DOGFOOD_LOG.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_LOG.md)：按时间追加的当前仓库真实 dogfood 证据
 - [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)：项目 AI 当前应如何实际消费 `MemPalace`、`Graphify` 与 `MemArk` 产物
 - [`docs/DOCUMENT_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOCUMENT_STATUS.md)：正式文档与研究归档的关系
 - [`docs/MAINTAINER_SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MAINTAINER_SKILL.md)：旧的维护型 Skill 说明
 - [`examples/sample_room_package.json`](/Users/zhaoyu/Downloads/code/my-memark/memark/examples/sample_room_package.json)：可直接试跑的 room package 示例
+
+如果你想直接从 CLI 看当前阶段和功能账，而不是先翻文档：
+
+```bash
+python3 -m memark milestones
+python3 -m memark milestones --workspace .
+python3 -m memark status --workspace . --json
+```
+
+其中 `memark milestones --workspace .` 现在不只展示阶段和证据，还会直接评估当前里程碑是否已达成、当前阻塞项是什么。
+`memark status --workspace . --json` 现在还会直接给出 corpus 级 `graphify_corpus.status`，用来区分：
+
+- 当前 corpus 还没有 graph：`graph_missing`
+- 已 onboard，但还没生成 corpus 级 `graphify-out/graph.json`：`onboarded_graph_missing`
+- 已有真实 mixed-corpus ingestion proof：`ingested`
+
+`memark context` 生成的自动消费产物现在也会带出这条状态：
+
+- `ai-context.md` 会包含 `graphify_corpus_status`、`graphify_onboarding_status`、`graphify_proof_diagnostics`
+- `graphify-status.md` 会直接写出 `corpus_status`、`onboarding_status`、证据图路径与推荐 update 命令
+
+如果上游 `Graphify` skill 已经真实 ingest 了当前 corpus，可以用两种方式让系统认出这条闭环证据：
+
+- 显式记录：`python3 -m memark graphify-proof --workspace . --record-ingested ...`
+- 自动识别：让 `corpus/<project>/graphify-out/graph.json` 里真实包含来自 `promoted/documents/imports` 的节点；之后 `memark graphify-proof` / `milestones` 会自动认出它
 
 ## 开源价值
 

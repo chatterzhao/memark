@@ -378,14 +378,40 @@ launchctl kickstart -k gui/$(id -u)/io.memark.projects-run.memark.3897640fdb
 - `launchd` 用户级 job 的安装、状态查询、卸载都已在真实机器上跑过
 - plist 内容与 `automation-run` 调用参数一致
 
-但这次验证也暴露了一个真实问题：
+随后又补做了一次更强的后台验证，目标是不再只证明“job 已注册”，而是证明“后台 cycle 真正完成”。
 
-- `kickstart` 后，`launchctl print` 的 `runs` 计数有增长
-- 但观察窗口内 `.memark/state/projects-run.json` 没有跟着更新
-- `.memark/logs/io.memark.projects-run.memark.3897640fdb.out.log` 与 `.err.log` 都保持 `0 bytes`
-- 当时后台 Python 进程曾持续存活，未拿到可直接归因给 `launchd` 的 cycle 完成证据
+补充执行：
 
-为了排除“后台默认环境不兼容”这个方向，又补做了一次前台最小环境验证：
+```bash
+python3 -m memark automation-run --workspace . --no-build --json
+python3 -m memark service-install --workspace . --scheduler launchd --interval-seconds 300 --json
+python3 -m memark service-status --workspace . --scheduler launchd --json
+launchctl kickstart -k gui/$(id -u)/io.memark.projects-run.memark.3897640fdb
+python3 -m memark automation-status --workspace . --json
+launchctl print gui/$(id -u)/io.memark.projects-run.memark.3897640fdb
+python3 -m memark service-uninstall --workspace . --scheduler launchd --json
+python3 -m memark service-status --workspace . --scheduler launchd --json
+```
+
+补充结果：
+
+- `service-status --json` 已能返回 `last_cycle`
+- 后台触发后的 `last_cycle.status = completed`
+- `last_cycle.started_at` / `finished_at` 推进到新的后台运行时间
+- 手动 `kickstart` 之后，`.memark/state/automation-run.json` 继续推进到更新的时间戳
+- `launchctl print` 显示：
+  - `runs = 3`
+  - `last exit code = 0`
+- 同一轮后台 cycle 里，`palace_drawers` 从 `1014` 推进到 `1024`
+- `intake.mined = true`
+- `.memark/logs/io.memark.projects-run.memark.3897640fdb.out.log` 与 `.err.log` 不再是 `0 bytes`
+
+因此当前可以新增确认：
+
+- 当前仓库已经拿到真实的 `launchd -> automation-run -> automation-run.json` 完成证据
+- `automation-status` 与 `service-status.last_cycle` 已经形成后台 cycle 的可观测面
+
+为了排除“后台默认环境不兼容”这个方向，之前也补做过一次前台最小环境验证：
 
 ```bash
 env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin \
@@ -406,10 +432,11 @@ env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin \
   - `mine_elapsed_seconds: 3.753`
 - `.memark/state/projects-run.json` 已更新为新的 `last_run_at`
 
-因此当前最准确的判断是：
+因此当前最准确的判断更新为：
 
 - `projects-run` 本身在接近 `launchd` 的最小环境下可以跑通
-- 但 `launchd` 后台持续 intake 的真实闭环，还不能因为“job 已注册”就判定为完成
+- `launchd` 后台单次自动 cycle 已经拿到真实完成证据
+- 但“长期持续稳定后台 intake”仍不能因为一两次成功就判定为完全完成
 
 ### 4.1 当前仓库 `automation-run` 单次真实烟测
 

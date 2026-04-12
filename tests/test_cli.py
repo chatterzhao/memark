@@ -9,6 +9,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -245,6 +246,24 @@ class MemArkCliTests(unittest.TestCase):
             "HOME": str(fake_home),
             "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
         }
+        now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        automation_state = self.workspace / ".memark" / "state" / "automation-run.json"
+        automation_state.parent.mkdir(parents=True, exist_ok=True)
+        automation_state.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "started_at": now,
+                    "finished_at": now,
+                    "project_filter": None,
+                    "build_graph": True,
+                    "project_count": 1,
+                    "results": [{"project": "memark", "graphify_status": "pending_update"}],
+                    "error": None,
+                }
+            ),
+            encoding="utf-8",
+        )
 
         install = run_cli(
             "service-install",
@@ -282,6 +301,124 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue(status_payload["installed"])
         self.assertTrue(status_payload["loaded"])
         self.assertEqual(status_payload["plist_path"], str(plist_path))
+        self.assertEqual(status_payload["interval_seconds"], 120)
+        self.assertEqual(status_payload["health"], "ok")
+        self.assertEqual(status_payload["last_cycle"]["status"], "completed")
+        self.assertEqual(status_payload["last_cycle"]["project_count"], 1)
+        self.assertIn("last completed cycle age:", status_payload["observations"][0])
+
+        uninstall = run_cli(
+            "service-uninstall",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(uninstall.returncode, 0, uninstall.stderr)
+        uninstall_payload = json.loads(uninstall.stdout)
+        self.assertTrue(uninstall_payload["removed"])
+        self.assertTrue(uninstall_payload["unloaded"])
+        self.assertFalse(plist_path.exists())
+
+    def test_service_status_marks_stale_cycle(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_home = Path(self.tmpdir.name) / "home"
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        state_dir = self.workspace / "launchctl-state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        fake_launchctl = fake_bin_dir / "launchctl"
+        fake_launchctl.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                STATE_DIR="{state_dir}"
+                cmd="$1"
+                shift
+                case "$cmd" in
+                  bootstrap)
+                    plist="$2"
+                    touch "$STATE_DIR/$(basename "$plist").loaded"
+                    exit 0
+                    ;;
+                  bootout)
+                    exit 0
+                    ;;
+                  enable)
+                    exit 0
+                    ;;
+                  kickstart)
+                    exit 0
+                    ;;
+                  print)
+                    label="${{1##*/}}"
+                    if [ -f "$STATE_DIR/$label.plist.loaded" ]; then
+                      echo "service = $label"
+                      exit 0
+                    fi
+                    exit 113
+                    ;;
+                esac
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_launchctl.chmod(fake_launchctl.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+        }
+        automation_state = self.workspace / ".memark" / "state" / "automation-run.json"
+        automation_state.parent.mkdir(parents=True, exist_ok=True)
+        automation_state.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "started_at": "2026-04-10T12:00:00+00:00",
+                    "finished_at": "2026-04-10T12:00:03+00:00",
+                    "project_filter": None,
+                    "build_graph": True,
+                    "project_count": 1,
+                    "results": [{"project": "memark"}],
+                    "error": None,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        install = run_cli(
+            "service-install",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--interval-seconds",
+            "120",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+        plist_path = Path(json.loads(install.stdout)["plist_path"])
+
+        status = run_cli(
+            "service-status",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(status.returncode, 0, status.stderr)
+        status_payload = json.loads(status.stdout)
+        self.assertEqual(status_payload["health"], "stale")
+        self.assertTrue(any("stale threshold" in note for note in status_payload["observations"]))
 
         uninstall = run_cli(
             "service-uninstall",
@@ -452,6 +589,138 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload["hits"][0]["scope"], "promoted")
         self.assertEqual(payload["hits"][0]["title"], "Bridge Governance")
 
+    def test_milestones_renders_catalog_json(self) -> None:
+        result = run_cli("milestones", "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["achieved"], "M0")
+        self.assertEqual(payload["current"], "M1")
+        self.assertEqual(payload["assessment"]["status"], "needs_workspace")
+        self.assertTrue(any(item["id"] == "M0" for item in payload["milestones"]))
+        self.assertTrue(any(item["id"] == "M1" for item in payload["milestones"]))
+
+    def test_milestones_can_attach_workspace_snapshot(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_home = Path(self.tmpdir.name) / "home"
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        state_dir = self.workspace / "launchctl-state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        fake_launchctl = fake_bin_dir / "launchctl"
+        fake_launchctl.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                STATE_DIR="{state_dir}"
+                cmd="$1"
+                shift
+                case "$cmd" in
+                  bootstrap)
+                    plist="$2"
+                    touch "$STATE_DIR/$(basename "$plist").loaded"
+                    exit 0
+                    ;;
+                  bootout)
+                    exit 0
+                    ;;
+                  enable)
+                    exit 0
+                    ;;
+                  kickstart)
+                    exit 0
+                    ;;
+                  print)
+                    label="${{1##*/}}"
+                    if [ -f "$STATE_DIR/$label.plist.loaded" ]; then
+                      echo "service = $label"
+                      exit 0
+                    fi
+                    exit 113
+                    ;;
+                esac
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_launchctl.chmod(fake_launchctl.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+        }
+        finished_at = datetime.now(timezone.utc)
+        started_at = finished_at.replace(microsecond=0)
+        automation_state = self.workspace / ".memark" / "state" / "automation-run.json"
+        automation_state.parent.mkdir(parents=True, exist_ok=True)
+        automation_state.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "started_at": started_at.isoformat(),
+                    "finished_at": finished_at.isoformat(),
+                    "project_filter": None,
+                    "build_graph": True,
+                    "project_count": 1,
+                    "results": [{"project": "memark"}],
+                    "error": None,
+                }
+            ),
+            encoding="utf-8",
+        )
+        install = run_cli(
+            "service-install",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--interval-seconds",
+            "120",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+        result = run_cli("milestones", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["workspace_snapshot"]["workspace"], str(self.workspace.resolve()))
+        self.assertEqual(payload["workspace_snapshot"]["project"], "memark")
+        self.assertEqual(payload["workspace_snapshot"]["automation"]["status"], "completed")
+        self.assertEqual(payload["workspace_snapshot"]["service"]["health"], "ok")
+        self.assertEqual(payload["workspace_snapshot"]["graphify_corpus"]["status"], "graph_missing")
+        self.assertEqual(payload["assessment"]["status"], "blocked")
+        checks = {item["id"]: item for item in payload["assessment"]["checks"]}
+        self.assertEqual(checks["background_scheduler"]["status"], "passed")
+        self.assertEqual(checks["automation_cycle"]["status"], "passed")
+        self.assertEqual(checks["graphify_closure"]["status"], "blocked")
+        self.assertIn("Mixed-corpus graph closure is proven", payload["assessment"]["blockers"])
+        self.assertTrue(any("memark build --workspace <dir>" in item for item in payload["assessment"]["next_actions"]))
+
+    def test_status_includes_milestone_snapshot(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli("status", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["milestones"]["achieved"], "M0")
+        self.assertEqual(payload["milestones"]["current"], "M1")
+        self.assertEqual(payload["graphify_corpus"]["status"], "graph_missing")
+        self.assertEqual(payload["graphify_corpus"]["onboarding"]["status"], "missing")
+
+    def test_status_reports_onboarded_graph_missing_corpus_state(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        corpus_dir = self.workspace / "corpus" / "memark"
+        (corpus_dir / "AGENTS.md").write_text("installed\n", encoding="utf-8")
+        hooks_path = corpus_dir / ".codex" / "hooks.json"
+        hooks_path.parent.mkdir(parents=True, exist_ok=True)
+        hooks_path.write_text("{}", encoding="utf-8")
+
+        result = run_cli("status", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["graphify_corpus"]["status"], "onboarded_graph_missing")
+        self.assertEqual(payload["graphify_corpus"]["onboarding"]["status"], "onboarded")
+        self.assertEqual(payload["graphify_proof_diagnostics"]["status"], "graph_missing")
+
     def test_context_refreshes_automation_and_returns_combined_payload(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         sessions_root = self.workspace / "sessions"
@@ -527,9 +796,55 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue(payload["refreshed"])
         self.assertIn("ai-context", payload["files"])
         self.assertIn("# AI Context", payload["sections"]["ai-context"])
+        self.assertIn("graphify_corpus_status", payload["sections"]["ai-context"])
+        self.assertIn("graphify_onboarding_status", payload["sections"]["ai-context"])
         self.assertIn("Decision", payload["sections"]["decisions-digest"])
         self.assertIn("Risk", payload["sections"]["risks-digest"])
+        self.assertIn("corpus_status", payload["sections"]["graphify-status"])
+        self.assertIn("onboarding_status", payload["sections"]["graphify-status"])
         self.assertIn("recommended_command", payload["sections"]["graphify-status"])
+
+    def test_automation_status_reads_last_cycle_state(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        state_file = self.workspace / ".memark" / "state" / "automation-run.json"
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(
+            json.dumps(
+                {
+                    "status": "failed",
+                    "started_at": "2026-04-10T10:00:00+00:00",
+                    "finished_at": "2026-04-10T10:00:07+00:00",
+                    "project_filter": "memark",
+                    "build_graph": False,
+                    "project_count": 1,
+                    "results": [
+                        {
+                            "project": "memark",
+                            "packages": 2,
+                            "graphify_status": "not_requested",
+                        }
+                    ],
+                    "error": "simulated failure",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_cli(
+            "automation-status",
+            "--workspace",
+            str(self.workspace),
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["exists"])
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(payload["state_file"], str(state_file.resolve()))
+        self.assertEqual(payload["project_filter"], "memark")
+        self.assertEqual(payload["results"][0]["packages"], 2)
+        self.assertEqual(payload["error"], "simulated failure")
 
     def test_graphify_handoff_renders_prompt_and_command(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -563,6 +878,413 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue(payload["recommended_command"].endswith(" --update"))
         self.assertIn("Use the Graphify skill", payload["prompt"])
         self.assertEqual(payload["inventories"][0]["scope"], "promoted")
+
+    def test_graphify_proof_can_record_and_read_ingestion_evidence(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
+        promoted.write_text("# Bridge Governance\n\nSession-derived project knowledge.\n", encoding="utf-8")
+        evidence = self.workspace / "graphify-out" / "GRAPH_REPORT.md"
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text("# Graph Report\n\nMixed corpus consumed.\n", encoding="utf-8")
+
+        record = run_cli(
+            "graphify-proof",
+            "--workspace",
+            str(self.workspace),
+            "--record-ingested",
+            "--command",
+            "/graphify /tmp/corpus --update",
+            "--evidence-path",
+            str(evidence),
+            "--notes",
+            "verified via upstream Graphify skill run",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(record.returncode, 0, record.stderr)
+        recorded_payload = json.loads(record.stdout)
+        self.assertTrue(recorded_payload["exists"])
+        self.assertEqual(recorded_payload["proof"]["status"], "ingested")
+        self.assertEqual(recorded_payload["proof"]["notes"], "verified via upstream Graphify skill run")
+        self.assertEqual(recorded_payload["proof"]["evidence_paths"], [str(evidence.resolve())])
+
+        read_back = run_cli("graphify-proof", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(read_back.returncode, 0, read_back.stderr)
+        read_payload = json.loads(read_back.stdout)
+        self.assertTrue(read_payload["exists"])
+        self.assertEqual(read_payload["proof"]["status"], "ingested")
+        self.assertEqual(read_payload["diagnostics"]["status"], "graph_missing")
+
+    def test_graphify_proof_can_auto_detect_mixed_corpus_graph(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
+        promoted.write_text("# Bridge Governance\n\nSession-derived project knowledge.\n", encoding="utf-8")
+        graphify_out = self.workspace / "corpus" / "memark" / "graphify-out"
+        graphify_out.mkdir(parents=True, exist_ok=True)
+        (graphify_out / "graph.json").write_text(
+            json.dumps(
+                {
+                    "nodes": [
+                        {
+                            "id": "bridge-governance",
+                            "label": "Bridge Governance",
+                            "source_file": str(promoted.resolve()),
+                        }
+                    ],
+                    "links": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (graphify_out / "GRAPH_REPORT.md").write_text("# Graph Report\n", encoding="utf-8")
+
+        result = run_cli("graphify-proof", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["exists"])
+        self.assertEqual(payload["proof"]["status"], "ingested")
+        self.assertIn("auto-detected", payload["proof"]["notes"])
+        self.assertTrue(any(path.endswith("graph.json") for path in payload["proof"]["evidence_paths"]))
+        self.assertEqual(payload["diagnostics"]["status"], "mixed_corpus_detected")
+
+    def test_graphify_proof_reports_code_only_graph_diagnostics(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        code_file = self.workspace / "sample.py"
+        code_file.write_text("def main():\n    return 1\n", encoding="utf-8")
+        graphify_out = self.workspace / "corpus" / "memark" / "graphify-out"
+        graphify_out.mkdir(parents=True, exist_ok=True)
+        (graphify_out / "graph.json").write_text(
+            json.dumps(
+                {
+                    "nodes": [
+                        {
+                            "id": "main",
+                            "label": "main",
+                            "source_file": str(code_file.resolve()),
+                        }
+                    ],
+                    "links": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_cli("graphify-proof", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload["exists"])
+        self.assertEqual(payload["diagnostics"]["status"], "code_only_graph")
+        self.assertEqual(payload["diagnostics"]["mixed_corpus_nodes"], 0)
+
+    def test_graphify_proof_reports_workspace_root_graph_separately(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        code_file = self.workspace / "sample.py"
+        code_file.write_text("def main():\n    return 1\n", encoding="utf-8")
+        graphify_out = self.workspace / "graphify-out"
+        graphify_out.mkdir(parents=True, exist_ok=True)
+        (graphify_out / "graph.json").write_text(
+            json.dumps(
+                {
+                    "nodes": [
+                        {
+                            "id": "main",
+                            "label": "main",
+                            "source_file": str(code_file.resolve()),
+                        }
+                    ],
+                    "links": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_cli("graphify-proof", "--workspace", str(self.workspace), "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertFalse(payload["exists"])
+        self.assertEqual(payload["diagnostics"]["status"], "graph_missing")
+        self.assertEqual(payload["diagnostics"]["workspace_graph_status"], "code_only_graph")
+        self.assertEqual(payload["diagnostics"]["workspace_total_nodes"], 1)
+
+    def test_graphify_onboard_dry_run_reports_corpus_dir_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+
+        result = run_cli("graphify-onboard", "--workspace", str(self.workspace), "--dry-run", "--json", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["project"], "memark")
+        self.assertEqual(payload["platform"], "codex")
+        self.assertEqual(Path(payload["command"][0]).name, "graphify")
+        self.assertEqual(payload["command"][1:], ["codex", "install"])
+        self.assertTrue(payload["corpus_dir"].endswith("/corpus/memark"))
+        self.assertTrue(payload["recommended_update_command"].endswith("/corpus/memark --update"))
+
+    def test_graphify_onboard_runs_graphify_install_inside_corpus_dir(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_graphify = fake_bin_dir / "graphify"
+        log_file = self.workspace / "graphify-onboard.log"
+        fake_graphify.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                echo "cwd=$(pwd)" > "{log_file}"
+                echo "args=$*" >> "{log_file}"
+                cat <<'EOF' > AGENTS.md
+                ## graphify
+                installed
+                EOF
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_graphify.chmod(fake_graphify.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("graphify-onboard", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["ok"])
+        corpus_dir = (self.workspace / "corpus" / "memark").resolve()
+        log_text = log_file.read_text(encoding="utf-8")
+        self.assertIn(f"cwd={corpus_dir}", log_text)
+        self.assertIn("args=codex install", log_text)
+        self.assertTrue((corpus_dir / "AGENTS.md").exists())
+
+    def test_milestones_assessment_accepts_recorded_graphify_proof(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_home = Path(self.tmpdir.name) / "home"
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        state_dir = self.workspace / "launchctl-state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        fake_launchctl = fake_bin_dir / "launchctl"
+        fake_launchctl.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                STATE_DIR="{state_dir}"
+                cmd="$1"
+                shift
+                case "$cmd" in
+                  bootstrap)
+                    plist="$2"
+                    touch "$STATE_DIR/$(basename "$plist").loaded"
+                    exit 0
+                    ;;
+                  bootout)
+                    exit 0
+                    ;;
+                  enable)
+                    exit 0
+                    ;;
+                  kickstart)
+                    exit 0
+                    ;;
+                  print)
+                    label="${{1##*/}}"
+                    if [ -f "$STATE_DIR/$label.plist.loaded" ]; then
+                      echo "service = $label"
+                      exit 0
+                    fi
+                    exit 113
+                    ;;
+                esac
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_launchctl.chmod(fake_launchctl.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+        }
+        finished_at = datetime.now(timezone.utc)
+        started_at = finished_at.replace(microsecond=0)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
+        promoted.write_text("# Bridge Governance\n\nSession-derived project knowledge.\n", encoding="utf-8")
+        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
+        document.parent.mkdir(parents=True, exist_ok=True)
+        document.write_text("# Notes\n\nProject notes live here.\n", encoding="utf-8")
+        imported = self.workspace / "corpus" / "memark" / "imports" / "paper.md"
+        imported.parent.mkdir(parents=True, exist_ok=True)
+        imported.write_text("# Imported\n\nExternal material.\n", encoding="utf-8")
+        automation_state = self.workspace / ".memark" / "state" / "automation-run.json"
+        automation_state.parent.mkdir(parents=True, exist_ok=True)
+        automation_state.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "started_at": started_at.isoformat(),
+                    "finished_at": finished_at.isoformat(),
+                    "project_filter": None,
+                    "build_graph": True,
+                    "project_count": 1,
+                    "results": [
+                        {
+                            "project": "memark",
+                            "graphify_status": "pending_update",
+                            "artifacts": ["graphify-status.md"],
+                        }
+                    ],
+                    "error": None,
+                }
+            ),
+            encoding="utf-8",
+        )
+        install = run_cli(
+            "service-install",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--interval-seconds",
+            "120",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+        evidence = self.workspace / "graphify-out" / "GRAPH_REPORT.md"
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text("# Graph Report\n\nMixed corpus consumed.\n", encoding="utf-8")
+        proof = run_cli(
+            "graphify-proof",
+            "--workspace",
+            str(self.workspace),
+            "--record-ingested",
+            "--evidence-path",
+            str(evidence),
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(proof.returncode, 0, proof.stderr)
+
+        result = run_cli("milestones", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["assessment"]["status"], "ready")
+        checks = {item["id"]: item for item in payload["assessment"]["checks"]}
+        self.assertEqual(checks["graphify_closure"]["status"], "passed")
+        self.assertEqual(payload["workspace_snapshot"]["graphify_proof"]["status"], "ingested")
+
+    def test_milestones_assessment_accepts_auto_detected_graphify_proof(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_home = Path(self.tmpdir.name) / "home"
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        state_dir = self.workspace / "launchctl-state"
+        state_dir.mkdir(parents=True, exist_ok=True)
+        fake_launchctl = fake_bin_dir / "launchctl"
+        fake_launchctl.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                STATE_DIR="{state_dir}"
+                cmd="$1"
+                shift
+                case "$cmd" in
+                  bootstrap)
+                    plist="$2"
+                    touch "$STATE_DIR/$(basename "$plist").loaded"
+                    exit 0
+                    ;;
+                  bootout|enable|kickstart)
+                    exit 0
+                    ;;
+                  print)
+                    label="${{1##*/}}"
+                    if [ -f "$STATE_DIR/$label.plist.loaded" ]; then
+                      echo "service = $label"
+                      exit 0
+                    fi
+                    exit 113
+                    ;;
+                esac
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_launchctl.chmod(fake_launchctl.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+        }
+        finished_at = datetime.now(timezone.utc)
+        started_at = finished_at.replace(microsecond=0)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
+        promoted.write_text("# Bridge Governance\n\nSession-derived project knowledge.\n", encoding="utf-8")
+        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
+        document.parent.mkdir(parents=True, exist_ok=True)
+        document.write_text("# Notes\n\nProject notes live here.\n", encoding="utf-8")
+        imported = self.workspace / "corpus" / "memark" / "imports" / "paper.md"
+        imported.parent.mkdir(parents=True, exist_ok=True)
+        imported.write_text("# Imported\n\nExternal material.\n", encoding="utf-8")
+        automation_state = self.workspace / ".memark" / "state" / "automation-run.json"
+        automation_state.parent.mkdir(parents=True, exist_ok=True)
+        automation_state.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "started_at": started_at.isoformat(),
+                    "finished_at": finished_at.isoformat(),
+                    "project_filter": None,
+                    "build_graph": True,
+                    "project_count": 1,
+                    "results": [
+                        {
+                            "project": "memark",
+                            "graphify_status": "pending_update",
+                            "artifacts": ["graphify-status.md"],
+                        }
+                    ],
+                    "error": None,
+                }
+            ),
+            encoding="utf-8",
+        )
+        install = run_cli(
+            "service-install",
+            "--workspace",
+            str(self.workspace),
+            "--scheduler",
+            "launchd",
+            "--interval-seconds",
+            "120",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+        graphify_out = self.workspace / "corpus" / "memark" / "graphify-out"
+        graphify_out.mkdir(parents=True, exist_ok=True)
+        (graphify_out / "graph.json").write_text(
+            json.dumps(
+                {
+                    "nodes": [
+                        {
+                            "id": "bridge-governance",
+                            "label": "Bridge Governance",
+                            "source_file": str(promoted.resolve()),
+                        }
+                    ],
+                    "links": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        result = run_cli("milestones", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["assessment"]["status"], "ready")
+        self.assertEqual(payload["workspace_snapshot"]["graphify_proof"]["status"], "ingested")
+        self.assertEqual(payload["workspace_snapshot"]["graphify_proof_diagnostics"]["status"], "mixed_corpus_detected")
 
     def test_build_uses_graphify_binary(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -598,8 +1320,470 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("--update", logged)
         self.assertIn("--wiki", logged)
 
-    def test_build_reports_graphify_cli_contract_mismatch(self) -> None:
+    def test_slash_graphify_routes_to_build_flags(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_graphify = fake_bin_dir / "graphify"
+        log_file = self.workspace / "slash-graphify.log"
+        fake_graphify.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                echo "$@" > "{log_file}"
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_graphify.chmod(fake_graphify.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+        corpus_dir = self.workspace / "corpus" / "memark"
+
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "/graphify",
+            str(corpus_dir),
+            "--update",
+            "--wiki",
+            "--mcp",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        logged = log_file.read_text(encoding="utf-8")
+        self.assertIn(str(corpus_dir), logged)
+        self.assertIn("--update", logged)
+        self.assertIn("--wiki", logged)
+        self.assertIn("--mcp", logged)
+
+    def test_slash_graphify_maps_workspace_root_target_to_corpus(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "--json",
+            "/graphify",
+            ".",
+            "--update",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["adapter"], "graphify")
+        self.assertEqual(payload["target"]["mode"], "workspace-root")
+        self.assertEqual(Path(payload["target"]["path"]).resolve(), (self.workspace / "corpus" / "memark").resolve())
+        self.assertEqual(payload["memark_command"], "build")
+        self.assertEqual(payload["memark_argv"], ["build", "--update"])
+        self.assertTrue(payload["mapped_args"]["update"])
+
+    def test_slash_catalog_renders_json(self) -> None:
+        result = run_cli(
+            "slash",
+            "--catalog",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["routing_policy"]["preferred_invocation"], "cli")
+        self.assertEqual(payload["routing_policy"]["interaction_mode"], "non_interactive_first")
+        self.assertEqual(payload["routing_policy"]["approval_mode"], "auto")
+        self.assertIn("adapters", payload)
+        graphify = next(item for item in payload["adapters"] if item["name"] == "graphify")
+        self.assertEqual(graphify["slash_command"], "/graphify")
+        self.assertEqual(graphify["memark_command"], "build")
+        self.assertEqual(graphify["preferred_invocation"], "cli")
+        self.assertEqual(graphify["interaction_mode"], "non_interactive_first")
+        self.assertEqual(graphify["approval_mode"], "auto")
+        option_flags = [tuple(option["flags"]) for option in graphify["options"]]
+        self.assertIn(("--update",), option_flags)
+        context = next(item for item in payload["adapters"] if item["name"] == "context")
+        self.assertEqual(context["slash_command"], "/context")
+        self.assertEqual(context["memark_command"], "context")
+        context_option_flags = [tuple(option["flags"]) for option in context["options"]]
+        self.assertIn(("--no-refresh",), context_option_flags)
+        milestones = next(item for item in payload["adapters"] if item["name"] == "milestones")
+        self.assertEqual(milestones["slash_command"], "/milestones")
+        self.assertEqual(milestones["memark_command"], "milestones")
+        milestone_option_flags = [tuple(option["flags"]) for option in milestones["options"]]
+        self.assertIn(("--json",), milestone_option_flags)
+        automation_status = next(item for item in payload["adapters"] if item["name"] == "automation-status")
+        self.assertEqual(automation_status["slash_command"], "/automation-status")
+        self.assertEqual(automation_status["memark_command"], "automation-status")
+        automation_status_option_flags = [tuple(option["flags"]) for option in automation_status["options"]]
+        self.assertIn(("--json",), automation_status_option_flags)
+        status = next(item for item in payload["adapters"] if item["name"] == "status")
+        self.assertEqual(status["slash_command"], "/status")
+        self.assertEqual(status["memark_command"], "status")
+        status_option_flags = [tuple(option["flags"]) for option in status["options"]]
+        self.assertIn(("--json",), status_option_flags)
+        query = next(item for item in payload["adapters"] if item["name"] == "query")
+        self.assertEqual(query["slash_command"], "/query")
+        self.assertEqual(query["memark_command"], "query")
+        query_option_flags = [tuple(option["flags"]) for option in query["options"]]
+        self.assertIn(("--scope",), query_option_flags)
+        self.assertIn(("--limit",), query_option_flags)
+        query_positionals = [item["name"] for item in query["positionals"]]
+        self.assertEqual(query_positionals, ["query"])
+        graphify_proof = next(item for item in payload["adapters"] if item["name"] == "graphify-proof")
+        self.assertEqual(graphify_proof["slash_command"], "/graphify-proof")
+        self.assertEqual(graphify_proof["memark_command"], "graphify-proof")
+        graphify_proof_option_flags = [tuple(option["flags"]) for option in graphify_proof["options"]]
+        self.assertIn(("--record-ingested",), graphify_proof_option_flags)
+        self.assertIn(("--evidence-path",), graphify_proof_option_flags)
+
+    def test_slash_catalog_renders_text(self) -> None:
+        result = run_cli(
+            "slash",
+            "--catalog",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Available slash adapters:", result.stdout)
+        self.assertIn("/graphify -> memark build", result.stdout)
+        self.assertIn("policy: prefer direct memark CLI; slash is compatibility for slash-only workflows", result.stdout)
+        self.assertIn("execution: non-interactive first, approval=auto", result.stdout)
+        self.assertIn("/context -> memark context", result.stdout)
+        self.assertIn("/milestones -> memark milestones", result.stdout)
+        self.assertIn("/automation-status -> memark automation-status", result.stdout)
+        self.assertIn("/status -> memark status", result.stdout)
+        self.assertIn("/query -> memark query", result.stdout)
+        self.assertIn("/graphify-proof -> memark graphify-proof", result.stdout)
+
+    def test_slash_query_dry_run_maps_positionals_and_options(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "--json",
+            "/query",
+            "graphify",
+            "fallback",
+            "--scope",
+            "documents",
+            "--limit",
+            "3",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["adapter"], "query")
+        self.assertEqual(payload["memark_command"], "query")
+        self.assertEqual(payload["mapped_args"]["query"], "graphify fallback")
+        self.assertEqual(payload["mapped_args"]["scope"], "documents")
+        self.assertEqual(payload["mapped_args"]["limit"], 3)
+        self.assertEqual(payload["memark_argv"], ["query", "graphify fallback", "--scope", "documents", "--limit", "3", "--json"])
+        self.assertIsNone(payload["target"])
+
+    def test_slash_query_executes_query_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "query-demo.md"
+        promoted.write_text("# Query Demo\n\nGraphify fallback stays local.\n", encoding="utf-8")
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "/query",
+            "graphify",
+            "fallback",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["project"], "memark")
+        self.assertEqual(payload["query"], "graphify fallback")
+        self.assertEqual(payload["scopes"], ["promoted", "documents", "imports"])
+        self.assertTrue(payload["hits"])
+
+    def test_slash_status_maps_workspace_root(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "--json",
+            "/status",
+            ".",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["adapter"], "status")
+        self.assertEqual(payload["memark_command"], "status")
+        self.assertEqual(payload["memark_argv"], ["status", "--json"])
+        self.assertEqual(payload["target"]["mode"], "workspace-root")
+
+    def test_slash_status_executes_status_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "/status",
+            ".",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["project"], "memark")
+        self.assertIn("graphify_corpus", payload)
+        self.assertIn("milestones", payload)
+
+    def test_slash_automation_status_maps_workspace_root(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "--json",
+            "/automation-status",
+            ".",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["adapter"], "automation-status")
+        self.assertEqual(payload["memark_command"], "automation-status")
+        self.assertEqual(payload["memark_argv"], ["automation-status", "--json"])
+        self.assertEqual(payload["target"]["mode"], "workspace-root")
+
+    def test_slash_automation_status_executes_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        state_file = self.workspace / ".memark" / "state" / "automation-run.json"
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        state_file.write_text(
+            json.dumps(
+                {
+                    "status": "completed",
+                    "project_count": 1,
+                    "build_graph": False,
+                }
+            ),
+            encoding="utf-8",
+        )
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "/automation-status",
+            ".",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["exists"])
+        self.assertEqual(payload["status"], "completed")
+        self.assertEqual(payload["project_count"], 1)
+
+    def test_slash_graphify_proof_maps_workspace_root_and_options(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "--json",
+            "/graphify-proof",
+            ".",
+            "--record-ingested",
+            "--evidence-path",
+            "graphify-out/graph.json",
+            "--notes",
+            "verified",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["adapter"], "graphify-proof")
+        self.assertEqual(payload["memark_command"], "graphify-proof")
+        self.assertTrue(payload["mapped_args"]["record_ingested"])
+        self.assertEqual(payload["mapped_args"]["evidence_path"], ["graphify-out/graph.json"])
+        self.assertEqual(payload["mapped_args"]["notes"], "verified")
+        self.assertEqual(
+            payload["memark_argv"],
+            ["graphify-proof", "--record-ingested", "--evidence-path", "graphify-out/graph.json", "--notes", "verified", "--json"],
+        )
+        self.assertEqual(payload["target"]["mode"], "workspace-root")
+
+    def test_slash_graphify_proof_executes_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        graph_dir = self.workspace / "corpus" / "memark" / "graphify-out"
+        graph_dir.mkdir(parents=True, exist_ok=True)
+        graph_path = graph_dir / "graph.json"
+        graph_path.write_text(json.dumps({"nodes": [], "edges": []}), encoding="utf-8")
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "/graphify-proof",
+            ".",
+            "--record-ingested",
+            "--evidence-path",
+            str(graph_path),
+            "--notes",
+            "verified",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["exists"])
+        self.assertEqual(payload["proof"]["status"], "ingested")
+        self.assertEqual(payload["proof"]["notes"], "verified")
+
+    def test_slash_context_maps_workspace_root(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "--json",
+            "/context",
+            ".",
+            "--no-refresh",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["adapter"], "context")
+        self.assertEqual(payload["memark_command"], "context")
+        self.assertEqual(payload["memark_argv"], ["context", "--no-refresh", "--json"])
+        self.assertEqual(payload["target"]["mode"], "workspace-root")
+
+    def test_slash_context_executes_context_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "/context",
+            ".",
+            "--no-refresh",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["project"], "memark")
+        self.assertIn("sections", payload)
+        self.assertIn("files", payload)
+
+    def test_slash_milestones_maps_workspace_root(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "--json",
+            "/milestones",
+            ".",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["adapter"], "milestones")
+        self.assertEqual(payload["memark_command"], "milestones")
+        self.assertEqual(payload["memark_argv"], ["milestones", "--json"])
+        self.assertEqual(payload["target"]["mode"], "workspace-root")
+
+    def test_slash_milestones_executes_milestones_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "/milestones",
+            ".",
+            "--json",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["current"], "M1")
+        self.assertEqual(payload["workspace_snapshot"]["project"], "memark")
+        self.assertIn("assessment", payload)
+
+    def test_slash_reports_unknown_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "/unknown",
+            cwd=ROOT,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("unsupported slash command '/unknown'", result.stderr)
+        self.assertIn("/graphify", result.stderr)
+
+    def test_slash_dry_run_renders_mapped_memark_command(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "/graphify",
+            ".",
+            "--update",
+            "--wiki",
+            cwd=self.workspace,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Mapped command: memark build", result.stdout)
+        self.assertIn("MemArk argv: build --update --wiki", result.stdout)
+        self.assertIn("Build command:", result.stdout)
+
+    def test_slash_requires_command_without_catalog(self) -> None:
+        result = run_cli(
+            "slash",
+            cwd=ROOT,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("slash_command is required unless --catalog is used", result.stderr)
+
+    def test_slash_rejects_unmanaged_graphify_target(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        external_dir = Path(self.tmpdir.name) / "external"
+        external_dir.mkdir()
+        result = run_cli(
+            "slash",
+            "--workspace",
+            str(self.workspace),
+            "/graphify",
+            str(external_dir),
+            cwd=ROOT,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("workspace root or the managed corpus directory", result.stderr)
+
+    def test_build_falls_back_to_memark_mixed_corpus_when_graphify_cli_contract_mismatches(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-demo.md"
+        promoted.write_text("# Demo\n\nDecision: ship the autonomous graph builder.\n", encoding="utf-8")
+        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
+        document.parent.mkdir(parents=True, exist_ok=True)
+        document.write_text("# Notes\n\nThe graph should link promoted and document files.\n", encoding="utf-8")
         fake_bin_dir = self.workspace / "bin"
         fake_bin_dir.mkdir()
         fake_graphify = fake_bin_dir / "graphify"
@@ -609,6 +1793,40 @@ class MemArkCliTests(unittest.TestCase):
                 #!/bin/sh
                 echo "error: unknown command '$1'" >&2
                 exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_graphify.chmod(fake_graphify.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("build", "--workspace", str(self.workspace), cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Mode: memark-mixed-corpus", result.stdout)
+        self.assertIn("MemArk built a local mixed-corpus graph autonomously", result.stdout)
+        graph = json.loads((self.workspace / "corpus" / "memark" / "graphify-out" / "graph.json").read_text(encoding="utf-8"))
+        promoted_nodes = [
+            node for node in graph["nodes"]
+            if isinstance(node, dict) and str(node.get("source_file", "")).endswith("/corpus/memark/promoted/room-demo.md")
+        ]
+        document_nodes = [
+            node for node in graph["nodes"]
+            if isinstance(node, dict) and str(node.get("source_file", "")).endswith("/corpus/memark/documents/notes.md")
+        ]
+        self.assertTrue(promoted_nodes)
+        self.assertTrue(document_nodes)
+
+    def test_build_reports_real_graphify_failure_when_cli_returns_non_contract_error(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_graphify = fake_bin_dir / "graphify"
+        fake_graphify.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                echo "permission denied" >&2
+                exit 2
                 """
             ),
             encoding="utf-8",
@@ -618,124 +1836,19 @@ class MemArkCliTests(unittest.TestCase):
 
         result = run_cli("build", "--workspace", str(self.workspace), cwd=ROOT, env=env)
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("fallback to graphify.watch._rebuild_code failed", result.stderr)
+        self.assertIn("Graphify build failed with exit code 2", result.stderr)
 
-    def test_build_falls_back_to_graphify_watch_module(self) -> None:
+    def test_build_uses_memark_mixed_corpus_when_graphify_binary_missing(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-demo.md"
-        promoted.write_text("# Demo\n", encoding="utf-8")
-        code_file = self.workspace / "corpus" / "memark" / "demo.py"
-        code_file.write_text("def demo():\n    return 'ok'\n", encoding="utf-8")
-
-        fake_bin_dir = self.workspace / "bin"
-        fake_bin_dir.mkdir()
-        fake_graphify = fake_bin_dir / "graphify"
-        fake_graphify.write_text(
-            textwrap.dedent(
-                """\
-                #!/bin/sh
-                echo "error: unknown command '$1'" >&2
-                exit 1
-                """
-            ),
-            encoding="utf-8",
-        )
-        fake_graphify.chmod(fake_graphify.stat().st_mode | stat.S_IEXEC)
-
-        fake_pkg_root = self.workspace / "fake-py"
-        fake_pkg = fake_pkg_root / "graphify"
-        fake_pkg.mkdir(parents=True)
-        (fake_pkg / "__init__.py").write_text("", encoding="utf-8")
-        (fake_pkg / "watch.py").write_text(
-            textwrap.dedent(
-                """\
-                from pathlib import Path
-
-
-                def _rebuild_code(path: Path) -> bool:
-                    out = path / "graphify-out"
-                    out.mkdir(exist_ok=True)
-                    (out / "GRAPH_REPORT.md").write_text("# Fake report\\n", encoding="utf-8")
-                    (out / "graph.json").write_text('{"nodes": [], "edges": []}\\n', encoding="utf-8")
-                    print("[graphify watch] Rebuilt fake graph")
-                    return True
-                """
-            ),
-            encoding="utf-8",
-        )
-
-        env = {
-            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
-            "PYTHONPATH": str(fake_pkg_root) + os.pathsep + str(ROOT),
-        }
-
-        result = run_cli("build", "--workspace", str(self.workspace), cwd=ROOT, env=env)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Graphify step completed", result.stdout)
-        self.assertIn("Mode: watch-fallback", result.stdout)
-        self.assertIn("graphify.watch", result.stdout)
-        self.assertIn("does not prove promoted markdown entered the graph", result.stdout)
-        self.assertTrue((self.workspace / "corpus" / "memark" / "graphify-out" / "graph.json").exists())
-
-    def test_build_fallback_uses_graphify_environment_python(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
-        code_file = self.workspace / "corpus" / "memark" / "demo.py"
-        code_file.write_text("def demo():\n    return 'ok'\n", encoding="utf-8")
-
-        fake_bin_dir = self.workspace / "bin"
-        fake_bin_dir.mkdir()
-        fake_graphify = fake_bin_dir / "graphify"
-        fake_graphify.write_text(
-            textwrap.dedent(
-                """\
-                #!/bin/sh
-                echo "error: unknown command '$1'" >&2
-                exit 1
-                """
-            ),
-            encoding="utf-8",
-        )
-        fake_graphify.chmod(fake_graphify.stat().st_mode | stat.S_IEXEC)
-
-        fake_pkg_root = self.workspace / "graphify-env"
-        fake_pkg = fake_pkg_root / "graphify"
-        fake_pkg.mkdir(parents=True)
-        (fake_pkg / "__init__.py").write_text("", encoding="utf-8")
-        (fake_pkg / "watch.py").write_text(
-            textwrap.dedent(
-                """\
-                from pathlib import Path
-
-
-                def _rebuild_code(path: Path) -> bool:
-                    out = path / "graphify-out"
-                    out.mkdir(exist_ok=True)
-                    (out / "graph.json").write_text('{"nodes": [], "edges": []}\\n', encoding="utf-8")
-                    (out / "GRAPH_REPORT.md").write_text("# Report\\n", encoding="utf-8")
-                    return True
-                """
-            ),
-            encoding="utf-8",
-        )
-
-        fake_python = fake_bin_dir / "python"
-        fake_python.write_text(
-            textwrap.dedent(
-                f"""\
-                #!/bin/sh
-                export PYTHONPATH="{fake_pkg_root}:$PYTHONPATH"
-                exec "{sys.executable}" "$@"
-                """
-            ),
-            encoding="utf-8",
-        )
-        fake_python.chmod(fake_python.stat().st_mode | stat.S_IEXEC)
-
-        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+        promoted.write_text("# Demo\n\nRisk: manual slash commands block automation.\n", encoding="utf-8")
+        env = {"PATH": os.environ.get("PATH", "")}
         result = run_cli("build", "--workspace", str(self.workspace), cwd=ROOT, env=env)
 
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Mode: memark-mixed-corpus", result.stdout)
         self.assertTrue((self.workspace / "corpus" / "memark" / "graphify-out" / "graph.json").exists())
+        self.assertTrue((self.workspace / "corpus" / "memark" / "graphify-out" / "GRAPH_REPORT.md").exists())
 
     def test_promote_is_idempotent_and_can_archive(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -2458,6 +3571,11 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(project["packages"], 1)
         self.assertEqual(project["graphify"]["status"], "not_requested")
         self.assertEqual(len(project["artifacts"]), 5)
+        automation_state = json.loads((self.workspace / ".memark" / "state" / "automation-run.json").read_text(encoding="utf-8"))
+        self.assertEqual(automation_state["status"], "completed")
+        self.assertEqual(automation_state["project_count"], 1)
+        self.assertEqual(automation_state["results"][0]["project"], "memark")
+        self.assertEqual(automation_state["results"][0]["packages"], 1)
 
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-automation-loop-rollout-auto.md"
         self.assertTrue(promoted.exists())
@@ -2474,6 +3592,69 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue((imports_dir / "risks-digest.md").exists())
         self.assertTrue((imports_dir / "ai-context.md").exists())
         self.assertTrue((imports_dir / "graphify-status.md").exists())
+        self.assertIn("graphify_corpus_status", (imports_dir / "latest-summary.md").read_text(encoding="utf-8"))
+        self.assertIn("graphify_onboarding_status", (imports_dir / "ai-context.md").read_text(encoding="utf-8"))
+        self.assertIn("corpus_status", (imports_dir / "graphify-status.md").read_text(encoding="utf-8"))
+
+    def test_automation_run_builds_autonomous_mixed_corpus_graph_when_graphify_is_unavailable(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        sessions_root = self.workspace / "sessions"
+        sessions_root.mkdir(parents=True, exist_ok=True)
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--path",
+            str(self.workspace),
+            "--sessions-root",
+            str(sessions_root),
+            "--json",
+            cwd=ROOT,
+        )
+        (self.workspace / "docs").mkdir(parents=True, exist_ok=True)
+        (self.workspace / "docs" / "plan.md").write_text(
+            "# Plan\n\nDecision: automate graph updates after install.\n",
+            encoding="utf-8",
+        )
+        package = {
+            "wing_id": "project/memark",
+            "wing_kind": "project",
+            "hall_id": "decisions",
+            "room_id": "autonomous-graph",
+            "room_title": "Autonomous Graph",
+            "closets": [{"summary": "Risk: manual slash workflows block zero-touch automation."}],
+        }
+        input_file = self.workspace / "inbox" / "promoted" / "room.json"
+        input_file.parent.mkdir(parents=True, exist_ok=True)
+        input_file.write_text(json.dumps(package), encoding="utf-8")
+
+        result = run_cli(
+            "automation-run",
+            "--workspace",
+            str(self.workspace),
+            "--json",
+            cwd=ROOT,
+            env={"PATH": ""},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload[0]["graphify"]["status"], "updated")
+        self.assertEqual(payload[0]["graphify"]["mode"], "memark-mixed-corpus")
+        graph_path = self.workspace / "corpus" / "memark" / "graphify-out" / "graph.json"
+        self.assertTrue(graph_path.exists())
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+        mixed_nodes = [
+            node
+            for node in graph["nodes"]
+            if isinstance(node, dict)
+            and any(part in str(node.get("source_file", "")) for part in ("/promoted/", "/documents/", "/imports/"))
+        ]
+        self.assertTrue(mixed_nodes)
+        status_artifact = (self.workspace / "corpus" / "memark" / "imports" / "automation" / "graphify-status.md").read_text(encoding="utf-8")
+        self.assertIn("status: updated", status_artifact)
+        self.assertIn("mode: memark-mixed-corpus", status_artifact)
 
 
 if __name__ == "__main__":

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .graphify import GraphifyError, GraphifyBuildResult, run_graphify
+from .graphify_proof import graphify_corpus_status
 from .handoff import GraphifyHandoff, build_graphify_handoff
 from .io import copy_document, dump_json_file, load_json_file, sha256_text
 from .package_builder import (
@@ -130,6 +132,30 @@ class AutomationContextResult:
         }
 
 
+@dataclass(slots=True)
+class AutomationCycleState:
+    status: str
+    started_at: str
+    finished_at: str | None
+    project_filter: str | None
+    build_graph: bool
+    project_count: int
+    results: list[dict[str, object]]
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "status": self.status,
+            "started_at": self.started_at,
+            "finished_at": self.finished_at,
+            "project_filter": self.project_filter,
+            "build_graph": self.build_graph,
+            "project_count": self.project_count,
+            "results": list(self.results),
+            "error": self.error,
+        }
+
+
 def _documents_ledger_path(config: WorkspaceConfig, project: str) -> Path:
     return config.state_dir / f"{slugify(project)}-documents.json"
 
@@ -140,6 +166,71 @@ def _automation_packages_dir(config: WorkspaceConfig, project: str) -> Path:
 
 def _automation_imports_dir(config: WorkspaceConfig, project: str) -> Path:
     return config.imports_dir(project) / "automation"
+
+
+def _now_utc_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _automation_summary(result: AutomationProjectResult) -> dict[str, object]:
+    return {
+        "project": result.project,
+        "documents": {
+            "copied": result.documents.copied,
+            "updated": result.documents.updated,
+            "unchanged": result.documents.unchanged,
+        },
+        "palace_drawers": result.palace_drawers,
+        "packages": result.packages,
+        "promoted_changed": sum(1 for item in result.promoted if item.changed),
+        "promoted_unchanged": sum(1 for item in result.promoted if not item.changed),
+        "graphify_status": result.graphify.status,
+        "artifacts": list(result.artifacts),
+        "intake": None
+        if result.intake is None
+        else {
+            "copied": result.intake.sync.copied,
+            "updated": result.intake.sync.updated,
+            "unchanged": result.intake.sync.unchanged,
+            "invalid": result.intake.sync.invalid,
+            "pending_mine": result.intake.pending_mine,
+            "mined": result.intake.mined,
+            "mine_skipped_reason": result.intake.mine_skipped_reason,
+        },
+    }
+
+
+def _save_automation_cycle_state(
+    config: WorkspaceConfig,
+    *,
+    status: str,
+    started_at: str,
+    project_filter: str | None,
+    build_graph: bool,
+    results: list[AutomationProjectResult] | None = None,
+    error: str | None = None,
+) -> None:
+    finished_at = None if status == "running" else _now_utc_iso()
+    summaries = [_automation_summary(item) for item in results or []]
+    payload = AutomationCycleState(
+        status=status,
+        started_at=started_at,
+        finished_at=finished_at,
+        project_filter=project_filter,
+        build_graph=build_graph,
+        project_count=len(summaries),
+        results=summaries,
+        error=error,
+    )
+    dump_json_file(config.automation_cycle_state_file, payload.to_dict())
+
+
+def load_automation_cycle_state(config: WorkspaceConfig) -> dict[str, object] | None:
+    path = config.automation_cycle_state_file
+    if not path.exists():
+        return None
+    payload = load_json_file(path)
+    return payload if isinstance(payload, dict) else None
 
 
 def _load_documents_ledger(path: Path) -> dict[str, str]:
@@ -293,14 +384,29 @@ def _write_artifact(path: Path, lines: list[str]) -> str:
     return str(path)
 
 
-def _render_graphify_status(handoff: GraphifyHandoff, graphify: GraphifyAutomationResult) -> list[str]:
+def _render_graphify_status(
+    handoff: GraphifyHandoff,
+    graphify: GraphifyAutomationResult,
+    *,
+    graphify_corpus: dict[str, object],
+) -> list[str]:
+    onboarding = graphify_corpus.get("onboarding") if isinstance(graphify_corpus.get("onboarding"), dict) else {}
+    diagnostics = graphify_corpus.get("diagnostics") if isinstance(graphify_corpus.get("diagnostics"), dict) else {}
     lines = [
         "# Graphify Status",
         "",
         f"- status: {graphify.status}",
+        f"- corpus_status: {graphify_corpus.get('status')}",
         f"- attempted: {str(graphify.attempted).lower()}",
         f"- recommended_command: `{handoff.recommended_command}`",
     ]
+    if onboarding:
+        lines.append(f"- onboarding_status: {onboarding.get('status')}")
+        lines.append(f"- agents_installed: {str(onboarding.get('agents_installed')).lower()}")
+        lines.append(f"- codex_hooks_installed: {str(onboarding.get('codex_hooks_installed')).lower()}")
+    if diagnostics:
+        lines.append(f"- proof_diagnostics: {diagnostics.get('status')}")
+        lines.append(f"- graph_path: {diagnostics.get('graph_path')}")
     if graphify.mode:
         lines.append(f"- mode: {graphify.mode}")
     if graphify.command:
@@ -322,6 +428,9 @@ def generate_consumption_artifacts(
     graphify: GraphifyAutomationResult,
 ) -> list[str]:
     project_slug = slugify(project)
+    graphify_corpus = graphify_corpus_status(config, project_slug)
+    onboarding = graphify_corpus.get("onboarding") if isinstance(graphify_corpus.get("onboarding"), dict) else {}
+    diagnostics = graphify_corpus.get("diagnostics") if isinstance(graphify_corpus.get("diagnostics"), dict) else {}
     imports_dir = _automation_imports_dir(config, project_slug)
     promoted = sorted(
         config.promoted_dir(project_slug).glob("*.md"),
@@ -352,6 +461,7 @@ def generate_consumption_artifacts(
                 f"- promoted_files: {len(promoted)}",
                 f"- document_files: {len(documents)}",
                 f"- graphify_status: {graphify.status}",
+                f"- graphify_corpus_status: {graphify_corpus.get('status')}",
                 "",
                 "## Recent Promoted Knowledge",
                 "",
@@ -387,6 +497,9 @@ def generate_consumption_artifacts(
                 "",
                 f"- project: {project_slug}",
                 f"- graphify_status: {graphify.status}",
+                f"- graphify_corpus_status: {graphify_corpus.get('status')}",
+                f"- graphify_onboarding_status: {onboarding.get('status')}",
+                f"- graphify_proof_diagnostics: {diagnostics.get('status')}",
                 f"- recommended_graphify_command: `{handoff.recommended_command}`",
                 "",
                 "## Start Here",
@@ -394,6 +507,7 @@ def generate_consumption_artifacts(
                 "- Read latest-summary.md for the newest promoted changes.",
                 "- Read decisions-digest.md before making project-level changes.",
                 "- Read risks-digest.md before changing architecture or rollout logic.",
+                "- If graphify_corpus_status is not `ingested`, read graphify-status.md before depending on Graphify outputs.",
                 "",
                 "## Recent Promoted Knowledge",
                 "",
@@ -401,7 +515,12 @@ def generate_consumption_artifacts(
             ],
         )
     )
-    written.append(_write_artifact(imports_dir / "graphify-status.md", _render_graphify_status(handoff, graphify)))
+    written.append(
+        _write_artifact(
+            imports_dir / "graphify-status.md",
+            _render_graphify_status(handoff, graphify, graphify_corpus=graphify_corpus),
+        )
+    )
     return written
 
 
@@ -523,52 +642,81 @@ def run_automation_cycle(
         profiles = [profile for profile in profiles if profile.normalized_name() == target]
     profiles = [profile for profile in profiles if profile.enabled]
 
-    results: list[AutomationProjectResult] = []
-    for profile in profiles:
-        project = profile.normalized_name()
-        documents = sync_project_documents(
-            config,
-            project=project,
-            source_root=profile.normalized_path(),
-        )
-        palace_drawers, packages, promoted = _build_palace_packages(config, project=project)
-        handoff = build_graphify_handoff(project, config.corpus_project_dir(project))
+    started_at = _now_utc_iso()
+    _save_automation_cycle_state(
+        config,
+        status="running",
+        started_at=started_at,
+        project_filter=slugify(project_filter) if project_filter is not None else None,
+        build_graph=build_graph,
+    )
 
-        graphify_result: GraphifyBuildResult | None = None
-        graphify_error: str | None = None
-        attempted = False
-        if build_graph:
-            attempted = True
-            try:
-                graphify_result = run_graphify(
-                    graphify_bin=graphify_bin or config.graphify_bin,
-                    project_dir=config.corpus_project_dir(project),
-                    update=True,
-                )
-            except GraphifyError as exc:
-                graphify_error = str(exc)
-        graphify = _graphify_automation_result(
-            handoff=handoff,
-            result=graphify_result,
-            error=graphify_error,
-            attempted=attempted,
-        )
-        artifacts = generate_consumption_artifacts(
-            config,
-            project=project,
-            handoff=handoff,
-            graphify=graphify,
-        )
-        results.append(
-            AutomationProjectResult(
+    results: list[AutomationProjectResult] = []
+    try:
+        for profile in profiles:
+            project = profile.normalized_name()
+            documents = sync_project_documents(
+                config,
                 project=project,
-                intake=intake_by_project.get(project),
-                documents=documents,
-                palace_drawers=palace_drawers,
-                packages=packages,
-                promoted=promoted,
-                artifacts=artifacts,
+                source_root=profile.normalized_path(),
+            )
+            palace_drawers, packages, promoted = _build_palace_packages(config, project=project)
+            handoff = build_graphify_handoff(project, config.corpus_project_dir(project))
+
+            graphify_result: GraphifyBuildResult | None = None
+            graphify_error: str | None = None
+            attempted = False
+            if build_graph:
+                attempted = True
+                try:
+                    graphify_result = run_graphify(
+                        graphify_bin=graphify_bin or config.graphify_bin,
+                        project_dir=config.corpus_project_dir(project),
+                        update=True,
+                    )
+                except GraphifyError as exc:
+                    graphify_error = str(exc)
+            graphify = _graphify_automation_result(
+                handoff=handoff,
+                result=graphify_result,
+                error=graphify_error,
+                attempted=attempted,
+            )
+            artifacts = generate_consumption_artifacts(
+                config,
+                project=project,
+                handoff=handoff,
                 graphify=graphify,
             )
+            results.append(
+                AutomationProjectResult(
+                    project=project,
+                    intake=intake_by_project.get(project),
+                    documents=documents,
+                    palace_drawers=palace_drawers,
+                    packages=packages,
+                    promoted=promoted,
+                    artifacts=artifacts,
+                    graphify=graphify,
+                )
+            )
+    except Exception as exc:
+        _save_automation_cycle_state(
+            config,
+            status="failed",
+            started_at=started_at,
+            project_filter=slugify(project_filter) if project_filter is not None else None,
+            build_graph=build_graph,
+            results=results,
+            error=str(exc),
         )
+        raise
+    _save_automation_cycle_state(
+        config,
+        status="completed",
+        started_at=started_at,
+        project_filter=slugify(project_filter) if project_filter is not None else None,
+        build_graph=build_graph,
+        results=results,
+    )
     return results

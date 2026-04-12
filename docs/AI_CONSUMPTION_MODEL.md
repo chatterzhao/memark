@@ -4,6 +4,14 @@
 
 `MemArk` 把数据喂进去之后，项目里的 AI 到底应该怎么消费这些数据，才比单独用 `MemPalace` 或 `Graphify` 更有价值。
 
+这里的成功标准必须明确成一句硬话：
+
+- 如果 `MemArk` 让 AI 的历史找回不如直接用 `MemPalace`
+- 或者让 AI 的结构理解不如直接用 `Graphify`
+- 或者让自动消费结果比直接读上游入口更绕、更慢、更脏
+
+那 `MemArk` 就不是增强层，而是失败的中间层。
+
 ## 真实证据
 
 当前仓库已经验证过的事实：
@@ -12,20 +20,34 @@
 - `mempalace wake-up` 能输出当前项目的压缩历史脉络，适合新一轮对话前快速恢复上下文
 - `memark palace-package --group-by session` 在当前仓库 palace 中，能把 `802` 个 drawer 重新整理成 `14` 个会话级 package
 - `Graphify` 在当前仓库代码图上已经产出 `264 nodes / 509 edges / 12 communities`
-- 但当前 `memark build` 走到安装版 `Graphify` 的 code-only fallback 时，会因为 `corpus/<project>` 下没有代码而失败
-- 当前 `graphify-out/graph.json` 里 `document_nodes = 0`，`promoted_nodes = 0`
+- `memark build` 现在会在安装版 `Graphify` CLI 不支持 direct folder build 时，自动写出 corpus 级 mixed-corpus graph
+- 当前闭环重点已经从“如何 handoff”转成“图是否稳定更新、AI 是否真的消费它”
 
 这意味着一件事：
 
 当前已经验证成功的是“会话记忆整理”和“代码图消费”。
 
-当前还没有验证成功的是“`MemArk promoted markdown -> Graphify 图谱`”这条闭环。
+当前还在持续验证的是“自动图更新后，AI 是否真的持续消费这条 mixed-corpus graph”。
 
-但现在已经补出一条更准确的桥接面：
+同时仍保留一条互操作桥接面：
 
 - `memark graphify-handoff` 会把当前项目 `corpus/<project>` 的真实边界、文件规模和推荐命令整理出来
-- 它明确告诉 AI 应该把哪个目录交给上游 `Graphify` skill 执行 `/graphify <path> --update`
-- 这样 `MemArk` 不需要伪装成已经完成 mixed-corpus semantic build
+- 它明确告诉 AI 如果必须走上游 `Graphify` skill，应该把哪个目录交给 `/graphify <path> --update`
+
+另外现在还有一条由 `MemArk` 自己承接的 slash-compatible 入口：
+
+- `memark slash --workspace <workspace> /graphify <workspace-or-corpus> --update`
+- 它的职责不是假装 shell 原生支持 `/graphify`
+- 它的职责是把 slash-only 语义稳定映射到 `MemArk` 的 CLI 执行面
+- `memark slash --catalog --json` 则提供当前支持的 slash adapter 目录，方便 AI 先发现能力再调用
+- 这个 catalog 现在还明确声明：优先直接调用 `MemArk` CLI；slash 仅是兼容层；默认执行策略是 `non_interactive_first` 与 `approval=auto`
+- 当 direct CLI 可用时，AI 应只使用 canonical 命令名，不要自己缩写或猜测别名
+- 现在 catalog 里也包含 `/context`，可直接映射到统一项目上下文入口
+- 现在 catalog 里也包含 `/milestones`，可直接映射到阶段状态与 blocker 入口
+- 现在 catalog 里也包含 `/automation-status`，可直接映射到最近自动化周期状态入口
+- 现在 catalog 里也包含 `/status`，可直接映射到 workspace 状态入口
+- 现在 catalog 里也包含 `/query`，可直接映射到本地 corpus 搜索入口
+- 现在 catalog 里也包含 `/graphify-proof`，可直接映射到 mixed-corpus graph proof 入口
 
 补充一条现在已经核实的上游事实：
 
@@ -33,7 +55,7 @@
 - 但公开 Python 入口 `graphify.extract()` 只提代码 AST，不会直接把这些 Markdown 变成图节点
 - `graphify.watch()` 对文档变化只会提示去 AI 平台里执行 `/graphify --update`
 
-所以当前闭环卡点不是 `MemArk` 没把文件落出来，而是 `Graphify` 的 mixed-corpus 语义提取仍由上游 skill / AI 运行时主导。
+所以当前闭环卡点已经不再是“没有 mixed-corpus graph”，而是“这条 graph 的长期稳定性与默认消费是否足够好”。
 
 ## 三者怎么分工
 
@@ -110,11 +132,19 @@
 
 项目 AI 在实际开发中，当前最靠谱的消费顺序是：
 
-1. 先用 `MemPalace wake-up` 恢复项目背景
-2. 如果需要追某个历史决策，再用 `MemPalace search`
-3. 如果要理解当前实现结构，转去读 `Graphify` 的 report / graph
-4. 如果需要把一整段历史会话作为项目材料审阅，先用 `memark query` 定位，再读对应 promoted markdown
-5. 如果需要把这些晋升材料继续交给 `Graphify` 做 mixed-corpus 语义编译，先运行 `memark graphify-handoff`，再把生成的 handoff 交给上游 `Graphify` skill
+1. 先用 `memark context` 读取当前自动整理后的项目消费面
+2. 如果需要追更深的历史背景，再用 `MemPalace wake-up`
+3. 如果需要追某个历史决策或失败尝试，再用 `MemPalace search`
+4. 如果要理解当前实现结构，转去读 `Graphify` 的 report / graph
+5. 如果需要把一整段历史会话作为项目材料审阅，先用 `memark query` 定位，再读对应 promoted markdown
+6. 如果需要刷新当前 corpus graph，先运行 `memark build`
+7. 如果 `MemArk` 自己已经有 CLI，默认优先直接调用 CLI；这些入口应按免交互、自动批准来使用
+8. 只有任务本身是 slash-only 语义时，才运行 `memark slash --workspace <workspace> /context <workspace> --no-refresh --json`
+9. 只有任务本身是 slash-only 语义且目标是刷新图谱时，才运行 `memark slash --workspace <workspace> /graphify <workspace-or-corpus> --update`
+10. 只有任务本身是 slash-only 语义且目标是阶段状态、blocker 或 next actions 时，才运行 `memark slash --workspace <workspace> /milestones <workspace> --json`
+11. 只有任务本身是 slash-only 语义且目标是读取 workspace 精确状态时，才运行 `memark slash --workspace <workspace> /status <workspace> --json`
+12. 只有任务本身是 slash-only 语义且目标是在本地 corpus 里搜主题时，才运行 `memark slash --workspace <workspace> /query <terms...> --json`
+13. 只有明确要求上游 `Graphify` skill / AGENTS/hooks 互操作时，才运行 `memark graphify-handoff`
 
 更短地说：
 
@@ -148,10 +178,12 @@
 并且现在多了一条已落地能力：
 
 - 在 `Graphify` 统一入图还没打通前，项目 AI 已经可以通过 `memark query` 直接消费晋升后的项目语料
+- 项目 AI 也已经可以通过 `memark context` 一次拿到自动整理后的 summary / decisions / risks / graphify status
 
 但下面这条还没有成立：
 
 - 把这些 promoted session 文档稳定编进 `Graphify` 图里，并让 AI 从同一查询面同时消费代码结构和会话知识
+- `memark context` 里的自动摘要质量，已经稳定不低于直接用 `MemPalace` / `Graphify` 的原生入口
 
 ## 当前不能声称已经做到
 

@@ -74,13 +74,13 @@
 ## G. 已实现 Graphify 集成
 
 - [x] `memark build` 会调用外部配置的 Graphify 构建入口
-- [x] 当顶层 `graphify <folder>` 不可用时，`memark build` 会退回已验证的 code-only fallback
+- [x] 当顶层 `graphify <folder>` 不可用时，`memark build` 会退回 `MemArk` 自己的 autonomous mixed-corpus build
 - [x] `memark build` 支持 `--update`
 - [x] `memark build` 支持 `--wiki`
 - [x] `memark build` 支持 `--obsidian`
 - [x] `memark build` 支持 `--mcp`
-- [x] 当 `graphify` 不存在时会明确报错
-- [x] 当遇到 helper/query 型 `graphify` CLI 且 fallback 不可用时会明确报错
+- [x] 当 `graphify` 不存在时，`memark build` 仍可构建本地 mixed-corpus graph
+- [x] 当遇到 helper/query 型 `graphify` CLI 时，会自动转入本地 mixed-corpus build
 - [x] `memark run` 能串联 promote + build
 - [x] `memark run` 会先消费 `inbox/promoted` 与 `inbox/documents`
 - [x] `memark mempalace-mine` 能调用 `mempalace mine --mode convos`
@@ -142,7 +142,9 @@
 - [x] 即使 workspace 里配置的是默认命令名，也能在当前 `PATH` 不完整时回退到 `~/.memark/venv/bin/mempalace` / `graphify`
 - [x] 能在 `palace-package` / `palace-run` 中对同一逻辑 session 的旧 snapshot 做下游去重
 - [x] `palace-package` / `palace-run` 已支持 `--group-by session`，可把会话型 palace 从粗 room 拆成更细的逻辑 session package
-- [x] 文档明确说明当前 Graphify fallback 只保证 code graph 重建，不保证 mixed-corpus 完整编译
+- [x] 文档明确说明当前默认 fallback 已是本地 mixed-corpus build，`graphify-handoff` 只是互操作入口
+- [x] 已提供 `memark slash` 作为 slash-compatible adapter surface，AI 可通过 `MemArk` CLI 执行 slash-only 语义
+- [x] 已提供 `memark slash --catalog` 作为 slash adapter discovery 入口，AI 可先查询支持面再执行
 - [x] 文档明确说明当前 `graphify.detect()` 与 `graphify.extract()` 的边界差异，避免把“已发现文档”误写成“已完成文档入图”
 - [x] 能把 `.memark` / `.mempalace` / `.codex` / `.claude` / `AGENTS.md` 从一个目录复制到新 worktree
 - [x] `memark worktree-hook-install` 能把自动 attach hook 装到共享 git hooks 目录
@@ -150,8 +152,18 @@
 - [x] `memark query` 能在 `corpus/<project>/promoted|documents|imports` 上提供不依赖 `Graphify` 的本地搜索入口
 - [x] `memark graphify-handoff` 能输出当前项目 corpus 的绝对路径、scope 规模和推荐 `/graphify <path> --update` 命令
 - [x] `memark graphify-handoff --json` 能输出可直接喂给 AI 的 prompt 与 machine-readable payload
+- [x] `memark slash --dry-run --json /graphify ...` 能输出 slash 到 `MemArk` 命令的 machine-readable 映射
+- [x] `memark slash --catalog --json` 能输出当前支持的 slash adapter 目录与参数映射
+- [x] `memark slash /context ...` 能执行统一项目上下文入口，并支持 `--no-refresh` / `--json`
+- [x] `memark slash /milestones ...` 能执行阶段状态入口，并支持 `--json`
+- [x] `memark slash /automation-status ...` 能执行自动化周期状态入口，并支持 `--json`
+- [x] `memark slash /status ...` 能执行 workspace 状态入口，并支持 `--json`
+- [x] `memark slash /query ...` 能执行本地 corpus 搜索入口，并支持位置参数、`--scope`、`--limit`、`--json`
+- [x] `memark slash /graphify-proof ...` 能执行 mixed-corpus graph proof 入口，并支持 `--record-ingested`、`--evidence-path`、`--notes`、`--json`
 - [x] `automation-run` 能自动生成 `latest-summary`、`decisions-digest`、`risks-digest`、`ai-context`、`graphify-status`
 - [x] `memark context` 能把自动消费产物收成一个统一入口，并默认先刷新一轮 `automation-run`
+- [x] 当前 CLI 每项能力只保留一个唯一正式命令名，避免同一能力存在多种拼写
+- [x] 文档已明确：如果未来需要更短命令，应在新增命令设计时直接定为唯一正式命令名，而不是并存别名
 
 ## K. 产品目标验收项
 

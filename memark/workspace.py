@@ -119,6 +119,10 @@ class WorkspaceConfig:
     def project_cycle_state_file(self) -> Path:
         return self.state_dir / "projects-run.json"
 
+    @property
+    def automation_cycle_state_file(self) -> Path:
+        return self.state_dir / "automation-run.json"
+
     def palace_dir(self, project: str | None = None) -> Path:
         return self.config_dir / "palaces" / slugify(project or self.default_project)
 

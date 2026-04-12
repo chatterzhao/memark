@@ -12,6 +12,13 @@
 
 `MemArk` 是一个 `CLI-first` 的桥接与治理工具。
 
+它的成功标准不是“包了一层自动化”，而是：
+
+- 自动喂数据不能比单用 `MemPalace` 更差
+- 自动加工不能比直接读原始 session / 项目文档更差
+- 自动消费不能比直接用 `MemPalace` / `Graphify` 原生入口更差
+- 如果任一自动化主路径降低了上游已有价值，这条路径就不该被当成正式能力宣传
+
 它负责：
 
 - 以用户级 AI skill bundle 的方式安装并配置 `MemArk`
@@ -22,6 +29,7 @@
 - 把值得保留的目录过程知识晋升为 `Graphify-ready` 语料
 - 触发兼容的 `Graphify` 编译入口
 - 在上游 mixed-corpus 编译仍由 skill 主导时，生成准确的 Graphify handoff
+- 维持唯一正式 CLI 命令面，避免同一能力出现多种拼写导致自动化漂移
 
 它不负责：
 
@@ -29,6 +37,12 @@
 - 自己做知识图谱引擎
 - 假装上游已经提供稳定的自动增量 API
 - 假装任何版本的 `Graphify` 都有同一条稳定 build CLI
+
+当前命名策略：
+
+- 每个能力只保留一个唯一正式命令名
+- 如果未来需要更短命令，应在新增能力时直接把短名定为唯一正式名
+- slash 不是默认入口；只有 direct CLI 不可用或任务明确要求 slash 语法时才走 slash adapter
 
 ## 一、当前必须实现
 
@@ -200,25 +214,31 @@
 
 - 触发兼容的 `Graphify` 构建入口
 - 区分：
-  - code-only fallback
-  - 真正 mixed-corpus build
+  - 上游 CLI 直连 build
+  - `MemArk` autonomous mixed-corpus build
 
 当前状态：
 
-- 已实现安装版 `graphify` CLI 不暴露直接 folder build 时的兼容 fallback
-- 当前 fallback 依赖 `graphify.watch._rebuild_code`
-- 这条 fallback 是 code-only 路径
+- 已实现安装版 `graphify` CLI 不暴露直接 folder build 时的兼容回退
+- 当顶层 `graphify <folder>` 不可用，或 `graphify` 缺失时，`MemArk` 会直接在 `corpus/<project>/graphify-out/` 构建本地 mixed-corpus graph
+- 当前本地构建产物包括：
+  - `graph.json`
+  - `manifest.json`
+  - `GRAPH_REPORT.md`
 - 当前已通过 Graphify 源码与本仓库实测再次确认：
   - `detect()` 能发现 `promoted/*.md`
   - 但 `extract()` 公开入口只处理代码文件
   - `watch()` 对文档变化只会写 `graphify-out/needs_update`，要求上游 AI skill 再执行 `/graphify --update`
-- 在当前仓库里，对 `corpus/<project>` 执行时会因为“没有代码文件”直接失败
-- 当前 `graphify-out/graph.json` 实测 `document_nodes = 0`、`promoted_nodes = 0`
-- 因此“promoted markdown 已稳定进入 Graphify 图”目前不能算已完成能力
 - 当前更准确的能力定义是：
   - `MemArk` 能稳定落出 `Graphify-ready corpus`
-  - `MemArk` 能调用兼容的 Graphify 代码图重建路径
-  - `MemArk` 还不能独立完成上游 mixed-corpus 语义编译
+  - `MemArk` 能独立完成一个可检测、可消费的 mixed-corpus graph build
+  - `MemArk` 能把 slash-only `Graphify` 请求映射到自己的 CLI 适配层
+  - `MemArk` 能枚举当前支持的 slash adapter 与参数映射，供 AI 自动发现
+  - `MemArk` 能在 catalog 中声明路由原则：CLI 优先、免交互优先、自动批准
+  - `MemArk` 也能把统一上下文消费入口映射成 `/context`
+  - `MemArk` 也能把阶段状态入口映射成 `/milestones`
+  - `MemArk` 也能把本地 corpus 搜索入口映射成 `/query`
+  - 上游 `Graphify` skill 互操作仍然可选保留，但不再是正常自动化闭环前置条件
 
 ### F10. 可观测结果
 
@@ -310,17 +330,18 @@
   - `risks-digest`
   - `graphify-status`
 - 运行时 skill bundle 现在也已把 `memark context` 提升为默认项目消费入口
+- 但当前还不能声称它已经稳定优于直接使用 `MemPalace wake-up/search` 与 `Graphify report/query`
 
 ### F10.2. Graphify skill handoff
 
 说明：
 
-- 当 mixed-corpus 语义编译仍需要上游 `Graphify` skill 时，`MemArk` 需要给 AI 一个准确 handoff
+- 当任务明确要求上游 `Graphify` skill / AGENTS/hooks 互操作时，`MemArk` 仍需要给 AI 一个准确 handoff
 - 这个 handoff 至少应明确：
   - 当前项目 `corpus/<project>` 的绝对路径
   - `promoted/documents/imports` 的文件规模
   - 推荐命令 `/graphify <corpus> --update`
-  - 为什么这里必须走 skill，而不是误用 `memark build`
+  - 这是可选互操作路径，而不是默认构建路径
 
 当前状态：
 
@@ -330,6 +351,68 @@
   - 推荐命令
   - scope 文件数与词数
   - 可直接复制给 AI 的 prompt
+
+### F10.3. Graphify ingestion proof
+
+说明：
+
+- mixed-corpus graph 是否真的覆盖过当前 corpus，必须是系统可见状态
+- 否则 `M1` 是否达成仍然只能靠人类记忆或文档补记
+
+当前状态：
+
+- 已实现 `memark graphify-proof`
+- 可持久记录：
+  - `recorded_at`
+  - `recommended_command`
+  - 实际执行命令
+  - 证据文件路径
+  - 备注
+- 也可自动识别：
+  - `corpus/<project>/graphify-out/graph.json`
+  - 其中存在来自 `promoted/`、`documents/` 或 `imports/` 的节点
+- `memark milestones --workspace ...` 已会把这条 proof 作为 mixed-corpus 闭环判断依据
+
+### F10.4. Graphify corpus onboarding
+
+说明：
+
+- mixed-corpus `Graphify` 真正要跑的目录不是 workspace root，而是 `corpus/<project>`
+- 因此仍需要一个明确入口，把上游 `Graphify` 的项目级 AGENTS / hooks 安装到这个 corpus 目录
+- 但这条路径现在只服务于上游 interop，不再是本地自动构图的前置条件
+
+当前状态：
+
+- 已实现 `memark graphify-onboard`
+- 当前会在 `corpus/<project>` 内执行上游 `graphify <platform> install`
+- 已实现 corpus 级 Graphify onboarding state 暴露：
+  - `graph_missing`
+  - `onboarded_graph_missing`
+  - `ingested`
+- `memark status --json` 与 `memark milestones --workspace ...` 现在都会显示这条状态
+- 当前仓库已真实验证：
+  - `corpus/memark/AGENTS.md`
+  - `corpus/memark/.codex/hooks.json`
+
+### F10.5. Graphify blocker surfaced in default context
+
+说明：
+
+- 日常消费入口不能只说 `graphify_status=not_requested`，还要能回答当前到底是 graph 还没生成，还是只差上游 interop
+- 否则 AI 在 `context` 面前仍要额外翻 `status` 或 `milestones`
+
+当前状态：
+
+- 已实现自动消费产物携带 corpus 级 Graphify 状态
+- `ai-context.md` 现包含：
+  - `graphify_corpus_status`
+  - `graphify_onboarding_status`
+  - `graphify_proof_diagnostics`
+- `graphify-status.md` 现包含：
+  - `corpus_status`
+  - `onboarding_status`
+  - `graph_path`
+  - `recommended_command`
 
 ## 二、下一阶段应实现
 
