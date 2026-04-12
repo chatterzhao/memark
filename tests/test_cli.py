@@ -52,8 +52,16 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue((self.workspace / "inbox" / "documents").exists())
         self.assertTrue((self.workspace / "corpus" / "memark" / "promoted").exists())
         payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
-        self.assertEqual(Path(payload["mempalace_bin"]).name, "mempalace")
+        self.assertEqual(payload["mem_tool"], "mempalace")
+        self.assertEqual(Path(payload["mem_tool_bin"]).name, "mempalace")
         self.assertEqual(Path(payload["graphify_bin"]).name, "graphify")
+
+    def test_init_can_select_mempal_tool(self) -> None:
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["mem_tool"], "mempal")
+        self.assertEqual(Path(payload["mem_tool_bin"]).name, "mempal")
 
     def test_load_workspace_prefers_user_runtime_binaries(self) -> None:
         with (
@@ -61,12 +69,34 @@ class MemArkCliTests(unittest.TestCase):
             mock.patch.object(workspace_mod, "_runtime_binary", side_effect=lambda name: f"/tmp/runtime/{name}"),
         ):
             config = workspace_mod.create_workspace(self.workspace, "MemArk")
-            self.assertEqual(config.mempalace_bin, "mempalace")
+            self.assertEqual(config.mem_tool, "mempalace")
+            self.assertEqual(config.mem_tool_bin, "mempalace")
             self.assertEqual(config.graphify_bin, "graphify")
 
             loaded = workspace_mod.load_workspace(str(self.workspace))
-            self.assertEqual(loaded.mempalace_bin, "/tmp/runtime/mempalace")
+            self.assertEqual(loaded.mem_tool, "mempalace")
+            self.assertEqual(loaded.mem_tool_bin, "/tmp/runtime/mempalace")
             self.assertEqual(loaded.graphify_bin, "/tmp/runtime/graphify")
+
+    def test_load_workspace_reads_legacy_mempalace_bin_config(self) -> None:
+        config_dir = self.workspace / ".memark"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        (config_dir / "config.json").write_text(
+            json.dumps(
+                {
+                    "default_project": "memark",
+                    "graphify_bin": "graphify",
+                    "mempalace_bin": "legacy-mempalace",
+                },
+                indent=2,
+                ensure_ascii=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        loaded = workspace_mod.load_workspace(str(self.workspace))
+        self.assertEqual(loaded.mem_tool, "mempalace")
+        self.assertEqual(loaded.mem_tool_bin, "legacy-mempalace")
 
     def test_install_bundle_writes_user_skill_dir(self) -> None:
         fake_home = Path(self.tmpdir.name) / "home"
@@ -1979,7 +2009,7 @@ class MemArkCliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["project"], "memark")
         self.assertIn("graphify", payload)
-        self.assertIn("mempalace", payload)
+        self.assertIn("mem_tool", payload)
         self.assertIn("palace_dir", payload)
         self.assertIn("inbox_promoted_dir", payload)
         self.assertIn("codex_staged_sessions", payload)
@@ -3650,14 +3680,23 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(len(payload), 1)
         project = payload[0]
         self.assertEqual(project["project"], "memark")
+        self.assertIn("feed", project)
+        self.assertIn("process", project)
+        self.assertIn("consume", project)
         self.assertEqual(project["documents"]["copied"], 1)
+        self.assertEqual(project["process"]["documents"]["copied"], 1)
         self.assertEqual(project["packages"], 1)
+        self.assertEqual(project["process"]["packages"], 1)
         self.assertEqual(project["graphify"]["status"], "not_requested")
+        self.assertEqual(project["consume"]["graphify"]["status"], "not_requested")
         self.assertEqual(len(project["artifacts"]), 5)
         automation_state = json.loads((self.workspace / ".memark" / "state" / "automation-run.json").read_text(encoding="utf-8"))
         self.assertEqual(automation_state["status"], "completed")
         self.assertEqual(automation_state["project_count"], 1)
         self.assertEqual(automation_state["results"][0]["project"], "memark")
+        self.assertIn("feed", automation_state["results"][0])
+        self.assertIn("process", automation_state["results"][0])
+        self.assertIn("consume", automation_state["results"][0])
         self.assertEqual(automation_state["results"][0]["packages"], 1)
 
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-automation-loop-rollout-auto.md"

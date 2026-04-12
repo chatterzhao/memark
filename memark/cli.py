@@ -24,7 +24,8 @@ from .graphify_proof import (
 from .handoff import build_graphify_handoff
 from .install import InstallError, install_memark, run_doctor
 from .io import copy_document
-from .mempalace import MemPalaceError, reset_palace_dir, run_mempalace_convo_mine
+from .mempalace import MemPalaceError, reset_palace_dir
+from .mem_tool import MemToolError, build_mem_tool_mine_command, mem_tool_available, run_mem_tool_convo_mine
 from .milestones import assess_current_milestone, milestone_catalog
 from .models import ValidationError
 from .package_builder import (
@@ -179,7 +180,9 @@ def _build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("workspace", nargs="?", default=".", help="Workspace directory")
     init_parser.add_argument("--project", default="default", help="Default project slug")
     init_parser.add_argument("--graphify-bin", default="graphify", help="Graphify executable name")
-    init_parser.add_argument("--mempalace-bin", default="mempalace", help="MemPalace executable name")
+    init_parser.add_argument("--mem-tool", choices=("mempalace", "mempal"), default="mempalace", help="Memory tool implementation")
+    init_parser.add_argument("--mem-tool-bin", help="Memory tool executable name")
+    init_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
     init_parser.set_defaults(func=cmd_init)
 
     install_parser = subparsers.add_parser(
@@ -631,7 +634,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     mempalace_parser.add_argument("--workspace", default=".", help="Workspace directory")
     mempalace_parser.add_argument("--project", help="Target project slug")
-    mempalace_parser.add_argument("--mempalace-bin", help="Override mempalace executable name")
+    mempalace_parser.add_argument("--mem-tool", choices=("mempalace", "mempal"), help="Override workspace memory tool")
+    mempalace_parser.add_argument("--mem-tool-bin", help="Override memory tool executable name")
+    mempalace_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
     mempalace_parser.add_argument(
         "--palace-dir",
         help="Override palace directory. Defaults to .memark/palaces/<project>",
@@ -678,7 +683,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     palace_rebuild_parser.add_argument("--workspace", default=".", help="Workspace directory")
     palace_rebuild_parser.add_argument("--project", help="Target project slug")
-    palace_rebuild_parser.add_argument("--mempalace-bin", help="Override mempalace executable name")
+    palace_rebuild_parser.add_argument("--mem-tool", choices=("mempalace", "mempal"), help="Override workspace memory tool")
+    palace_rebuild_parser.add_argument("--mem-tool-bin", help="Override memory tool executable name")
+    palace_rebuild_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
     palace_rebuild_parser.add_argument("--palace-dir", help="Override palace directory")
     palace_rebuild_parser.add_argument("--staging-dir", help="Override staging directory")
     palace_rebuild_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
@@ -698,7 +705,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     palace_retry_parser.add_argument("--workspace", default=".", help="Workspace directory")
     palace_retry_parser.add_argument("--project", help="Target project slug")
-    palace_retry_parser.add_argument("--mempalace-bin", help="Override mempalace executable name")
+    palace_retry_parser.add_argument("--mem-tool", choices=("mempalace", "mempal"), help="Override workspace memory tool")
+    palace_retry_parser.add_argument("--mem-tool-bin", help="Override memory tool executable name")
+    palace_retry_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
     palace_retry_parser.add_argument("--palace-dir", help="Override palace directory")
     palace_retry_parser.add_argument("--staging-dir", help="Override staging directory")
     palace_retry_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
@@ -826,11 +835,13 @@ def _infer_single_project_from_results(results, fallback_project: str) -> str:
 
 def cmd_init(args: argparse.Namespace) -> int:
     workspace = resolve_workspace(args.workspace)
+    mem_tool_bin = args.mem_tool_bin or args.mempalace_bin or args.mem_tool
     config = create_workspace(
         workspace=workspace,
         project=args.project,
         graphify_bin=args.graphify_bin,
-        mempalace_bin=args.mempalace_bin,
+        mem_tool=args.mem_tool,
+        mem_tool_bin=mem_tool_bin,
     )
     print(f"Initialized MemArk workspace: {config.workspace}")
     print(f"Default project: {config.default_project}")
@@ -838,8 +849,15 @@ def cmd_init(args: argparse.Namespace) -> int:
     print(f"Inbox promoted: {config.inbox_promoted_dir}")
     print(f"Inbox documents: {config.inbox_documents_dir}")
     print(f"Corpus: {config.corpus_project_dir()}")
-    print(f"MemPalace bin: {config.mempalace_bin}")
+    print(f"Mem tool: {config.mem_tool}")
+    print(f"Mem tool bin: {config.mem_tool_bin}")
     return 0
+
+
+def _resolve_mem_tool_args(args: argparse.Namespace, config: object) -> tuple[str, str]:
+    mem_tool = getattr(args, "mem_tool", None) or config.mem_tool
+    mem_tool_bin = getattr(args, "mem_tool_bin", None) or getattr(args, "mempalace_bin", None) or config.mem_tool_bin
+    return mem_tool, mem_tool_bin
 
 
 def cmd_install(args: argparse.Namespace) -> int:
@@ -2177,52 +2195,49 @@ def cmd_automation_run(args: argparse.Namespace) -> int:
         print(f"Project: {item.project}")
         if item.intake is not None:
             print(
-                "  Intake:"
+                "  Feed:"
                 f" copied={item.intake.sync.copied}"
                 f" updated={item.intake.sync.updated}"
                 f" unchanged={item.intake.sync.unchanged}"
                 f" mined={'yes' if item.intake.mined else 'no'}"
             )
         print(
-            "  Documents:"
+            "  Process documents:"
             f" copied={item.documents.copied}"
             f" updated={item.documents.updated}"
             f" unchanged={item.documents.unchanged}"
         )
-        print(f"  Palace drawers: {item.palace_drawers}")
-        print(f"  Packages: {item.packages}")
+        print(f"  Process palace drawers: {item.palace_drawers}")
+        print(f"  Process packages: {item.packages}")
         changed = sum(1 for result in item.promoted if result.changed)
         unchanged = len(item.promoted) - changed
-        print(f"  Promoted: {changed} changed, {unchanged} unchanged")
-        print(f"  Graphify: {item.graphify.status}")
+        print(f"  Process promoted: {changed} changed, {unchanged} unchanged")
+        print(f"  Consume graphify: {item.graphify.status}")
         for artifact in item.artifacts:
-            print(f"  Artifact: {artifact}")
+            print(f"  Consume artifact: {artifact}")
     return 0
 
 
 def cmd_mempalace_mine(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
     project = slugify(args.project or config.default_project)
-    mempalace_bin = args.mempalace_bin or config.mempalace_bin
+    mem_tool, mem_tool_bin = _resolve_mem_tool_args(args, config)
     palace_dir = Path(args.palace_dir).expanduser().resolve() if args.palace_dir else config.palace_dir(project)
     staging_dir = Path(args.staging_dir).expanduser().resolve() if args.staging_dir else config.codex_sessions_dir(project)
-
-    command = [
-        mempalace_bin,
-        "--palace",
-        str(palace_dir),
-        "mine",
-        str(staging_dir),
-        "--mode",
-        "convos",
-    ]
+    command = build_mem_tool_mine_command(
+        mem_tool=mem_tool,
+        mem_tool_bin=mem_tool_bin,
+        palace_dir=palace_dir,
+        staging_dir=staging_dir,
+    )
     if args.dry_run:
         if args.json:
             print(
                 json.dumps(
                     {
                         "project": project,
-                        "mempalace_bin": mempalace_bin,
+                        "mem_tool": mem_tool,
+                        "mem_tool_bin": mem_tool_bin,
                         "palace_dir": str(palace_dir),
                         "staging_dir": str(staging_dir),
                         "command": command,
@@ -2238,8 +2253,9 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
         print(" ".join(command))
         return 0
 
-    result = run_mempalace_convo_mine(
-        mempalace_bin=mempalace_bin,
+    result = run_mem_tool_convo_mine(
+        mem_tool=mem_tool,
+        mem_tool_bin=mem_tool_bin,
         palace_dir=palace_dir,
         staging_dir=staging_dir,
         retry_attempts=args.retry_attempts,
@@ -2250,6 +2266,8 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
             json.dumps(
                 {
                     "project": project,
+                    "mem_tool": result.tool,
+                    "mem_tool_bin": result.bin_name,
                     "palace_dir": str(result.palace_dir),
                     "staging_dir": str(result.staging_dir),
                     "command": result.command,
@@ -2267,6 +2285,7 @@ def cmd_mempalace_mine(args: argparse.Namespace) -> int:
         return 0
 
     print(f"Project: {project}")
+    print(f"Mem tool: {result.tool} ({result.bin_name})")
     print(f"Palace dir: {result.palace_dir}")
     print(f"Staging dir: {result.staging_dir}")
     print(f"Attempts: {result.attempts}")
@@ -2350,18 +2369,15 @@ def cmd_palace_clean(args: argparse.Namespace) -> int:
 def cmd_palace_rebuild(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
     project = slugify(args.project or config.default_project)
-    mempalace_bin = args.mempalace_bin or config.mempalace_bin
+    mem_tool, mem_tool_bin = _resolve_mem_tool_args(args, config)
     palace_dir = Path(args.palace_dir).expanduser().resolve() if args.palace_dir else config.palace_dir(project)
     staging_dir = Path(args.staging_dir).expanduser().resolve() if args.staging_dir else config.codex_sessions_dir(project)
-    command = [
-        mempalace_bin,
-        "--palace",
-        str(palace_dir),
-        "mine",
-        str(staging_dir),
-        "--mode",
-        "convos",
-    ]
+    command = build_mem_tool_mine_command(
+        mem_tool=mem_tool,
+        mem_tool_bin=mem_tool_bin,
+        palace_dir=palace_dir,
+        staging_dir=staging_dir,
+    )
     if args.dry_run:
         payload = {
             "project": project,
@@ -2381,8 +2397,9 @@ def cmd_palace_rebuild(args: argparse.Namespace) -> int:
         return 0
 
     reset_palace_dir(palace_dir)
-    result = run_mempalace_convo_mine(
-        mempalace_bin=mempalace_bin,
+    result = run_mem_tool_convo_mine(
+        mem_tool=mem_tool,
+        mem_tool_bin=mem_tool_bin,
         palace_dir=palace_dir,
         staging_dir=staging_dir,
         retry_attempts=args.retry_attempts,
@@ -2390,6 +2407,8 @@ def cmd_palace_rebuild(args: argparse.Namespace) -> int:
     )
     payload = {
         "project": project,
+        "mem_tool": result.tool,
+        "mem_tool_bin": result.bin_name,
         "palace_dir": str(result.palace_dir),
         "staging_dir": str(result.staging_dir),
         "command": result.command,
@@ -2403,6 +2422,7 @@ def cmd_palace_rebuild(args: argparse.Namespace) -> int:
         return 0
 
     print(f"Project: {project}")
+    print(f"Mem tool: {result.tool} ({result.bin_name})")
     print(f"Rebuilt palace: {result.palace_dir}")
     print(f"Staging dir: {result.staging_dir}")
     print(f"Attempts: {result.attempts}")
@@ -2417,18 +2437,15 @@ def cmd_palace_rebuild(args: argparse.Namespace) -> int:
 def cmd_palace_retry(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
     project = slugify(args.project or config.default_project)
-    mempalace_bin = args.mempalace_bin or config.mempalace_bin
+    mem_tool, mem_tool_bin = _resolve_mem_tool_args(args, config)
     palace_dir = Path(args.palace_dir).expanduser().resolve() if args.palace_dir else config.palace_dir(project)
     staging_dir = Path(args.staging_dir).expanduser().resolve() if args.staging_dir else config.codex_sessions_dir(project)
-    command = [
-        mempalace_bin,
-        "--palace",
-        str(palace_dir),
-        "mine",
-        str(staging_dir),
-        "--mode",
-        "convos",
-    ]
+    command = build_mem_tool_mine_command(
+        mem_tool=mem_tool,
+        mem_tool_bin=mem_tool_bin,
+        palace_dir=palace_dir,
+        staging_dir=staging_dir,
+    )
     if args.dry_run:
         payload = {
             "project": project,
@@ -2446,8 +2463,9 @@ def cmd_palace_retry(args: argparse.Namespace) -> int:
         print("would run:", " ".join(command))
         return 0
 
-    result = run_mempalace_convo_mine(
-        mempalace_bin=mempalace_bin,
+    result = run_mem_tool_convo_mine(
+        mem_tool=mem_tool,
+        mem_tool_bin=mem_tool_bin,
         palace_dir=palace_dir,
         staging_dir=staging_dir,
         retry_attempts=args.retry_attempts,
@@ -2455,6 +2473,8 @@ def cmd_palace_retry(args: argparse.Namespace) -> int:
     )
     payload = {
         "project": project,
+        "mem_tool": result.tool,
+        "mem_tool_bin": result.bin_name,
         "palace_dir": str(result.palace_dir),
         "staging_dir": str(result.staging_dir),
         "command": result.command,
@@ -2468,6 +2488,7 @@ def cmd_palace_retry(args: argparse.Namespace) -> int:
         return 0
 
     print(f"Project: {project}")
+    print(f"Mem tool: {result.tool} ({result.bin_name})")
     print(f"Retried palace mine: {result.palace_dir}")
     print(f"Staging dir: {result.staging_dir}")
     print(f"Attempts: {result.attempts}")
@@ -2734,7 +2755,7 @@ def _execute_status(
     inbox_files = [item for item in config.inbox_dir.rglob("*") if item.is_file()]
     staged_codex_sessions = [item for item in config.codex_sessions_dir(project).rglob("*.jsonl") if item.is_file()]
     graphify_available = shutil.which(config.graphify_bin) is not None
-    mempalace_available = shutil.which(config.mempalace_bin) is not None
+    mem_tool_available_flag = mem_tool_available(mem_tool_bin=config.mem_tool_bin)
     payload = {
         "workspace": str(config.workspace),
         "project": project,
@@ -2751,9 +2772,10 @@ def _execute_status(
             "bin": config.graphify_bin,
             "available": graphify_available,
         },
-        "mempalace": {
-            "bin": config.mempalace_bin,
-            "available": mempalace_available,
+        "mem_tool": {
+            "name": config.mem_tool,
+            "bin": config.mem_tool_bin,
+            "available": mem_tool_available_flag,
         },
         "milestones": {
             "achieved": milestone_catalog()["achieved"],
@@ -2780,7 +2802,7 @@ def _execute_status(
     print(f"Inbox files: {payload['inbox_files']}")
     print(f"Codex staged sessions: {payload['codex_staged_sessions']}")
     print(f"Graphify available: {'yes' if graphify_available else 'no'} ({config.graphify_bin})")
-    print(f"MemPalace available: {'yes' if mempalace_available else 'no'} ({config.mempalace_bin})")
+    print(f"Mem tool available: {'yes' if mem_tool_available_flag else 'no'} ({config.mem_tool}: {config.mem_tool_bin})")
     print(f"Graphify corpus status: {payload['graphify_corpus']['status']}")
     onboarding = payload["graphify_corpus"]["onboarding"]
     print(
@@ -2809,7 +2831,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
-    except (FileNotFoundError, ValidationError, ValueError, SlashError, GraphifyError, MemPalaceError, PalaceReadError, InstallError) as exc:
+    except (FileNotFoundError, ValidationError, ValueError, SlashError, GraphifyError, MemPalaceError, MemToolError, PalaceReadError, InstallError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:

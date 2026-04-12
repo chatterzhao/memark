@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .codex import CodexSyncResult, sync_codex_sessions
 from .io import dump_json_file, load_json_file
-from .mempalace import MemPalaceMineResult, run_mempalace_convo_mine
+from .mem_tool import MemToolMineResult, run_mem_tool_convo_mine
 from .workspace import WorkspaceConfig, slugify
 
 try:
@@ -277,7 +277,7 @@ def run_projects_cycle(
             _save_cycle_state(config.project_cycle_state_file, next_states)
         mined = False
         mine_skipped_reason: str | None = None
-        mine_result: MemPalaceMineResult | None = None
+        mine_result: MemToolMineResult | None = None
         if state.pending_mine:
             if not profile.auto_mine:
                 mine_skipped_reason = "auto_mine_disabled"
@@ -294,8 +294,9 @@ def run_projects_cycle(
             else:
                 if progress is not None:
                     progress(f"  Mine: starting {config.codex_sessions_dir(project)}")
-                mine_result = run_mempalace_convo_mine(
-                    mempalace_bin=config.mempalace_bin,
+                mine_result = run_mem_tool_convo_mine(
+                    mem_tool=config.mem_tool,
+                    mem_tool_bin=config.mem_tool_bin,
                     palace_dir=config.palace_dir(project),
                     staging_dir=config.codex_sessions_dir(project),
                     retry_attempts=retry_attempts,
