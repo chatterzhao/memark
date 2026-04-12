@@ -15,6 +15,7 @@
 - 功能开发先开分支，再改代码
 - 需要并行推进另一块功能时，优先新开 worktree，而不是把多个主题堆在同一个工作树
 - 连续后台 dogfood 最好放在专用 worktree，避免主工作树持续生成运行时产物
+- `dogfood/runtime` 要定期消费 `develop`，但不要在这个工作树里承接普通 feature 开发
 
 一个可直接复用的方式是：
 
@@ -29,6 +30,34 @@ python3 -m memark automation-run --workspace . --no-build --json
 - `.memark/`、`.mempalace/`、`graphify-out/` 这类运行时目录不入库
 - `corpus/<project>/documents/`、`imports/`、`.codex/`、`AGENTS.md` 这类自动生成产物不入库
 - 时间戳型 dogfood rollout 文件默认不入库；如果确实要保留，显式挑选后再提交
+
+当前仓库已经进一步收口为：
+
+- `develop` 负责功能主线
+- `dogfood/runtime` 负责持续运行验证
+- 时间戳型 `corpus/<project>/promoted/room-*-rollout-*.md` 已从版本控制退出，只作为本地 dogfood 产物存在
+
+## 同步 dogfood/runtime
+
+`dogfood/runtime` 的目标是消费最新主线能力，而不是偏离出自己的功能分叉。
+
+推荐做法：
+
+```bash
+cd /Users/zhaoyu/Downloads/code/my-memark/memark-dogfood
+git status --short
+git merge develop
+python3 -m memark service-status --workspace . --scheduler launchd --json
+python3 -m memark milestones --workspace . --json
+```
+
+同步后重点确认：
+
+- `dogfood/runtime` 与 `develop` 没有提交差距
+- `service-status.health` 是 `ok` 或至少不是 `not_installed`
+- `milestones.assessment.status` 仍是 `ready` 或至少没有新增回归
+
+如果 dogfood 工作树里存在本地 rollout 文件，不要把它们重新纳入 git；保持它们作为被忽略的本地运行产物即可。
 
 ## 日常入口
 
@@ -52,6 +81,16 @@ python3 -m memark service-status --workspace . --scheduler launchd
 
 ```bash
 python3 -m memark automation-run --workspace . --no-build --json
+```
+
+如果要补齐 `M1` 证据，而不是只刷新 intake/promotion，可以直接执行：
+
+```bash
+python3 -m memark build --workspace .
+python3 -m memark automation-run --workspace .
+python3 -m memark consumption-proof --workspace . --record-verified \
+  --command "python3 -m memark context --workspace . --json"
+python3 -m memark milestones --workspace . --json
 ```
 
 ## 持续后台观察
@@ -176,6 +215,11 @@ python3 -m memark service-uninstall --workspace . --scheduler launchd --json
 - palace 是否真的新增了可用 drawers
 - 当前 grouping 是否过粗
 - 变化是否只落在无价值或被忽略内容上
+
+如果 `promoted_changed` 主要来自时间戳 rollout 文件，先不要把它当成需要提交的代码变更。先确认：
+
+- 这些变化是否只是 dogfood 持续运行导致的内容刷新
+- 当前需要保留的正式 promoted 文档是否已经另有稳定文件名版本
 
 ### 4. 自动消费产物没更新
 

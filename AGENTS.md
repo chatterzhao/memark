@@ -14,15 +14,6 @@ This repository follows a strict branch-to-worktree mapping.
 - Main development baseline:
   - worktree: `/Users/zhaoyu/Downloads/code/my-memark/memark`
   - branch: `develop`
-- Feature worktree:
-  - worktree: `/Users/zhaoyu/Downloads/code/my-memark/memark-git-hygiene-dogfood`
-  - branch: `feature/git-hygiene-dogfood`
-- Feature worktree:
-  - worktree: `/Users/zhaoyu/Downloads/code/my-memark/memark-consumption-proof`
-  - branch: `feature/consumption-proof`
-- Feature worktree:
-  - worktree: `/Users/zhaoyu/Downloads/code/my-memark/memark-worktree-governance`
-  - branch: `feature/worktree-governance`
 - Dogfood runtime:
   - worktree: `/Users/zhaoyu/Downloads/code/my-memark/memark-dogfood`
   - branch: `dogfood/runtime`
@@ -64,3 +55,10 @@ If the main worktree is found on a non-`develop` branch:
 - After a feature branch has been merged and no further isolated work is needed, remove its dedicated worktree with `git worktree remove <path>`.
 - Only delete the local branch after confirming it has been consumed by `develop` or otherwise intentionally archived.
 - Dogfood and research worktrees are retired only when their operational or research value has been intentionally concluded, not merely because they are unmerged.
+
+## Current Completion State
+
+- `feature/git-hygiene-dogfood` has already been consumed by `develop` and its dedicated worktree has been retired.
+- `feature/worktree-governance` has already been consumed by `develop` and its dedicated worktree has been retired.
+- `feature/consumption-proof` has already been consumed by `develop` and its dedicated worktree has been retired.
+- `feature/runtime-artifact-cleanup` has already been consumed by `develop` and its dedicated worktree has been retired.
