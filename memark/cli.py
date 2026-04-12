@@ -628,32 +628,41 @@ def _build_parser() -> argparse.ArgumentParser:
     automation_run_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     automation_run_parser.set_defaults(func=cmd_automation_run)
 
-    mempalace_parser = subparsers.add_parser(
-        "mempalace-mine",
-        help="Run 'mempalace mine --mode convos' against a project's staged Codex sessions",
+    mem_tool_mine_parser = subparsers.add_parser(
+        "mem-tool-mine",
+        help="Run the selected memory tool against a project's staged Codex sessions",
     )
-    mempalace_parser.add_argument("--workspace", default=".", help="Workspace directory")
-    mempalace_parser.add_argument("--project", help="Target project slug")
-    mempalace_parser.add_argument("--mem-tool", choices=("mempalace", "mempal"), help="Override workspace memory tool")
-    mempalace_parser.add_argument("--mem-tool-bin", help="Override memory tool executable name")
-    mempalace_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
-    mempalace_parser.add_argument(
+    mem_tool_mine_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    mem_tool_mine_parser.add_argument("--project", help="Target project slug")
+    mem_tool_mine_parser.add_argument("--mem-tool", choices=("mempalace", "mempal"), help="Override workspace memory tool")
+    mem_tool_mine_parser.add_argument("--mem-tool-bin", help="Override memory tool executable name")
+    mem_tool_mine_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
+    mem_tool_mine_parser.add_argument(
         "--palace-dir",
         help="Override palace directory. Defaults to .memark/palaces/<project>",
     )
-    mempalace_parser.add_argument(
+    mem_tool_mine_parser.add_argument(
         "--staging-dir",
         help="Override staging directory. Defaults to .memark/staging/<project>/sessions",
     )
-    mempalace_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
-    mempalace_parser.add_argument(
+    mem_tool_mine_parser.add_argument("--retry-attempts", type=int, default=3, help="Retry mine on lock errors up to N attempts")
+    mem_tool_mine_parser.add_argument(
         "--retry-delay-seconds",
         type=float,
         default=0.2,
         help="Initial retry delay for lock errors; doubles after each retry",
     )
-    mempalace_parser.add_argument("--dry-run", action="store_true", help="Print the MemPalace command without executing it")
-    mempalace_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    mem_tool_mine_parser.add_argument("--dry-run", action="store_true", help="Print the memory-tool command without executing it")
+    mem_tool_mine_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    mem_tool_mine_parser.set_defaults(func=cmd_mempalace_mine)
+
+    mempalace_parser = subparsers.add_parser(
+        "mempalace-mine",
+        help="Backward-compatible alias for 'mem-tool-mine'",
+    )
+    for action in mem_tool_mine_parser._actions[1:]:
+        if not any(existing.dest == action.dest for existing in mempalace_parser._actions):
+            mempalace_parser._add_action(action)
     mempalace_parser.set_defaults(func=cmd_mempalace_mine)
 
     palace_status_parser = subparsers.add_parser(
@@ -843,6 +852,14 @@ def cmd_init(args: argparse.Namespace) -> int:
         mem_tool=args.mem_tool,
         mem_tool_bin=mem_tool_bin,
     )
+    upsert_project_profile(
+        config.projects_file,
+        ProjectProfile(
+            name=config.default_project,
+            path=str(config.workspace),
+            sessions_root="~/.codex/sessions",
+        ),
+    )
     print(f"Initialized MemArk workspace: {config.workspace}")
     print(f"Default project: {config.default_project}")
     print(f"Inbox: {config.inbox_dir}")
@@ -851,6 +868,7 @@ def cmd_init(args: argparse.Namespace) -> int:
     print(f"Corpus: {config.corpus_project_dir()}")
     print(f"Mem tool: {config.mem_tool}")
     print(f"Mem tool bin: {config.mem_tool_bin}")
+    print(f"Registered project: {config.default_project}")
     return 0
 
 
@@ -877,6 +895,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     print(f"Python: {result.python_bin}")
     print(f"MemArk: {result.memark_bin}")
     print(f"MemPalace: {result.mempalace_bin}")
+    print(f"MemPal: {result.mempal_bin}")
     print(f"Graphify: {result.graphify_bin}")
     print(f"Source spec: {result.source_spec}")
     for target in result.targets:
@@ -898,6 +917,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"Python: {result.python_bin}")
     print(f"MemArk: {result.memark_bin}")
     print(f"MemPalace: {result.mempalace_bin}")
+    print(f"MemPal: {result.mempal_bin}")
     print(f"Graphify: {result.graphify_bin}")
     for target in result.targets:
         print(f"Skill bundle: {target.platform} -> {target.bundle_dir}")
@@ -2559,6 +2579,7 @@ def cmd_palace_package(args: argparse.Namespace) -> int:
                 session_title=session_title,
                 drawers=group_drawers,
                 hall_id=args.hall_id,
+                default_mem_tool=config.mem_tool,
             )
             for (wing, room, session_key, session_title), group_drawers in sorted(group_drawers_by_logical_session(drawers).items())
         ]
@@ -2570,6 +2591,7 @@ def cmd_palace_package(args: argparse.Namespace) -> int:
                 room=room,
                 drawers=group_drawers,
                 hall_id=args.hall_id,
+                default_mem_tool=config.mem_tool,
             )
             for (wing, room), group_drawers in sorted(group_drawers_by_room(drawers).items())
         ]
@@ -2626,6 +2648,7 @@ def cmd_palace_run(args: argparse.Namespace) -> int:
                 session_title=session_title,
                 drawers=group_drawers,
                 hall_id=args.hall_id,
+                default_mem_tool=config.mem_tool,
             )
             for (wing, room_name, session_key, session_title), group_drawers in sorted(group_drawers_by_logical_session(drawers).items())
         ]
@@ -2637,6 +2660,7 @@ def cmd_palace_run(args: argparse.Namespace) -> int:
                 room=room_name,
                 drawers=group_drawers,
                 hall_id=args.hall_id,
+                default_mem_tool=config.mem_tool,
             )
             for (wing, room_name), group_drawers in sorted(group_drawers_by_room(drawers).items())
         ]

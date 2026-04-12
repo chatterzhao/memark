@@ -91,6 +91,9 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload["mem_tool"], "mempalace")
         self.assertEqual(Path(payload["mem_tool_bin"]).name, "mempalace")
         self.assertEqual(Path(payload["graphify_bin"]).name, "graphify")
+        projects_toml = (self.workspace / ".memark" / "projects.toml").read_text(encoding="utf-8")
+        self.assertIn('name = "memark"', projects_toml)
+        self.assertIn(f'path = "{self.workspace.resolve()}"', projects_toml)
 
     def test_init_can_select_mempal_tool(self) -> None:
         result = run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
@@ -98,6 +101,7 @@ class MemArkCliTests(unittest.TestCase):
         payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["mem_tool"], "mempal")
         self.assertEqual(Path(payload["mem_tool_bin"]).name, "mempal")
+        self.assertIn("Registered project: memark", result.stdout)
 
     def test_load_workspace_prefers_user_runtime_binaries(self) -> None:
         with (
@@ -137,9 +141,15 @@ class MemArkCliTests(unittest.TestCase):
     def test_install_bundle_writes_user_skill_dir(self) -> None:
         fake_home = Path(self.tmpdir.name) / "home"
         memark_home = fake_home / ".memark-test"
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempal = fake_bin_dir / "mempal"
+        fake_mempal.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake_mempal.chmod(fake_mempal.stat().st_mode | stat.S_IEXEC)
         env = {
             "HOME": str(fake_home),
             "MEMARK_HOME": str(memark_home),
+            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
         }
 
         result = run_cli(
@@ -155,6 +165,7 @@ class MemArkCliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         bundle_dir = (fake_home / ".agents" / "skills" / "memark").resolve()
         self.assertEqual(payload["targets"][0]["bundle_dir"], str(bundle_dir))
+        self.assertEqual(Path(payload["mempal_bin"]).name, "mempal")
         self.assertTrue((bundle_dir / "SKILL.md").exists())
         self.assertTrue((bundle_dir / "project.md").exists())
         self.assertTrue((bundle_dir / "doctor.md").exists())
@@ -188,9 +199,15 @@ class MemArkCliTests(unittest.TestCase):
             path = scripts_dir / name
             path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
             path.chmod(path.stat().st_mode | stat.S_IEXEC)
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempal = fake_bin_dir / "mempal"
+        fake_mempal.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake_mempal.chmod(fake_mempal.stat().st_mode | stat.S_IEXEC)
         env = {
             "HOME": str(fake_home),
             "MEMARK_HOME": str(memark_home),
+            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
         }
         install = run_cli(
             "install",
@@ -205,6 +222,7 @@ class MemArkCliTests(unittest.TestCase):
         doctor = run_cli("doctor", "--platform", "codex", cwd=ROOT, env=env)
         self.assertEqual(doctor.returncode, 0, doctor.stderr)
         self.assertIn("Doctor summary: ok", doctor.stdout)
+        self.assertIn("MemPal:", doctor.stdout)
 
     def test_default_python_command_prefers_supported_interpreter(self) -> None:
         with mock.patch.object(
@@ -251,6 +269,40 @@ class MemArkCliTests(unittest.TestCase):
         doctor = run_cli("doctor", "--platform", "codex", cwd=ROOT, env=env)
         self.assertNotEqual(doctor.returncode, 0)
         self.assertIn("unsupported runtime python version", doctor.stderr)
+
+    def test_doctor_reports_missing_mempal_binary(self) -> None:
+        fake_home = Path(self.tmpdir.name) / "home"
+        memark_home = fake_home / ".memark-test"
+        scripts_dir = memark_home / "venv" / "bin"
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        python_bin = scripts_dir / "python"
+        python_bin.write_text(
+            "#!/bin/sh\nif [ \"$1\" = \"-c\" ]; then\n  printf '3.13\\n'\nfi\nexit 0\n",
+            encoding="utf-8",
+        )
+        python_bin.chmod(python_bin.stat().st_mode | stat.S_IEXEC)
+        for name in ("memark", "mempalace", "graphify"):
+            path = scripts_dir / name
+            path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            path.chmod(path.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "MEMARK_HOME": str(memark_home),
+            "PATH": os.environ.get("PATH", ""),
+        }
+        install = run_cli(
+            "install",
+            "--platform",
+            "codex",
+            "--skip-runtime-install",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(install.returncode, 0, install.stderr)
+
+        doctor = run_cli("doctor", "--platform", "codex", cwd=ROOT, env=env)
+        self.assertNotEqual(doctor.returncode, 0)
+        self.assertIn("missing mempal executable in PATH", doctor.stderr)
 
     def test_service_install_status_and_uninstall_manage_launchd_scheduler(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -2936,6 +2988,21 @@ class MemArkCliTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not found in PATH", result.stderr)
 
+    def test_mem_tool_mine_dry_run_uses_backend_neutral_entrypoint(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        result = run_cli(
+            "mem-tool-mine",
+            "--workspace",
+            str(self.workspace),
+            "--dry-run",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["mem_tool"], "mempal")
+        self.assertEqual(payload["command"][0], "mempal")
+
     def test_mempal_mine_runs_against_project_staging(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
         staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
@@ -3409,6 +3476,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(package["drawer_refs"][1]["source_uri"], "/tmp/demo/rollout-b.jsonl")
         self.assertEqual(package["source_timestamps"]["start"], "2026-04-09T02:11:00Z")
         self.assertEqual(package["source_timestamps"]["end"], "2026-04-09T02:12:00Z")
+        self.assertIn("mempalace", package["closets"][0]["tags"])
 
     def test_palace_package_can_write_into_inbox(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -3578,6 +3646,9 @@ class MemArkCliTests(unittest.TestCase):
             titles["technical-rollout-beta"],
             "Compare MemPalace search and Graphify query for project AI consumption.",
         )
+        for item in payload["packages"]:
+            self.assertIn("mempalace", item["closets"][0]["tags"])
+            self.assertNotIn("mempal", item["closets"][0]["tags"])
 
     def test_palace_package_reads_mempal_sqlite_store(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)

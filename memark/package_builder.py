@@ -155,6 +155,15 @@ def _drawer_ref(drawer: PalaceDrawer) -> DrawerRef:
     )
 
 
+def _memory_tool_tag(drawers: list[PalaceDrawer], default_mem_tool: str | None = None) -> str:
+    for drawer in drawers:
+        if drawer.added_by and drawer.added_by.strip():
+            return slugify(drawer.added_by).replace("-", "_")
+    if default_mem_tool and default_mem_tool.strip():
+        return slugify(default_mem_tool).replace("-", "_")
+    return "mempalace"
+
+
 def build_room_package_from_drawers(
     *,
     project: str,
@@ -162,6 +171,7 @@ def build_room_package_from_drawers(
     room: str,
     drawers: list[PalaceDrawer],
     hall_id: str = "discoveries",
+    default_mem_tool: str | None = None,
 ) -> RoomPackage:
     ordered = sorted(_latest_drawers_by_logical_source(drawers), key=lambda item: _sort_timestamp(item.filed_at))
     excerpts = [_excerpt(item.document) for item in ordered[:5]]
@@ -174,7 +184,7 @@ def build_room_package_from_drawers(
             {
                 slugify(room).replace("-", "_"),
                 slugify(wing).replace("-", "_"),
-                "mempalace",
+                _memory_tool_tag(ordered, default_mem_tool),
                 "codex_session",
             }
         ),
@@ -216,6 +226,7 @@ def build_session_package_from_drawers(
     session_title: str | None,
     drawers: list[PalaceDrawer],
     hall_id: str = "discoveries",
+    default_mem_tool: str | None = None,
 ) -> RoomPackage:
     room_id = slugify(f"{room}-{session_key}")
     ordered = sorted(_latest_drawers_by_logical_source(drawers), key=lambda item: _sort_timestamp(item.filed_at))
@@ -240,7 +251,7 @@ def build_session_package_from_drawers(
                 slugify(room).replace("-", "_"),
                 slugify(wing).replace("-", "_"),
                 slugify(session_key).replace("-", "_"),
-                "mempalace",
+                _memory_tool_tag(ordered, default_mem_tool),
                 "codex_session",
             }
         ),
