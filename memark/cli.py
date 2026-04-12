@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .automation import _render_context_markdown, load_automation_context, load_automation_cycle_state, run_automation_cycle
 from .corpus import search_payload, search_project_corpus
+from .consumption_proof import load_consumption_proof, record_consumption_proof
 from .codex import sync_codex_sessions
 from .graphify import GraphifyError, run_graphify
 from .graphify_proof import (
@@ -386,6 +387,34 @@ def _build_parser() -> argparse.ArgumentParser:
     graphify_proof_parser.add_argument("--notes", help="Short notes about what was verified")
     graphify_proof_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     graphify_proof_parser.set_defaults(func=cmd_graphify_proof)
+
+    consumption_proof_parser = subparsers.add_parser(
+        "consumption-proof",
+        help="Show or record proof that AI auto-consumption improved project continuity",
+    )
+    consumption_proof_parser.add_argument("--workspace", default=".", help="Workspace directory")
+    consumption_proof_parser.add_argument("--project", help="Target project slug")
+    consumption_proof_parser.add_argument(
+        "--record-verified",
+        action="store_true",
+        help="Persist proof that MemArk auto-consumption measurably improved the AI workflow",
+    )
+    consumption_proof_parser.add_argument("--command", help="The actual command or workflow used during verification")
+    consumption_proof_parser.add_argument(
+        "--evidence-path",
+        action="append",
+        default=[],
+        help="File path that serves as verification evidence; repeat for multiple files",
+    )
+    consumption_proof_parser.add_argument(
+        "--outcome",
+        action="append",
+        default=[],
+        help="Observed improvement outcome; repeat for multiple outcomes",
+    )
+    consumption_proof_parser.add_argument("--notes", help="Short notes about what was verified")
+    consumption_proof_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
+    consumption_proof_parser.set_defaults(func=cmd_consumption_proof)
 
     graphify_onboard_parser = subparsers.add_parser(
         "graphify-onboard",
@@ -1378,6 +1407,73 @@ def _execute_build(
     return 0
 
 
+def cmd_consumption_proof(args: argparse.Namespace) -> int:
+    config = load_workspace(args.workspace)
+    project = slugify(args.project or config.default_project)
+    return _execute_consumption_proof(
+        config=config,
+        project=project,
+        record_verified=args.record_verified,
+        command=args.command,
+        evidence_paths=args.evidence_path,
+        outcomes=args.outcome,
+        notes=args.notes,
+        json_output=args.json,
+    )
+
+
+def _execute_consumption_proof(
+    *,
+    config: object,
+    project: str,
+    record_verified: bool,
+    command: str | None,
+    evidence_paths: list[str],
+    outcomes: list[str],
+    notes: str | None,
+    json_output: bool,
+) -> int:
+    proof = (
+        record_consumption_proof(
+            config,
+            project=project,
+            command=command,
+            evidence_paths=evidence_paths,
+            notes=notes,
+            outcomes=outcomes,
+        )
+        if record_verified
+        else load_consumption_proof(config, project)
+    )
+
+    if json_output:
+        print(json.dumps({"exists": proof is not None, "proof": proof}, indent=2, ensure_ascii=True))
+        return 0
+
+    if proof is None:
+        print(f"No AI auto-consumption proof recorded for project '{project}'.")
+        return 0
+
+    print(f"Consumption proof project: {proof['project']}")
+    print(f"Status: {proof['status']}")
+    print(f"Recorded at: {proof['recorded_at']}")
+    if proof.get("command"):
+        print(f"Command: {proof['command']}")
+    evidence_paths = proof.get("evidence_paths")
+    if isinstance(evidence_paths, list) and evidence_paths:
+        print("Evidence paths:")
+        for item in evidence_paths:
+            print(f"  {item}")
+    outcomes = proof.get("outcomes")
+    if isinstance(outcomes, list) and outcomes:
+        print("Outcomes:")
+        for item in outcomes:
+            print(f"  {item}")
+    if proof.get("notes"):
+        print(f"Notes: {proof['notes']}")
+    return 0
+
+
 def _execute_context(
     *,
     config: object,
@@ -1439,10 +1535,13 @@ def _build_milestones_payload(
             workspace_snapshot["service_error"] = str(exc)
         graphify = graphify_corpus_status(config, resolved_project)
         graphify_proof = graphify.get("proof")
+        consumption_proof = load_consumption_proof(config, resolved_project)
         workspace_snapshot["graphify_corpus"] = graphify
         workspace_snapshot["graphify_proof_diagnostics"] = graphify["diagnostics"]
         if graphify_proof is not None:
             workspace_snapshot["graphify_proof"] = graphify_proof
+        if consumption_proof is not None:
+            workspace_snapshot["consumption_proof"] = consumption_proof
         payload["workspace_snapshot"] = workspace_snapshot
     payload["assessment"] = assess_current_milestone(payload)
     return payload
@@ -1709,9 +1808,31 @@ def _execute_slash_graphify_proof(
     )
 
 
+def _execute_slash_consumption_proof(
+    *,
+    config: object,
+    project: str,
+    workspace_dir: Path,
+    graphify_bin: str,
+    mapped_args: dict[str, object],
+) -> int:
+    del workspace_dir, graphify_bin
+    return _execute_consumption_proof(
+        config=config,
+        project=project,
+        record_verified=bool(mapped_args.get("record_verified")),
+        command=str(mapped_args["command"]) if mapped_args.get("command") is not None else None,
+        evidence_paths=list(mapped_args.get("evidence_path") or []),
+        outcomes=list(mapped_args.get("outcome") or []),
+        notes=str(mapped_args["notes"]) if mapped_args.get("notes") is not None else None,
+        json_output=bool(mapped_args.get("json")),
+    )
+
+
 _SLASH_EXECUTORS = {
     "build": _execute_slash_build,
     "automation-status": _execute_slash_automation_status,
+    "consumption-proof": _execute_slash_consumption_proof,
     "context": _execute_slash_context,
     "graphify-proof": _execute_slash_graphify_proof,
     "milestones": _execute_slash_milestones,
@@ -2639,6 +2760,7 @@ def _execute_status(
             "current": milestone_catalog()["current"],
         },
         "graphify_corpus": graphify_corpus_status(config, project),
+        "consumption_proof": load_consumption_proof(config, project),
     }
     payload["graphify_proof"] = payload["graphify_corpus"]["proof"]
     payload["graphify_proof_diagnostics"] = payload["graphify_corpus"]["diagnostics"]
@@ -2672,6 +2794,10 @@ def _execute_status(
         "Graphify proof diagnostics:"
         f" {diagnostics['status']}"
         f" (total_nodes={diagnostics['total_nodes']}, mixed_corpus_nodes={diagnostics['mixed_corpus_nodes']})"
+    )
+    print(
+        "Consumption proof:"
+        f" {'verified' if isinstance(payload['consumption_proof'], dict) else 'missing'}"
     )
     print(f"Achieved milestone: {payload['milestones']['achieved']}")
     print(f"Current milestone: {payload['milestones']['current']}")

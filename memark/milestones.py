@@ -86,6 +86,7 @@ def milestone_catalog() -> dict[str, object]:
                 {"name": "Autonomous Graph Build", "commands": ["memark build", "memark run", "memark automation-run"]},
                 {"name": "Slash-compatible Execution", "commands": ["memark slash", "memark status"]},
                 {"name": "Graph Proof Surface", "commands": ["memark graphify-proof", "memark milestones"]},
+                {"name": "Consumption Proof Surface", "commands": ["memark consumption-proof", "memark milestones"]},
                 {"name": "Graphify Interop", "commands": ["memark graphify-handoff", "memark graphify-onboard"]},
             ],
         },
@@ -163,6 +164,14 @@ def assess_current_milestone(payload: dict[str, object]) -> dict[str, object]:
         else "latest cycle does not show generated automation artifacts"
     )
 
+    consumption_proof = snapshot.get("consumption_proof") if isinstance(snapshot.get("consumption_proof"), dict) else {}
+    consumption_ok = consumption_proof.get("status") == "verified"
+    consumption_detail = (
+        f"proof recorded_at={consumption_proof.get('recorded_at')}, outcomes={consumption_proof.get('outcomes')}"
+        if consumption_proof
+        else "no AI auto-consumption proof recorded yet"
+    )
+
     graphify_proof = snapshot.get("graphify_proof") if isinstance(snapshot.get("graphify_proof"), dict) else {}
     graphify_corpus = snapshot.get("graphify_corpus") if isinstance(snapshot.get("graphify_corpus"), dict) else {}
     graphify_onboarding = graphify_corpus.get("onboarding") if isinstance(graphify_corpus.get("onboarding"), dict) else {}
@@ -202,6 +211,7 @@ def assess_current_milestone(payload: dict[str, object]) -> dict[str, object]:
         _check("project_corpus", "Workspace has a real mixed local corpus", corpus_ok, corpus_detail),
         _check("auto_consumption", "Automation produced consumption artifacts", auto_consumption_ok, auto_consumption_detail),
         _check("graphify_closure", "Mixed-corpus graph closure is proven", graphify_ok, graphify_detail),
+        _check("consumption_proof", "AI auto-consumption improvement is proven", consumption_ok, consumption_detail),
     ]
     blockers = [item["label"] for item in checks if not item["passed"]]
     next_actions: list[str] = []
@@ -236,6 +246,10 @@ def assess_current_milestone(payload: dict[str, object]) -> dict[str, object]:
                 next_actions.append(f"Optional upstream interop command: {recommended_command}")
         else:
             next_actions.append("Record or auto-detect one mixed-corpus graph proof beyond 'pending_update' or 'not_requested'.")
+    if not consumption_ok:
+        next_actions.append(
+            "Record one AI continuity win with 'memark consumption-proof --workspace <dir> --record-verified ...'."
+        )
 
     assessment["checks"] = checks
     assessment["blockers"] = blockers
