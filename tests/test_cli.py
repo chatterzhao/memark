@@ -2434,6 +2434,7 @@ class MemArkCliTests(unittest.TestCase):
     def test_worktree_attach_copies_hidden_tool_config(self) -> None:
         source_dir = self.workspace / "repo"
         target_dir = self.workspace / "worktree"
+        external_dir = self.workspace / "shared"
         (source_dir / ".memark").mkdir(parents=True)
         (source_dir / ".codex").mkdir(parents=True)
         (source_dir / ".claude").mkdir(parents=True)
@@ -2441,7 +2442,23 @@ class MemArkCliTests(unittest.TestCase):
         (source_dir / ".memark" / "state").mkdir(parents=True)
         (source_dir / ".memark" / "state" / "ledger.json").write_text('{"old":true}\n', encoding="utf-8")
         (source_dir / ".memark" / "config.json").write_text('{"ok":true}\n', encoding="utf-8")
-        (source_dir / ".memark" / "projects.toml").write_text("version = 1\n", encoding="utf-8")
+        (source_dir / ".memark" / "projects.toml").write_text(
+            textwrap.dedent(
+                f"""\
+                version = 1
+
+                [[projects]]
+                name = "memark"
+                path = "{source_dir.resolve()}"
+                sessions_root = "~/.codex/sessions"
+                extra_paths = ["{(source_dir / 'worktrees').resolve()}", "{external_dir.resolve()}"]
+                mine_interval_seconds = 120
+                auto_mine = true
+                enabled = true
+                """
+            ),
+            encoding="utf-8",
+        )
         (source_dir / ".codex" / "config.toml").write_text("model = 'gpt-5.4'\n", encoding="utf-8")
         (source_dir / ".claude" / "settings.json").write_text('{"hooks":[]}\n', encoding="utf-8")
         (source_dir / ".mempalace" / "config.toml").write_text("mode = 'convos'\n", encoding="utf-8")
@@ -2464,7 +2481,10 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn(".mempalace", payload["copied"])
         self.assertIn("AGENTS.md", payload["copied"])
         self.assertEqual((target_dir / ".memark" / "config.json").read_text(encoding="utf-8"), '{"ok":true}\n')
-        self.assertEqual((target_dir / ".memark" / "projects.toml").read_text(encoding="utf-8"), "version = 1\n")
+        registry = (target_dir / ".memark" / "projects.toml").read_text(encoding="utf-8")
+        self.assertIn(f'path = "{target_dir.resolve()}"', registry)
+        self.assertIn(f'"{(target_dir / "worktrees").resolve()}"', registry)
+        self.assertIn(f'"{external_dir.resolve()}"', registry)
         self.assertFalse((target_dir / ".memark" / "state").exists())
         self.assertEqual((target_dir / ".codex" / "config.toml").read_text(encoding="utf-8"), "model = 'gpt-5.4'\n")
         self.assertEqual((target_dir / ".claude" / "settings.json").read_text(encoding="utf-8"), '{"hooks":[]}\n')
