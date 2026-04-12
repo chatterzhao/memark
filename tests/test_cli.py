@@ -43,6 +43,42 @@ class MemArkCliTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmpdir.cleanup()
 
+    def _write_mempal_drawers(
+        self,
+        palace_dir: Path,
+        rows: list[tuple[str, str, str, str | None, str, str, str | None, int | None, str | None]],
+    ) -> None:
+        db_path = palace_dir / "palace.db"
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.execute(
+                """
+                CREATE TABLE drawers (
+                  id TEXT PRIMARY KEY,
+                  content TEXT NOT NULL,
+                  wing TEXT NOT NULL,
+                  room TEXT,
+                  source_file TEXT,
+                  source_type TEXT NOT NULL,
+                  added_at TEXT NOT NULL,
+                  chunk_index INTEGER,
+                  deleted_at TEXT
+                )
+                """
+            )
+            conn.executemany(
+                """
+                INSERT INTO drawers (
+                  id, content, wing, room, source_file, source_type, added_at, chunk_index, deleted_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
     def test_init_creates_workspace_layout(self) -> None:
         result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -2900,6 +2936,81 @@ class MemArkCliTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not found in PATH", result.stderr)
 
+    def test_mempal_mine_runs_against_project_staging(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempal = fake_bin_dir / "mempal"
+        log_file = self.workspace / "mempal.log"
+        fake_mempal.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                echo "ARGS:$@" > "{log_file}"
+                echo "HOME:$HOME" >> "{log_file}"
+                if [ -f "$HOME/.mempal/config.toml" ]; then
+                  cat "$HOME/.mempal/config.toml" >> "{log_file}"
+                fi
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempal.chmod(fake_mempal.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("mempalace-mine", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["mem_tool"], "mempal")
+        self.assertEqual(payload["mem_tool_bin"], "mempal")
+        logged = log_file.read_text(encoding="utf-8")
+        self.assertIn("ARGS:ingest", logged)
+        self.assertIn("--wing memark", logged)
+        self.assertIn("--format convos", logged)
+        self.assertIn(str(self.workspace / ".memark" / "staging" / "memark" / "sessions"), logged)
+        self.assertIn('db_path = "', logged)
+        self.assertIn(str(self.workspace / ".memark" / "palaces" / "memark" / "palace.db"), logged)
+
+    def test_palace_rebuild_uses_selected_mempal_tool(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        stale = palace_dir / "old.txt"
+        stale.write_text("old\n", encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempal = fake_bin_dir / "mempal"
+        log_file = self.workspace / "mempal-rebuild.log"
+        fake_mempal.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                echo "$@" > "{log_file}"
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempal.chmod(fake_mempal.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("palace-rebuild", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["mem_tool"], "mempal")
+        self.assertTrue(payload["clean_first"])
+        self.assertFalse(stale.exists())
+        self.assertIn("ingest", log_file.read_text(encoding="utf-8"))
+
     def test_palace_status_reports_files_and_drawers(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         palace_dir = self.workspace / ".memark" / "palaces" / "memark"
@@ -3468,6 +3579,80 @@ class MemArkCliTests(unittest.TestCase):
             "Compare MemPalace search and Graphify query for project AI consumption.",
         )
 
+    def test_palace_package_reads_mempal_sqlite_store(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        snapshot_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        alpha = snapshot_dir / "rollout-alpha--111-aaaaaaaaaaaa.md"
+        alpha.write_text(
+            "Source Path: /tmp/demo/rollout-alpha.jsonl\n"
+            f"Workspace Path: {self.workspace}\n"
+            "Session ID: alpha\n"
+            "Session Timestamp: 2026-04-09T02:10:00Z\n\n"
+            "> Continue\n\n"
+            "> Design the MemArk install flow for production skill bundles.\n",
+            encoding="utf-8",
+        )
+        beta = snapshot_dir / "rollout-beta--222-bbbbbbbbbbbb.md"
+        beta.write_text(
+            "Source Path: /tmp/demo/rollout-beta.jsonl\n"
+            f"Workspace Path: {self.workspace}\n"
+            "Session ID: beta\n"
+            "Session Timestamp: 2026-04-09T02:11:00Z\n\n"
+            "> Compare MemPalace search and Graphify query for project AI consumption.\n",
+            encoding="utf-8",
+        )
+        self._write_mempal_drawers(
+            palace_dir,
+            [
+                (
+                    "drawer-alpha",
+                    "Session A first decision.",
+                    "sessions",
+                    "technical",
+                    str(alpha),
+                    "conversation",
+                    "2026-04-09T02:10:00Z",
+                    0,
+                    None,
+                ),
+                (
+                    "drawer-beta",
+                    "Session B decision.",
+                    "sessions",
+                    "technical",
+                    str(beta),
+                    "conversation",
+                    "2026-04-09T02:11:00Z",
+                    0,
+                    None,
+                ),
+            ],
+        )
+
+        result = run_cli(
+            "palace-package",
+            "--workspace",
+            str(self.workspace),
+            "--group-by",
+            "session",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["group_by"], "session")
+        self.assertEqual(len(payload["packages"]), 2)
+        room_ids = {item["room_id"] for item in payload["packages"]}
+        self.assertEqual(room_ids, {"technical-rollout-alpha", "technical-rollout-beta"})
+        titles = {item["room_id"]: item["room_title"] for item in payload["packages"]}
+        self.assertEqual(titles["technical-rollout-alpha"], "Design the MemArk install flow for production skill bundles.")
+        self.assertEqual(
+            titles["technical-rollout-beta"],
+            "Compare MemPalace search and Graphify query for project AI consumption.",
+        )
+
     def test_palace_run_promotes_packages_without_build(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         palace_dir = self.workspace / ".memark" / "palaces" / "memark"
@@ -3717,6 +3902,92 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("graphify_corpus_status", (imports_dir / "latest-summary.md").read_text(encoding="utf-8"))
         self.assertIn("graphify_onboarding_status", (imports_dir / "ai-context.md").read_text(encoding="utf-8"))
         self.assertIn("corpus_status", (imports_dir / "graphify-status.md").read_text(encoding="utf-8"))
+
+    def test_automation_run_consumes_mempal_store_without_build(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        sessions_root = self.workspace / "sessions"
+        sessions_root.mkdir(parents=True, exist_ok=True)
+        project_docs = self.workspace / "docs"
+        project_docs.mkdir(parents=True, exist_ok=True)
+        (project_docs / "plan.md").write_text("# Plan\n\nDecision: automate the full memark cycle.\n", encoding="utf-8")
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--path",
+            str(self.workspace),
+            "--sessions-root",
+            str(sessions_root),
+            "--json",
+            cwd=ROOT,
+        )
+
+        palace_dir = self.workspace / ".memark" / "palaces" / "memark"
+        snapshot_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions"
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        snapshot = snapshot_dir / "rollout-auto--111-aaaaaaaaaaaa.md"
+        snapshot.write_text(
+            "Source Path: /tmp/demo/rollout-auto.jsonl\n"
+            f"Workspace Path: {self.workspace}\n"
+            "Session ID: auto\n"
+            "Session Timestamp: 2026-04-10T03:00:00Z\n\n"
+            "> Continue\n\n"
+            "> Installation should finish the setup without manual follow-up.\n",
+            encoding="utf-8",
+        )
+        self._write_mempal_drawers(
+            palace_dir,
+            [
+                (
+                    "drawer-auto",
+                    "Decision: installation should finish the setup. Risk: manual follow-up breaks adoption.",
+                    "codex_project",
+                    "automation_loop",
+                    str(snapshot),
+                    "conversation",
+                    "2026-04-10T03:00:00Z",
+                    0,
+                    None,
+                )
+            ],
+        )
+
+        result = run_cli(
+            "automation-run",
+            "--workspace",
+            str(self.workspace),
+            "--no-build",
+            "--json",
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(len(payload), 1)
+        project = payload[0]
+        self.assertEqual(project["project"], "memark")
+        self.assertIn("feed", project)
+        self.assertIn("process", project)
+        self.assertIn("consume", project)
+        self.assertFalse(project["feed"]["mined"])
+        self.assertEqual(project["documents"]["copied"], 1)
+        self.assertEqual(project["process"]["documents"]["copied"], 1)
+        self.assertEqual(project["palace_drawers"], 1)
+        self.assertEqual(project["process"]["palace_drawers"], 1)
+        self.assertEqual(project["packages"], 1)
+        self.assertEqual(project["process"]["packages"], 1)
+        self.assertEqual(project["graphify"]["status"], "not_requested")
+        self.assertEqual(project["consume"]["graphify"]["status"], "not_requested")
+
+        promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-automation-loop-rollout-auto.md"
+        self.assertTrue(promoted.exists())
+        self.assertIn("manual follow-up breaks adoption", promoted.read_text(encoding="utf-8"))
+        copied_doc = self.workspace / "corpus" / "memark" / "documents" / "docs" / "plan.md"
+        self.assertTrue(copied_doc.exists())
+        imports_dir = self.workspace / "corpus" / "memark" / "imports" / "automation"
+        self.assertTrue((imports_dir / "latest-summary.md").exists())
+        self.assertTrue((imports_dir / "ai-context.md").exists())
 
     def test_automation_run_builds_autonomous_mixed_corpus_graph_when_graphify_is_unavailable(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
