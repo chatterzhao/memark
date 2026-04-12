@@ -147,6 +147,13 @@ graphify query "<question>" --graph graphify-out/graph.json
 4. 验证安装后真实 runtime 的 `memark doctor`
 5. 可选清理 bootstrap venv
 
+额外约束：
+
+- `MemArk` runtime 只支持 `Python 3.10` 到 `3.13`
+- 不要显式传 `--python-command python3`，除非你已经确认那个 `python3` 落在支持范围内
+- 正常情况下让 `memark install` 自动挑选兼容 runtime Python 即可
+- 如果系统默认 `python3` 是 `3.14+`，bootstrap 仍可用，但 runtime 必须落到 `3.13`、`3.12`、`3.11` 或 `3.10`
+
 ### Linux / macOS 示例
 
 ```bash
@@ -173,6 +180,12 @@ py -m venv .memark-bootstrap
 .memark-bootstrap\Scripts\python -m memark install --platform codex --source-spec "%CD%"
 %USERPROFILE%\.memark\venv\Scripts\memark doctor --platform codex
 ```
+
+如果 `doctor` 只报 `missing mempal executable in PATH`，要这样理解：
+
+- 这不阻塞默认 `mempalace` 路径
+- 这只说明当前机器还不能使用 `mem_tool=mempal`
+- 需要额外安装 `mempal` 后，`mempal` 可插拔路径才算就绪
 
 ## 已实现的安装结果
 

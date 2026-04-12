@@ -23,6 +23,9 @@ Important:
 - MemArk runtime lives at `__MEMARK_HOME__`
 - preferred CLI is `__MEMARK_BIN__`
 - helper launchers live next to this skill under `bin/`
+- runtime installation requires a compatible Python interpreter in the `3.10` to `3.13` range
+- do not force `--python-command python3` unless that `python3` is already in the supported range
+- `memark doctor` may report a missing `mempal` executable; that only blocks `mem_tool=mempal`, not the default `mempalace` flow
 
 When starting work on a new project, first check installation health:
 

@@ -172,6 +172,9 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue((bundle_dir / "bin" / "memark").exists())
         self.assertTrue(os.access(bundle_dir / "bin" / "memark", os.X_OK))
         self.assertTrue((bundle_dir / "manifest.json").exists())
+        skill_text = (bundle_dir / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("3.10` to `3.13`", skill_text)
+        self.assertIn("missing `mempal` executable", skill_text)
 
     def test_doctor_reports_missing_runtime(self) -> None:
         fake_home = Path(self.tmpdir.name) / "home"
