@@ -620,9 +620,16 @@ class MemArkCliTests(unittest.TestCase):
         output = self.workspace / "corpus" / "memark" / "promoted" / "room-auth-migration.md"
         self.assertTrue(output.exists())
         content = output.read_text(encoding="utf-8")
+        self.assertIn('source: "memark"', content)
         self.assertIn('room_id: "auth-migration"', content)
         self.assertIn("# Authentication Migration", content)
         self.assertIn("## Evidence", content)
+
+    def test_mem_tool_mine_help_is_backend_neutral(self) -> None:
+        result = run_cli("mem-tool-mine", "--help", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Override memory tool executable name", result.stdout)
+        self.assertNotIn("MemPalace convo mine", result.stdout)
 
     def test_promote_rejects_non_project_by_default(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -716,6 +723,15 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload["assessment"]["status"], "needs_workspace")
         self.assertTrue(any(item["id"] == "M0" for item in payload["milestones"]))
         self.assertTrue(any(item["id"] == "M1" for item in payload["milestones"]))
+        palace_ops = next(
+            feature
+            for milestone in payload["milestones"]
+            if milestone["id"] == "M0"
+            for feature in milestone["features"]
+            if feature["name"] == "Palace Ops"
+        )
+        self.assertIn("memark mem-tool-mine", palace_ops["commands"])
+        self.assertNotIn("memark mempalace-mine", palace_ops["commands"])
 
     def test_milestones_can_attach_workspace_snapshot(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)

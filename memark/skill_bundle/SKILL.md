@@ -1,6 +1,6 @@
 ---
 name: memark
-description: Use MemArk to keep project conversations flowing into MemPalace and promoted project knowledge flowing toward Graphify.
+description: Use MemArk to keep project conversations flowing into the configured memory tool and promoted project knowledge flowing toward Graphify.
 ---
 
 # MemArk
@@ -12,9 +12,9 @@ Default behavior:
 - treat MemArk as the user-facing entrypoint
 - use MemArk commands instead of calling `mempalace` or `graphify` directly when MemArk already covers the operation
 - keep conversations isolated by directory path
-- let MemArk manage the bridge into MemPalace and the prepared corpus for Graphify
+- let MemArk manage the bridge into the configured memory tool and the prepared corpus for Graphify
 - prefer a split consumption model:
-  - use `MemPalace` for historical recall
+  - use the configured memory tool for historical recall
   - use `memark query` for promoted project corpus
   - use `Graphify` for code structure and graph navigation
 
@@ -122,6 +122,6 @@ If the user creates a new `git worktree`, do not re-install everything manually.
 __MEMARK_BIN__ worktree-attach --source-dir <repo-dir> --target-dir <worktree-dir>
 ```
 
-That command copies directory-local `.memark`, `.mempalace`, `.codex`, `.claude`, and `AGENTS.md` config into the new worktree.
+That command copies directory-local `.memark`, memory-tool config such as `.mempalace`, `.codex`, `.claude`, and `AGENTS.md` into the new worktree.
 
 If the user asks for installation or repair, use the scripts in `bin/` or the install skill from the repository root.

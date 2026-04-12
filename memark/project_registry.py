@@ -1,4 +1,4 @@
-"""Tracked path registry and single-cycle orchestration for Codex -> MemPalace intake."""
+"""Tracked path registry and single-cycle orchestration for Codex -> memory-tool intake."""
 
 from __future__ import annotations
 
