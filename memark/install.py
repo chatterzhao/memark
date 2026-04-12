@@ -40,6 +40,7 @@ class InstallResult:
     python_bin: Path
     memark_bin: Path
     mempalace_bin: Path
+    mempal_bin: str
     graphify_bin: Path
     source_spec: str
     targets: list[InstallTarget]
@@ -52,6 +53,7 @@ class InstallResult:
             "python_bin": str(self.python_bin),
             "memark_bin": str(self.memark_bin),
             "mempalace_bin": str(self.mempalace_bin),
+            "mempal_bin": self.mempal_bin,
             "graphify_bin": str(self.graphify_bin),
             "source_spec": self.source_spec,
             "targets": [
@@ -73,6 +75,7 @@ class DoctorResult:
     python_bin: Path
     memark_bin: Path
     mempalace_bin: Path
+    mempal_bin: str
     graphify_bin: Path
     targets: list[InstallTarget]
     issues: list[str]
@@ -88,6 +91,7 @@ class DoctorResult:
             "python_bin": str(self.python_bin),
             "memark_bin": str(self.memark_bin),
             "mempalace_bin": str(self.mempalace_bin),
+            "mempal_bin": self.mempal_bin,
             "graphify_bin": str(self.graphify_bin),
             "targets": [
                 {
@@ -231,6 +235,10 @@ def _venv_paths(memark_home: Path) -> tuple[Path, Path, Path, Path, Path]:
     return venv_dir, python_bin, memark_bin, mempalace_bin, graphify_bin
 
 
+def resolve_mempal_bin() -> str:
+    return shutil.which("mempal") or "mempal"
+
+
 def _run_command(command: list[str], *, cwd: Path | None = None) -> None:
     completed = subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
     if completed.returncode == 0:
@@ -347,6 +355,7 @@ def install_memark(
         python_bin=python_bin,
         memark_bin=memark_bin,
         mempalace_bin=mempalace_bin,
+        mempal_bin=resolve_mempal_bin(),
         graphify_bin=graphify_bin,
         source_spec=resolved_source,
         targets=targets,
@@ -379,6 +388,12 @@ def run_doctor(*, platform: str, memark_home: Path | None = None) -> DoctorResul
         issues.append(f"missing memark executable: {memark_bin}")
     if not mempalace_bin.exists():
         issues.append(f"missing mempalace executable: {mempalace_bin}")
+    mempal_bin = resolve_mempal_bin()
+    if shutil.which(mempal_bin) is None:
+        issues.append(
+            "missing mempal executable in PATH. Install it separately with 'cargo install mempal' "
+            "if you want to use mem_tool=mempal."
+        )
     if not graphify_bin.exists():
         issues.append(f"missing graphify executable: {graphify_bin}")
 
@@ -403,6 +418,7 @@ def run_doctor(*, platform: str, memark_home: Path | None = None) -> DoctorResul
         python_bin=python_bin,
         memark_bin=memark_bin,
         mempalace_bin=mempalace_bin,
+        mempal_bin=mempal_bin,
         graphify_bin=graphify_bin,
         targets=targets,
         issues=issues,
