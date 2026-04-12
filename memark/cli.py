@@ -120,6 +120,25 @@ def _rewrite_attached_project_registry(projects_file: Path, *, source_dir: Path,
     save_project_profiles(projects_file, rewritten)
 
 
+def _project_profile_for(config, project: str) -> ProjectProfile | None:
+    for profile in load_project_profiles(config.projects_file):
+        if profile.normalized_name() == slugify(project):
+            return profile
+    return None
+
+
+def _document_destination(config, *, project: str, source: Path) -> Path:
+    profile = _project_profile_for(config, project)
+    if profile is not None:
+        try:
+            relative = source.resolve().relative_to(profile.normalized_path())
+        except ValueError:
+            relative = None
+        if relative is not None:
+            return config.documents_dir(project) / relative
+    return config.documents_dir(project) / source.name
+
+
 def _attach_worktree_configs(source_dir: Path, target_dir: Path) -> dict[str, list[str]]:
     copied: list[str] = []
     skipped: list[str] = []
@@ -1163,7 +1182,7 @@ def cmd_add_documents(args: argparse.Namespace) -> int:
     copied = 0
     for source_name in args.sources:
         source = Path(source_name).expanduser().resolve()
-        destination = config.documents_dir(project) / source.name
+        destination = _document_destination(config, project=project, source=source)
         copy_document(source, destination)
         print(f"copied: {source} -> {destination}")
         copied += 1

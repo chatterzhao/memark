@@ -668,6 +668,37 @@ class MemArkCliTests(unittest.TestCase):
         copied = self.workspace / "corpus" / "memark" / "documents" / "architecture.md"
         self.assertTrue(copied.exists())
 
+    def test_add_documents_uses_project_relative_path_when_source_is_tracked(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        docs_dir = self.workspace / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        doc = docs_dir / "plan.md"
+        doc.write_text("# Plan\n", encoding="utf-8")
+        run_cli(
+            "project-set",
+            "--workspace",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--path",
+            str(self.workspace),
+            "--sessions-root",
+            str(self.workspace / "sessions"),
+            cwd=ROOT,
+        )
+
+        result = run_cli(
+            "add-documents",
+            "--workspace",
+            str(self.workspace),
+            str(doc),
+            cwd=ROOT,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        copied = self.workspace / "corpus" / "memark" / "documents" / "docs" / "plan.md"
+        self.assertTrue(copied.exists())
+        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / "plan.md").exists())
+
     def test_query_searches_promoted_and_documents(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
@@ -3082,6 +3113,10 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn(str(self.workspace / ".memark" / "staging" / "memark" / "sessions"), logged)
         self.assertIn('db_path = "', logged)
         self.assertIn(str(self.workspace / ".memark" / "palaces" / "memark" / "palace.db"), logged)
+        self.assertIn('[embed]', logged)
+        self.assertIn('backend = "api"', logged)
+        self.assertIn('api_endpoint = "http://localhost:11434/api/embeddings"', logged)
+        self.assertIn('api_model = "nomic-embed-text"', logged)
 
     def test_mempal_mine_reports_embedder_bootstrap_hint(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
@@ -3110,7 +3145,42 @@ class MemArkCliTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("failed to initialize embedder", result.stderr)
         self.assertIn("first-run model download access", result.stderr)
-        self.assertIn("~/.mempal/config.toml", result.stderr)
+        self.assertIn(
+            str(self.workspace / ".memark" / "palaces" / ".mempal-home-memark" / ".mempal" / "config.toml"),
+            result.stderr,
+        )
+
+    def test_mempal_mine_reports_api_backend_hint(self) -> None:
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempal = fake_bin_dir / "mempal"
+        fake_mempal.write_text(
+            textwrap.dedent(
+                """\
+                #!/bin/sh
+                echo "error: failed to embed chunks from /tmp/demo.md" >&2
+                echo "  caused by: embedding endpoint returned error status http://localhost:11434/api/embeddings" >&2
+                echo "  caused by: HTTP status server error (502 Bad Gateway) for url (http://localhost:11434/api/embeddings)" >&2
+                exit 1
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_mempal.chmod(fake_mempal.stat().st_mode | stat.S_IEXEC)
+        env = {"PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", "")}
+
+        result = run_cli("mem-tool-mine", "--workspace", str(self.workspace), cwd=ROOT, env=env)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("starter config currently uses an external embedding API backend", result.stderr)
+        self.assertIn(
+            str(self.workspace / ".memark" / "palaces" / ".mempal-home-memark" / ".mempal" / "config.toml"),
+            result.stderr,
+        )
 
     def test_palace_rebuild_uses_selected_mempal_tool(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
