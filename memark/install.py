@@ -121,9 +121,10 @@ def default_python_command() -> str:
 
     candidates: list[str] = []
     if os.name == "nt":
-        candidates.extend(["python3.13", "python3.12", "python3.11", "python3.10", "python", "py"])
+        candidates.extend(["python3.12", "python3.11", "python3.10", "python3.13", "python", "py"])
     else:
-        candidates.extend(["python3.13", "python3.12", "python3.11", "python3.10"])
+        # Prefer the most broadly compatible supported Python first.
+        candidates.extend(["python3.12", "python3.11", "python3.10", "python3.13"])
         if sys.executable:
             candidates.append(sys.executable)
         candidates.extend(["python3", "python"])
@@ -394,8 +395,9 @@ def run_doctor(*, platform: str, memark_home: Path | None = None) -> DoctorResul
     mempal_bin = resolve_mempal_bin()
     if shutil.which(mempal_bin) is None:
         warnings.append(
-            "missing mempal executable in PATH. Install it separately with 'cargo install mempal' "
-            "if you want to use mem_tool=mempal."
+            "missing mempal executable in PATH. This does not block the default mempalace flow. "
+            "Install it separately with 'cargo install mempal' only if you want to use mem_tool=mempal. "
+            "MemArk will then generate a workspace-local .mempal/config.toml starter file on first mine."
         )
     if not graphify_bin.exists():
         issues.append(f"missing graphify executable: {graphify_bin}")

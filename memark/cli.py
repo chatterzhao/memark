@@ -932,6 +932,34 @@ def _resolve_mem_tool_args(args: argparse.Namespace, config: object) -> tuple[st
     return mem_tool, mem_tool_bin
 
 
+def _install_next_step_lines(*, memark_bin: Path, platform: str) -> list[str]:
+    command = shlex.quote(str(memark_bin))
+    return [
+        "Next steps:",
+        f"- Check installation health: {command} doctor --platform {platform}",
+        f'- Start a workspace with defaults: {command} init . --project "$(basename "$PWD")"',
+        (
+            f'- Register the current repo and run one cycle: {command} project-set --workspace . '
+            '--project "$(basename "$PWD")" --path "$PWD" --sessions-root ~/.codex/sessions'
+        ),
+        f'- Refresh feed/process/consume once: {command} automation-run --workspace . --project "$(basename "$PWD")"',
+        "- Default memory tool is mempalace; the commands above run non-interactively as shown.",
+        (
+            "- Optional mem_tool=mempal: initialize with "
+            f'{command} init . --project "$(basename "$PWD")" --mem-tool mempal'
+        ),
+        (
+            "- On the first mempal mine, MemArk writes workspace-local starter config at "
+            '.memark/palaces/<project>/.mempal-home-<project>/.mempal/config.toml'
+        ),
+        (
+            "- That starter config defaults to embed backend api with "
+            "http://localhost:11434/api/embeddings and model nomic-embed-text to avoid blocking model downloads."
+        ),
+        "- If that API is not available yet, edit the generated config first or start a compatible embedding API before mining.",
+    ]
+
+
 def cmd_install(args: argparse.Namespace) -> int:
     result = install_memark(
         platform=args.platform,
@@ -954,6 +982,8 @@ def cmd_install(args: argparse.Namespace) -> int:
     print(f"Source spec: {result.source_spec}")
     for target in result.targets:
         print(f"Installed skill bundle: {target.platform} -> {target.bundle_dir}")
+    for line in _install_next_step_lines(memark_bin=result.memark_bin, platform=args.platform):
+        print(line)
     return 0
 
 
@@ -985,6 +1015,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         for warning in result.warnings:
             print(f"- {warning}", file=sys.stderr)
     print("Doctor summary: ok")
+    print("Doctor next step:")
+    print(f'- Default path is CLI-first with mempalace. Optional mempal workspaces should be initialized with: {result.memark_bin} init . --project "$(basename "$PWD")" --mem-tool mempal')
+    print(
+        "- When mem_tool=mempal runs its first mine, MemArk writes workspace-local starter config to "
+        ".memark/palaces/<project>/.mempal-home-<project>/.mempal/config.toml."
+    )
     return 0
 
 

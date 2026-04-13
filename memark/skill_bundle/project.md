@@ -2,6 +2,24 @@
 
 Use this helper when a project needs to be connected to MemArk.
 
+Copy/paste defaults:
+
+```bash
+export MEMARK_BIN="__MEMARK_BIN__"
+export MEMARK_WORKSPACE="${MEMARK_WORKSPACE:-$PWD}"
+export MEMARK_PROJECT="${MEMARK_PROJECT:-$(basename "$PWD")}"
+export MEMARK_SESSIONS_ROOT="${MEMARK_SESSIONS_ROOT:-$HOME/.codex/sessions}"
+```
+
+Default CLI-first onboarding:
+
+```bash
+"$MEMARK_BIN" init "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT"
+"$MEMARK_BIN" project-set --workspace "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT" --path "$PWD" --sessions-root "$MEMARK_SESSIONS_ROOT"
+"$MEMARK_BIN" automation-run --workspace "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT"
+"$MEMARK_BIN" context --workspace "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT"
+```
+
 Checklist:
 
 1. decide whether to reuse an existing workspace or create a new one
@@ -45,3 +63,12 @@ Consumption order:
 3. `memark query` for promoted project knowledge
 4. `memark build`, `memark slash`, or `automation-run` to refresh the corpus graph when needed
 5. `Graphify` report / query for code structure, with `memark graphify-handoff` reserved for upstream interop
+
+Optional `mempal` onboarding:
+
+```bash
+"$MEMARK_BIN" init "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT" --mem-tool mempal
+"$MEMARK_BIN" project-set --workspace "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT" --path "$PWD" --sessions-root "$MEMARK_SESSIONS_ROOT"
+```
+
+That still runs non-interactively. On the first mine, MemArk writes `.memark/palaces/<project>/.mempal-home-<project>/.mempal/config.toml`. The starter backend is `api` with `http://localhost:11434/api/embeddings` and `nomic-embed-text`; if no compatible embedding API is available yet, edit that generated config before running `automation-run`, `projects-run`, or `mem-tool-mine`.
