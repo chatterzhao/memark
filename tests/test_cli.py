@@ -175,6 +175,38 @@ class MemArkCliTests(unittest.TestCase):
         skill_text = (bundle_dir / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("3.10` to `3.13`", skill_text)
         self.assertIn("missing `mempal` executable", skill_text)
+        self.assertIn('export MEMARK_PROJECT="${MEMARK_PROJECT:-$(basename "$PWD")}"', skill_text)
+        self.assertIn('http://localhost:11434/api/embeddings', skill_text)
+
+    def test_install_prints_cli_first_next_steps(self) -> None:
+        fake_home = Path(self.tmpdir.name) / "home"
+        memark_home = fake_home / ".memark-test"
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempal = fake_bin_dir / "mempal"
+        fake_mempal.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake_mempal.chmod(fake_mempal.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "MEMARK_HOME": str(memark_home),
+            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+        }
+
+        result = run_cli(
+            "install",
+            "--platform",
+            "auto",
+            "--skip-runtime-install",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Next steps:", result.stdout)
+        self.assertIn("doctor --platform auto", result.stdout)
+        self.assertIn('init . --project "$(basename "$PWD")"', result.stdout)
+        self.assertIn("Default memory tool is mempalace", result.stdout)
+        self.assertIn(".mempal-home-<project>/.mempal/config.toml", result.stdout)
+        self.assertIn("http://localhost:11434/api/embeddings", result.stdout)
 
     def test_doctor_reports_missing_runtime(self) -> None:
         fake_home = Path(self.tmpdir.name) / "home"
@@ -226,6 +258,8 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(doctor.returncode, 0, doctor.stderr)
         self.assertIn("Doctor summary: ok", doctor.stdout)
         self.assertIn("MemPal:", doctor.stdout)
+        self.assertIn("Doctor next step:", doctor.stdout)
+        self.assertIn(".mempal-home-<project>/.mempal/config.toml", doctor.stdout)
 
     def test_default_python_command_prefers_supported_interpreter(self) -> None:
         with mock.patch.object(
@@ -242,6 +276,26 @@ class MemArkCliTests(unittest.TestCase):
         ):
             selected = install_mod._resolve_python_command("python3", "python3.13", "python3.12")
         self.assertEqual(selected, "python3.13")
+
+    def test_default_python_command_prefers_compatibility_over_newest_supported(self) -> None:
+        with (
+            mock.patch.dict(os.environ, {}, clear=False),
+            mock.patch.object(install_mod.os, "name", "posix"),
+            mock.patch.object(install_mod, "sys") as mocked_sys,
+            mock.patch.object(install_mod, "_python_version") as mocked_version,
+        ):
+            mocked_sys.executable = "/usr/bin/python3.14"
+            mocked_version.side_effect = lambda command: {
+                "python3.12": (3, 12),
+                "python3.11": (3, 11),
+                "python3.10": (3, 10),
+                "python3.13": (3, 13),
+                "/usr/bin/python3.14": (3, 14),
+                "python3": (3, 14),
+                "python": (3, 14),
+            }.get(command)
+            selected = install_mod.default_python_command()
+        self.assertEqual(selected, "python3.12")
 
     def test_doctor_rejects_unsupported_runtime_python(self) -> None:
         fake_home = Path(self.tmpdir.name) / "home"
