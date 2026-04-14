@@ -942,6 +942,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("memark mem-tool-mine", palace_ops["commands"])
         self.assertNotIn("memark mempalace-mine", palace_ops["commands"])
 
+    @unittest.skipIf(sys.platform != "darwin", "launchd service tests require macOS")
     def test_milestones_can_attach_workspace_snapshot(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         fake_home = Path(self.tmpdir.name) / "home"
@@ -1436,6 +1437,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("args=codex install", log_text)
         self.assertTrue((corpus_dir / "AGENTS.md").exists())
 
+    @unittest.skipIf(sys.platform != "darwin", "launchd service tests require macOS")
     def test_milestones_assessment_accepts_recorded_graphify_proof(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         fake_home = Path(self.tmpdir.name) / "home"
@@ -1578,6 +1580,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(rerun_checks["consumption_proof"]["status"], "passed")
         self.assertEqual(rerun_payload["workspace_snapshot"]["consumption_proof"]["status"], "verified")
 
+    @unittest.skipIf(sys.platform != "darwin", "launchd service tests require macOS")
     def test_milestones_assessment_accepts_auto_detected_graphify_proof(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         fake_home = Path(self.tmpdir.name) / "home"

@@ -7,6 +7,10 @@
 - `MemPalace` GitHub: <https://github.com/milla-jovovich/mempalace>
 - `Graphify` GitHub: <https://github.com/safishamsi/graphify>
 
+## 平台支持
+
+当前仅支持 **macOS**。后台调度依赖 `launchd`，后续版本将支持 Linux（systemd/cron）和 Windows（Task Scheduler）。
+
 ## 当前判断
 
 基于 2026-04-08 的实际使用结果，而不是只看 README 或源码，当前可以把三者关系收敛为：
