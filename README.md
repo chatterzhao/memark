@@ -51,11 +51,11 @@
 
 详细实测报告：
 
-- [`docs/RESEARCH_MEMPALACE_USAGE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RESEARCH_MEMPALACE_USAGE.md)
-- [`docs/RESEARCH_GRAPHIFY_USAGE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RESEARCH_GRAPHIFY_USAGE.md)
-- [`docs/MEMARK_REASSESSMENT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MEMARK_REASSESSMENT.md)
-- [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)
-- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
+- [`docs/RESEARCH_MEMPALACE_USAGE.md`](docs/RESEARCH_MEMPALACE_USAGE.md)
+- [`docs/RESEARCH_GRAPHIFY_USAGE.md`](docs/RESEARCH_GRAPHIFY_USAGE.md)
+- [`docs/MEMARK_REASSESSMENT.md`](docs/MEMARK_REASSESSMENT.md)
+- [`docs/CODEX_SESSION_INGEST_DESIGN.md`](docs/CODEX_SESSION_INGEST_DESIGN.md)
+- [`docs/AI_CONSUMPTION_MODEL.md`](docs/AI_CONSUMPTION_MODEL.md)
 
 ## 两个上游到底怎么用，才能发挥它们的强项
 
@@ -94,7 +94,7 @@
 - 实际 palace 顶层是 `chroma.sqlite3` 和 ANN 段文件，不是现成 Markdown 语料目录
 - 最适合桥接层消费的表面，是 Chroma 里的 drawer metadata 加 `chroma:document`
 - 对 `Codex` 来说，默认主入口应是 `~/.codex/sessions/**/*.jsonl`，因为 session 文件首行 `session_meta` 带 `cwd`
-- 这次按 `cwd=/Users/zhaoyu/Downloads/code/my-memark/memark` 筛出 `11` 个 session 文件后，实际 mine 出 `216 drawers`
+- 这次按 `cwd=<repo-root>` 筛出 `11` 个 session 文件后，实际 mine 出 `216 drawers`
 - `~/.codex/history.jsonl` 只是全局扁平索引，不应被当成目录级主入口
 - 虽然 metadata 里存在 `filed_at`
 - 但这次没有验证到一个稳定公开的“按时间戳取增量” CLI 或 MCP 接口
@@ -174,8 +174,8 @@
 
 - 经过收敛的项目定义
 - `MemPalace -> MemArk -> Graphify` 的治理和接口说明
-- 一个用户级生产安装入口 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
-- 一份开发期安装测试入口 [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)
+- 一个用户级生产安装入口 [`SKILL.md`](SKILL.md)
+- 一份开发期安装测试入口 [`skill-dev.md`](skill-dev.md)
 - 一个真实可执行的用户级安装命令：`memark install`
 - 一个真实可执行的健康检查命令：`memark doctor`
 - 一套会被安装到用户 AI 工具目录的 `MemArk` skill bundle
@@ -406,7 +406,7 @@ python3 -m memark init ./memark-work --project myproject
 
 仓库里自带一个可直接试跑的样例：
 
-[`examples/sample_room_package.json`](/Users/zhaoyu/Downloads/code/my-memark/memark/examples/sample_room_package.json)
+[`examples/sample_room_package.json`](<repo-root>/examples/sample_room_package.json)
 
 可以先把它放进 `inbox/promoted/`，再执行校验与晋升：
 
@@ -669,26 +669,26 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 
 ## 文档
 
-- [`README.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/README.md)：项目入口
-- [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)：默认生产入口 Skill
-- [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)：开发期安装测试 Skill
-- [`docs/PROJECT_SCOPE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PROJECT_SCOPE.md)：项目边界、组件关系、当前状态
-- [`docs/GOVERNANCE_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/GOVERNANCE_MODEL.md)：闲聊、项目对话、产出文档的隔离与晋升模型
-- [`docs/INTERFACE_CONTRACT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INTERFACE_CONTRACT.md)：推荐输入契约、输出契约与 Markdown 包格式
-- [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)：真实安装与 CLI 验证结果
-- [`docs/IMPLEMENTATION_PLAN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/IMPLEMENTATION_PLAN.md)：当前 Python CLI 的实现范围与后续分层
-- [`docs/ACCEPTANCE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/ACCEPTANCE_CHECKLIST.md)：当前版本的验收标准与完成状态
-- [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)：基于 `MemPalace` 与 `Graphify` 能力面收敛出的具体需求
-- [`docs/MILESTONE_BETA.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_BETA.md)：当前仓库自己吃自己的 Beta 里程碑与出站条件
-- [`docs/MILESTONES.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONES.md)：按阶段整理的能力账本，方便直接看当前应用已实现什么、下一步做什么
-- [`docs/MILESTONE_NEXT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_NEXT.md)：Beta 之后下一阶段里程碑，优先收口长期稳定性与消费闭环，而不是先扩跨平台
-- [`docs/RELEASE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RELEASE_CHECKLIST.md)：按当前 Beta 口径对外说明或内部推广前的发布检查清单
-- [`docs/DOGFOOD_RUNBOOK.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_RUNBOOK.md)：当前仓库持续自己吃自己时的日常操作与排障入口
-- [`docs/DOGFOOD_LOG.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_LOG.md)：按时间追加的当前仓库真实 dogfood 证据
-- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)：项目 AI 当前应如何实际消费 `MemPalace`、`Graphify` 与 `MemArk` 产物
-- [`docs/DOCUMENT_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOCUMENT_STATUS.md)：正式文档与研究归档的关系
-- [`docs/MAINTAINER_SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MAINTAINER_SKILL.md)：旧的维护型 Skill 说明
-- [`examples/sample_room_package.json`](/Users/zhaoyu/Downloads/code/my-memark/memark/examples/sample_room_package.json)：可直接试跑的 room package 示例
+- [`README.md`](<repo-root>/README.md)：项目入口
+- [`SKILL.md`](<repo-root>/SKILL.md)：默认生产入口 Skill
+- [`skill-dev.md`](<repo-root>/skill-dev.md)：开发期安装测试 Skill
+- [`docs/PROJECT_SCOPE.md`](docs/PROJECT_SCOPE.md)：项目边界、组件关系、当前状态
+- [`docs/GOVERNANCE_MODEL.md`](docs/GOVERNANCE_MODEL.md)：闲聊、项目对话、产出文档的隔离与晋升模型
+- [`docs/INTERFACE_CONTRACT.md`](docs/INTERFACE_CONTRACT.md)：推荐输入契约、输出契约与 Markdown 包格式
+- [`docs/INSTALL_VERIFICATION.md`](docs/INSTALL_VERIFICATION.md)：真实安装与 CLI 验证结果
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md)：当前 Python CLI 的实现范围与后续分层
+- [`docs/ACCEPTANCE_CHECKLIST.md`](docs/ACCEPTANCE_CHECKLIST.md)：当前版本的验收标准与完成状态
+- [`docs/PRODUCT_REQUIREMENTS.md`](docs/PRODUCT_REQUIREMENTS.md)：基于 `MemPalace` 与 `Graphify` 能力面收敛出的具体需求
+- [`docs/MILESTONE_BETA.md`](docs/MILESTONE_BETA.md)：当前仓库自己吃自己的 Beta 里程碑与出站条件
+- [`docs/MILESTONES.md`](docs/MILESTONES.md)：按阶段整理的能力账本，方便直接看当前应用已实现什么、下一步做什么
+- [`docs/MILESTONE_NEXT.md`](docs/MILESTONE_NEXT.md)：Beta 之后下一阶段里程碑，优先收口长期稳定性与消费闭环，而不是先扩跨平台
+- [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md)：按当前 Beta 口径对外说明或内部推广前的发布检查清单
+- [`docs/DOGFOOD_RUNBOOK.md`](docs/DOGFOOD_RUNBOOK.md)：当前仓库持续自己吃自己时的日常操作与排障入口
+- [`docs/DOGFOOD_LOG.md`](docs/DOGFOOD_LOG.md)：按时间追加的当前仓库真实 dogfood 证据
+- [`docs/AI_CONSUMPTION_MODEL.md`](docs/AI_CONSUMPTION_MODEL.md)：项目 AI 当前应如何实际消费 `MemPalace`、`Graphify` 与 `MemArk` 产物
+- [`docs/DOCUMENT_STATUS.md`](docs/DOCUMENT_STATUS.md)：正式文档与研究归档的关系
+- [`docs/MAINTAINER_SKILL.md`](docs/MAINTAINER_SKILL.md)：旧的维护型 Skill 说明
+- [`examples/sample_room_package.json`](examples/sample_room_package.json)：可直接试跑的 room package 示例
 
 如果你想直接从 CLI 看当前阶段和功能账，而不是先翻文档：
 

@@ -14,8 +14,8 @@
 - [x] 存在 `python3 -m memark` 入口
 - [x] 存在 console script 定义 `memark`
 - [x] 不再引用仓库里不存在的 `memark.py`
-- [x] 根目录 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md) 已收敛为生产安装入口
-- [x] [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md) 已收敛为开发期隔离安装验收入口
+- [x] 根目录 [`SKILL.md`](<repo-root>/SKILL.md) 已收敛为生产安装入口
+- [x] [`skill-dev.md`](<repo-root>/skill-dev.md) 已收敛为开发期隔离安装验收入口
 
 ## B. 用户级安装与技能包
 

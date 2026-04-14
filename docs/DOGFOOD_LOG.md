@@ -2,7 +2,7 @@
 
 本文件按时间记录当前 `memark` 仓库自己吃自己的关键证据。
 
-它不替代 [`docs/DOGFOOD_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_STATUS.md)。
+它不替代 [`docs/DOGFOOD_STATUS.md`](<repo-root>/docs/DOGFOOD_STATUS.md)。
 
 更准确的分工是：
 
@@ -95,4 +95,4 @@
 
 - 这次不执行 `service-uninstall`
 - 保持 `launchd` job 继续运行
-- 后续连续观察按 [`docs/DOGFOOD_RUNBOOK.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_RUNBOOK.md) 执行
+- 后续连续观察按 [`docs/DOGFOOD_RUNBOOK.md`](<repo-root>/docs/DOGFOOD_RUNBOOK.md) 执行

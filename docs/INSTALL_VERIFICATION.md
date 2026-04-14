@@ -7,7 +7,7 @@
 ## 验证时间
 
 - 日期：2026-04-09
-- 工作目录：[`/Users/zhaoyu/Downloads/code/my-memark/memark`](/Users/zhaoyu/Downloads/code/my-memark/memark)
+- 工作目录：[`<repo-root>`](<repo-root>)
 
 ## 验证环境
 
@@ -90,8 +90,8 @@ python3 -m venv .venv-skill-check
 
 当前已观察到的副作用路径：
 
-- [`/Users/zhaoyu/.claude/skills/graphify`](/Users/zhaoyu/.claude/skills/graphify)
-- [`/Users/zhaoyu/.agents/skills/graphify`](/Users/zhaoyu/.agents/skills/graphify)
+- [`~/.claude/skills/graphify`](~/.claude/skills/graphify)
+- [`~/.agents/skills/graphify`](~/.agents/skills/graphify)
 
 因此：
 
@@ -140,7 +140,7 @@ python3 -m venv .venv-skill-check
 
 ## 对 `SKILL.md` 的直接影响
 
-基于以上验证，根目录 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md) 需要坚持以下口径：
+基于以上验证，根目录 [`SKILL.md`](<repo-root>/SKILL.md) 需要坚持以下口径：
 
 - 首次执行必须允许 bootstrap venv
 - 系统 Python 受限时优先建议虚拟环境
@@ -160,7 +160,7 @@ HOME=/tmp/memark-prod-e2e/home \
   ./.venv-dev/bin/python -m memark install \
   --platform codex \
   --memark-home /tmp/memark-prod-e2e/home/.memark \
-  --source-spec /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --source-spec <repo-root> \
   --json
 HOME=/tmp/memark-prod-e2e/home \
   /tmp/memark-prod-e2e/home/.agents/skills/memark/bin/memark doctor --platform codex
@@ -217,14 +217,14 @@ python3 -m venv /tmp/memark-bootstrap
 /tmp/memark-bootstrap/bin/python -m pip install .
 /tmp/memark-bootstrap/bin/python -m memark install \
   --platform codex \
-  --source-spec /Users/zhaoyu/Downloads/code/my-memark/memark
+  --source-spec <repo-root>
 ~/.memark/venv/bin/memark doctor --platform codex --json
 ```
 
 结果：
 
-- 用户级 runtime 成功重建在 [`/Users/zhaoyu/.memark/venv`](/Users/zhaoyu/.memark/venv)
-- Codex skill bundle 成功重建在 [`/Users/zhaoyu/.agents/skills/memark`](/Users/zhaoyu/.agents/skills/memark)
+- 用户级 runtime 成功重建在 [`~/.memark/venv`](~/.memark/venv)
+- Codex skill bundle 成功重建在 [`~/.agents/skills/memark`](~/.agents/skills/memark)
 - `doctor` 对默认 `mempalace` 路径可通过；若机器尚未单独安装 `mempal`，则会额外给出 `mem_tool=mempal` 尚未就绪的 warning
 - runtime 实际版本：
   - `Python 3.13.6`
@@ -250,7 +250,7 @@ PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark init . --project M
 PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark project-set \
   --workspace . \
   --project MemArk \
-  --path /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --path <repo-root> \
   --sessions-root ~/.codex/sessions
 PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark projects-run --workspace . --json
 ```
@@ -292,7 +292,7 @@ PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/mempalace --palace .memar
 ```bash
 git worktree add /tmp/memark-worktree-nohook -b test/worktree-nohook
 ~/.memark/venv/bin/memark worktree-attach \
-  --source-dir /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --source-dir <repo-root> \
   --target-dir /tmp/memark-worktree-nohook \
   --json
 ```
@@ -313,14 +313,14 @@ git worktree add /tmp/memark-worktree-nohook -b test/worktree-nohook
 
 ```bash
 ~/.memark/venv/bin/memark worktree-hook-install \
-  --source-dir /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --source-dir <repo-root> \
   --json
 git worktree add /tmp/memark-worktree-auto2 -b test/worktree-auto2
 ```
 
 结果：
 
-- `post-checkout` hook 成功写入 [`/Users/zhaoyu/Downloads/code/my-memark/memark/.git/hooks/post-checkout`](/Users/zhaoyu/Downloads/code/my-memark/memark/.git/hooks/post-checkout)
+- `post-checkout` hook 成功写入 [`<repo-root>/.git/hooks/post-checkout`](<repo-root>/.git/hooks/post-checkout)
 - 新 worktree 自动出现：
   - [`config.json`](/private/tmp/memark-worktree-auto2/.memark/config.json)
   - [`projects.toml`](/private/tmp/memark-worktree-auto2/.memark/projects.toml)
@@ -363,10 +363,10 @@ launchctl kickstart -k gui/$(id -u)/io.memark.projects-run.memark.3897640fdb
   - `installed: true`
   - `loaded: true`
 - 生成的真实 plist 路径为：
-  - [`/Users/zhaoyu/Library/LaunchAgents/io.memark.projects-run.memark.3897640fdb.plist`](/Users/zhaoyu/Library/LaunchAgents/io.memark.projects-run.memark.3897640fdb.plist)
+  - [`~/Library/LaunchAgents/io.memark.projects-run.memark.3897640fdb.plist`](~/Library/LaunchAgents/io.memark.projects-run.memark.3897640fdb.plist)
 - `launchctl print` 可见：
-  - `ProgramArguments = /Users/zhaoyu/.memark/venv/bin/memark automation-run --workspace /Users/zhaoyu/Downloads/code/my-memark/memark`
-  - `WorkingDirectory = /Users/zhaoyu/Downloads/code/my-memark/memark`
+  - `ProgramArguments = ~/.memark/venv/bin/memark automation-run --workspace <repo-root>`
+  - `WorkingDirectory = <repo-root>`
   - `StartInterval = 300`
 - 卸载后 `service-uninstall` 返回：
   - `removed: true`
@@ -417,9 +417,9 @@ python3 -m memark service-status --workspace . --scheduler launchd --json
 
 ```bash
 env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin \
-  /Users/zhaoyu/.memark/venv/bin/memark \
+  ~/.memark/venv/bin/memark \
   projects-run \
-  --workspace /Users/zhaoyu/Downloads/code/my-memark/memark \
+  --workspace <repo-root> \
   --json
 ```
 
@@ -496,7 +496,7 @@ codex exec --dangerously-bypass-approvals-and-sandbox \
 
 尽管如此，新的 session 文件仍然真实落盘在：
 
-- [`/Users/zhaoyu/.codex/sessions/2026/04/09/rollout-2026-04-09T20-13-26-019d7561-56b2-7f52-8488-fd359a7bb971.jsonl`](/Users/zhaoyu/.codex/sessions/2026/04/09/rollout-2026-04-09T20-13-26-019d7561-56b2-7f52-8488-fd359a7bb971.jsonl)
+- [`~/.codex/sessions/2026/04/09/rollout-2026-04-09T20-13-26-019d7561-56b2-7f52-8488-fd359a7bb971.jsonl`](~/.codex/sessions/2026/04/09/rollout-2026-04-09T20-13-26-019d7561-56b2-7f52-8488-fd359a7bb971.jsonl)
 
 随后对该 worktree 执行：
 
@@ -542,7 +542,7 @@ PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/mempalace \
 先为当前仓库手写 `mempalace.yaml`，并让仓库级忽略规则排除派生产物后，执行：
 
 ```bash
-PYTHONPATH=/Users/zhaoyu/Downloads/code/my-memark/mempalace \
+PYTHONPATH=~/Downloads/code/my-memark/mempalace \
   .venv-skill-check/bin/python -m mempalace \
   --palace /tmp/memark-palace-clean mine .
 ```
@@ -568,14 +568,14 @@ PYTHONPATH=/Users/zhaoyu/Downloads/code/my-memark/mempalace \
 随后在同一个干净 palace 上执行：
 
 ```bash
-PYTHONPATH=/Users/zhaoyu/Downloads/code/my-memark/mempalace \
+PYTHONPATH=~/Downloads/code/my-memark/mempalace \
   .venv-skill-check/bin/python -m mempalace \
   --palace /tmp/memark-palace-clean search "graphify cli contract mismatch"
 ```
 
 结果：
 
-- 能准确命中 [`tests/test_cli.py`](/Users/zhaoyu/Downloads/code/my-memark/memark/tests/test_cli.py)
+- 能准确命中 [`tests/test_cli.py`](<repo-root>/tests/test_cli.py)
 - 对当前仓库这类中小型项目，`MemPalace` 的“精确找回”已经很有用
 
 ### 清理治理后的 `Graphify`
@@ -599,7 +599,7 @@ PYTHONPATH=/Users/zhaoyu/Downloads/code/my-memark/mempalace \
 
 1. 初始化 workspace
 2. 晋升一个 room package
-3. 复制当前仓库的 `memark/cli.py`、`memark/graphify.py`、[`tests/test_cli.py`](/Users/zhaoyu/Downloads/code/my-memark/memark/tests/test_cli.py) 等文件进入 corpus
+3. 复制当前仓库的 `memark/cli.py`、`memark/graphify.py`、[`tests/test_cli.py`](<repo-root>/tests/test_cli.py) 等文件进入 corpus
 4. 让 `PATH` 指向已安装 `graphify` 的 `.venv-skill-check/bin/graphify`
 5. 从 `memark` 自己的 `.venv` 执行 `memark build`
 

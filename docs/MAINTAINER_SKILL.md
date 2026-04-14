@@ -16,9 +16,9 @@
 
 ## 当前维护原则
 
-- 根目录 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md) 是默认生产入口
-- [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md) 是开发期安装测试入口
-- 开发者可见的 runtime skill 副本位于 [`skills/memark`](/Users/zhaoyu/Downloads/code/my-memark/memark/skills/memark)
-- 打包进 Python 包的 runtime skill 模板位于 [`memark/skill_bundle`](/Users/zhaoyu/Downloads/code/my-memark/memark/memark/skill_bundle)
+- 根目录 [`SKILL.md`](<repo-root>/SKILL.md) 是默认生产入口
+- [`skill-dev.md`](<repo-root>/skill-dev.md) 是开发期安装测试入口
+- 开发者可见的 runtime skill 副本位于 [`skills/memark`](<repo-root>/skills/memark)
+- 打包进 Python 包的 runtime skill 模板位于 [`memark/skill_bundle`](<repo-root>/memark/skill_bundle)
 - 文档维护与口径收敛说明放在 `docs/` 下
 - 不把安装 Skill 和维护 Skill 混成一份

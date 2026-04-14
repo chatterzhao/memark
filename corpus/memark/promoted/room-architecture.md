@@ -38,4 +38,4 @@ Collected 1 memory drawer(s) from room 'architecture' in wing 'sessions'.
 
 ## Evidence
 
-- `drawer_sessions_architecture_80dc6339c63d729dbc9f31b0`: 2026-04-09T20:12:22.497206 | Output exactly this JSON shape: {"nodes":[{"id":"node_id","label":"Human Readable Name","file_type":"code|document","source_file":"relative/path","source_location":null,"source_... | /Users/zhaoyu/Downloads/code/my-memark/memark/.memark/staging/memark/sessions/2026/04/08/rollout-2026-04-08T17-00-31-019d6f8a-59fb-7510-9bb7-c0bb2fb276da.md
+- `drawer_sessions_architecture_80dc6339c63d729dbc9f31b0`: 2026-04-09T20:12:22.497206 | Output exactly this JSON shape: {"nodes":[{"id":"node_id","label":"Human Readable Name","file_type":"code|document","source_file":"relative/path","source_location":null,"source_... | <repo-root>/.memark/staging/memark/sessions/2026/04/08/rollout-2026-04-08T17-00-31-019d6f8a-59fb-7510-9bb7-c0bb2fb276da.md

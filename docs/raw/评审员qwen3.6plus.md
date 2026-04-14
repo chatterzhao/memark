@@ -23,7 +23,7 @@
 
 **问题:** YAML 文件中写入的 `~/memark/mempalace_data` 等路径，`yaml.safe_load()` 会当作字面字符串处理，不会执行 shell 的 `~` 展开。a.md 中的 `memark.py` **完全没有调用 `.expanduser()`**，b.md 和 e.md 仅部分调用。
 
-**影响:** 所有文件读写操作会失败，因为路径是字面的 `"~/memark/..."` 而非 `/Users/zhaoyu/memark/...`。
+**影响:** 所有文件读写操作会失败，因为路径是字面的 `"~/memark/..."` 而非 `~/memark/...`。
 
 **建议修复:**
 ```python

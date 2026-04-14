@@ -14,7 +14,7 @@ description: Production installer skill that bootstraps MemArk into a user-level
 - 把 `MemArk` 的运行时 skill bundle 安装到 AI 工具的 skill 目录
 - 最后用 `memark doctor` 验证运行时与 skill bundle 都可用
 
-如果要做开发期反复重装、隔离验收、假 `HOME` 测试，改看 [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)。
+如果要做开发期反复重装、隔离验收、假 `HOME` 测试，改看 [`skill-dev.md`](<repo-root>/skill-dev.md)。
 
 ## 重要边界
 
@@ -245,4 +245,4 @@ py -m venv .memark-bootstrap
 
 ## 何时切到开发版
 
-如果需要开发期的重置式安装测试与隔离验收，改读 [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md) 再继续。
+如果需要开发期的重置式安装测试与隔离验收，改读 [`skill-dev.md`](<repo-root>/skill-dev.md) 再继续。

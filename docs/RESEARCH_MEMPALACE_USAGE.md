@@ -82,7 +82,7 @@ Actual session files contain a first-line `session_meta` record with project con
 
 For this repository, filtering `~/.codex/sessions/**/*.jsonl` by:
 
-- `session_meta.payload.cwd == /Users/zhaoyu/Downloads/code/my-memark/memark`
+- `session_meta.payload.cwd == <repo-root>`
 
 produced `11` session files, which were copied into:
 
@@ -210,7 +210,7 @@ Installed `mempalace 3.0.0` did not successfully complete non-interactive `init 
 
 Workaround that did work:
 
-- run from source with `PYTHONPATH=/Users/zhaoyu/Downloads/code/my-memark/mempalace`
+- run from source with `PYTHONPATH=~/Downloads/code/my-memark/mempalace`
 
 This means a skill or automation layer should not blindly trust installed `init` on this version.
 

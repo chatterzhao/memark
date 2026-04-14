@@ -148,7 +148,7 @@
 - staging snapshot 策略
 - package 层逻辑去重
 
-更完整设计见 [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)。
+更完整设计见 [`docs/CODEX_SESSION_INGEST_DESIGN.md`](<repo-root>/docs/CODEX_SESSION_INGEST_DESIGN.md)。
 
 ## `closet` 推荐最小字段
 
