@@ -911,14 +911,38 @@ def _infer_single_project_from_results(results, fallback_project: str) -> str:
 
 
 def _check_git_repo_root(directory: Path) -> tuple[bool, str]:
-    """Check if *directory* is the root of a git repository.
+    """Check if *directory* is the root of a git repository (not a worktree).
 
     Returns (is_root, reason).
     """
     git_dir = directory / ".git"
-    if git_dir.exists():
+    # .git is a file → this is a worktree, not the main repo
+    if git_dir.is_file():
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--git-common-dir"],
+                capture_output=True,
+                text=True,
+                cwd=str(directory),
+                timeout=5,
+            )
+            if result.returncode == 0:
+                common_dir = Path(result.stdout.strip()).resolve()
+                if common_dir != git_dir.resolve().parent:
+                    return False, (
+                        "This is a git worktree, not the main repository. "
+                        "Use 'memark worktree-attach' to set up MemArk in a worktree."
+                    )
+        except FileNotFoundError:
+            pass
+        return False, (
+            "This is a git worktree, not the main repository. "
+            "Use 'memark worktree-attach' to set up MemArk in a worktree."
+        )
+    # .git is a directory → this could be a main repo root
+    if git_dir.is_dir():
         return True, ""
-    # Not a git repo at all — check if a parent is
+    # No .git at all — check if a parent is a git repo
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
@@ -942,14 +966,16 @@ def cmd_init(args: argparse.Namespace) -> int:
     project_slug = slugify(project_name)
     mem_tool_bin = args.mem_tool_bin or args.mempalace_bin or args.mem_tool
 
-    # --auto requires the workspace directory to be a git repo root
-    if args.auto:
-        is_root, reason = _check_git_repo_root(workspace)
-        if not is_root:
-            print(f"Error: memark init --auto must be run from a git repository root.", file=sys.stderr)
-            print(f"  {reason}", file=sys.stderr)
+    # init always requires the workspace directory to be a git repo root (not a worktree)
+    is_root, reason = _check_git_repo_root(workspace)
+    if not is_root:
+        print(f"Error: memark init must be run from a git repository root.", file=sys.stderr)
+        print(f"  {reason}", file=sys.stderr)
+        if "worktree" in reason.lower():
+            print(f"  Run 'memark worktree-attach --source-dir <main-repo> --target-dir .' instead.", file=sys.stderr)
+        else:
             print(f"  Please cd to the project root directory, or run 'git init' first.", file=sys.stderr)
-            return 1
+        return 1
 
     # Step 1: Create workspace
     config = create_workspace(
