@@ -140,7 +140,7 @@ MemArk 关心的正是这条链路：
 
 `project wing -> room -> drawer metadata + text -> promoted markdown`
 
-更完整的隔离与晋升规则见 [`docs/GOVERNANCE_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/GOVERNANCE_MODEL.md)。
+更完整的隔离与晋升规则见 [`docs/GOVERNANCE_MODEL.md`](<repo-root>/docs/GOVERNANCE_MODEL.md)。
 
 ## 当前仓库状态
 
@@ -148,8 +148,8 @@ MemArk 关心的正是这条链路：
 
 - 正式 README
 - 项目治理模型
-- 一个生产安装入口 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
-- 一个开发期安装测试入口 [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)
+- 一个生产安装入口 [`SKILL.md`](<repo-root>/SKILL.md)
+- 一个开发期安装测试入口 [`skill-dev.md`](<repo-root>/skill-dev.md)
 - 一个用户级 runtime 安装器：`memark install`
 - 一个用户级健康检查入口：`memark doctor`
 - 一套可下发到 AI 工具目录的 `MemArk` skill bundle

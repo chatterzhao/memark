@@ -36,7 +36,7 @@ python3 -m memark milestones --workspace .
 
 定义文件：
 
-- [`docs/MILESTONE_BETA.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_BETA.md)
+- [`docs/MILESTONE_BETA.md`](<repo-root>/docs/MILESTONE_BETA.md)
 
 当前阶段判断：
 
@@ -64,7 +64,7 @@ python3 -m memark milestones --workspace .
 
 定义文件：
 
-- [`docs/MILESTONE_NEXT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_NEXT.md)
+- [`docs/MILESTONE_NEXT.md`](<repo-root>/docs/MILESTONE_NEXT.md)
 
 当前阶段判断：
 
@@ -99,5 +99,5 @@ python3 -m memark milestones --workspace .
   - 已做成什么
   - 还不能宣称什么
 - 里程碑是阶段视角
-- [`docs/FEATURE_LIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/FEATURE_LIST.md) 是组件/能力视角
-- [`docs/DOGFOOD_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_STATUS.md) 是真实验证视角
+- [`docs/FEATURE_LIST.md`](<repo-root>/docs/FEATURE_LIST.md) 是组件/能力视角
+- [`docs/DOGFOOD_STATUS.md`](<repo-root>/docs/DOGFOOD_STATUS.md) 是真实验证视角

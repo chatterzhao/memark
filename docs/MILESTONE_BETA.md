@@ -218,10 +218,10 @@
 如果以“当前仓库先自己吃自己”为优先目标，下一步最值得做的是：
 
 1. 把当前 Beta 作为正式里程碑写进仓库文档入口
-2. 以 [`docs/RELEASE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RELEASE_CHECKLIST.md) 作为每次对外说明或内部推广前的执行清单
+2. 以 [`docs/RELEASE_CHECKLIST.md`](<repo-root>/docs/RELEASE_CHECKLIST.md) 作为每次对外说明或内部推广前的执行清单
 3. 连续观察一段真实后台调度运行结果
-4. 按 [`docs/DOGFOOD_RUNBOOK.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_RUNBOOK.md) 持续运行当前仓库 dogfood
-5. 参考 [`docs/MILESTONE_NEXT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_NEXT.md) 推进下一阶段里程碑
+4. 按 [`docs/DOGFOOD_RUNBOOK.md`](<repo-root>/docs/DOGFOOD_RUNBOOK.md) 持续运行当前仓库 dogfood
+5. 参考 [`docs/MILESTONE_NEXT.md`](<repo-root>/docs/MILESTONE_NEXT.md) 推进下一阶段里程碑
 
 ## 一句话结论
 

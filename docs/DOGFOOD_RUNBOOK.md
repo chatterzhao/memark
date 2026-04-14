@@ -44,7 +44,7 @@ python3 -m memark automation-run --workspace . --no-build --json
 推荐做法：
 
 ```bash
-cd /Users/zhaoyu/Downloads/code/my-memark/memark-dogfood
+cd <repo-root>-dogfood
 git status --short
 git merge develop
 python3 -m memark service-status --workspace . --scheduler launchd --json

@@ -1,26 +1,58 @@
-.DS_Store
+# Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
 .pytest_cache/
 .coverage
+htmlcov/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Virtual environments
 .venv/
 .venv-*/
 .venv-dev/
 .venv-skill-check/
-.experiments/
-graphify-out/
-memark-work/
+venv/
+
+# MemArk runtime state
 .memark/
 .mempalace/
+
+# Sensitive files
+entities.json
+.env
+secrets
+*.secret
+
+# Build artifacts
+graphify-out/
+memark-work/
+.graphify_python
+.graphify_detect.json
+
+# Experiments
+.experiments/
+
+# Corpus runtime artifacts
 corpus/*/.codex/
 corpus/*/AGENTS.md
 corpus/*/documents/
 corpus/*/imports/
 corpus/*/promoted/room-*-rollout-*.md
-.graphify_python
-.graphify_detect.json
-entities.json
+
+# Docs
 docs/raw/
-dist/
-build/
-*.egg-info/

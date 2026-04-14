@@ -50,7 +50,7 @@
 - `palace_drawers` 进一步推进到 `1043`
 - 当前选择是不卸载该 job，让当前仓库继续进入持续 dogfood 观察
 
-对应时间线已追加到 [`docs/DOGFOOD_LOG.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_LOG.md)
+对应时间线已追加到 [`docs/DOGFOOD_LOG.md`](<repo-root>/docs/DOGFOOD_LOG.md)
 
 同一天还补了一个直接从真实 dogfood 中长出来的运维需求：
 
@@ -127,7 +127,7 @@
   - `corpus_status`
   - `onboarding_status`
   - `graph_path`
-  - 推荐上游命令 `/graphify /Users/zhaoyu/Downloads/code/my-memark/memark/corpus/memark --update`
+  - 推荐上游命令 `/graphify <repo-root>/corpus/memark --update`
 
 这意味着当前仓库日常“自己吃自己”时，不用再额外翻 `status` 或 `milestones`，只读 `context` 就能看见 mixed-corpus graph 已经吃通。
 
@@ -137,7 +137,7 @@
 
 证据来源：
 
-- [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)
+- [`docs/INSTALL_VERIFICATION.md`](<repo-root>/docs/INSTALL_VERIFICATION.md)
 
 已真实验证：
 
@@ -155,7 +155,7 @@
 
 证据来源：
 
-- [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)
+- [`docs/INSTALL_VERIFICATION.md`](<repo-root>/docs/INSTALL_VERIFICATION.md)
 
 已真实验证：
 
@@ -175,8 +175,8 @@
 
 证据来源：
 
-- [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)
-- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
+- [`docs/INSTALL_VERIFICATION.md`](<repo-root>/docs/INSTALL_VERIFICATION.md)
+- [`docs/AI_CONSUMPTION_MODEL.md`](<repo-root>/docs/AI_CONSUMPTION_MODEL.md)
 
 已真实验证：
 
@@ -192,8 +192,8 @@
 
 证据来源：
 
-- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
-- [`docs/ACCEPTANCE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/ACCEPTANCE_CHECKLIST.md)
+- [`docs/AI_CONSUMPTION_MODEL.md`](<repo-root>/docs/AI_CONSUMPTION_MODEL.md)
+- [`docs/ACCEPTANCE_CHECKLIST.md`](<repo-root>/docs/ACCEPTANCE_CHECKLIST.md)
 
 已真实验证：
 
@@ -208,7 +208,7 @@
 
 证据来源：
 
-- [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)
+- [`docs/INSTALL_VERIFICATION.md`](<repo-root>/docs/INSTALL_VERIFICATION.md)
 
 已真实验证：
 
@@ -406,9 +406,9 @@
 
 证据来源：
 
-- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
-- [`docs/FEATURE_LIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/FEATURE_LIST.md)
-- [`docs/ACCEPTANCE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/ACCEPTANCE_CHECKLIST.md)
+- [`docs/AI_CONSUMPTION_MODEL.md`](<repo-root>/docs/AI_CONSUMPTION_MODEL.md)
+- [`docs/FEATURE_LIST.md`](<repo-root>/docs/FEATURE_LIST.md)
+- [`docs/ACCEPTANCE_CHECKLIST.md`](<repo-root>/docs/ACCEPTANCE_CHECKLIST.md)
 
 当前已知事实：
 

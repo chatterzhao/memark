@@ -6,16 +6,16 @@
 
 如果要理解当前最新口径，请先读下面几份文档：
 
-- [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)
-- [`docs/MILESTONE_BETA.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_BETA.md)
-- [`docs/MILESTONES.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONES.md)
-- [`docs/MILESTONE_NEXT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_NEXT.md)
-- [`docs/RELEASE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RELEASE_CHECKLIST.md)
-- [`docs/DOGFOOD_RUNBOOK.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_RUNBOOK.md)
-- [`docs/DOGFOOD_LOG.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_LOG.md)
-- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
-- [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)
-- [`docs/DOGFOOD_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_STATUS.md)
+- [`docs/PRODUCT_REQUIREMENTS.md`](<repo-root>/docs/PRODUCT_REQUIREMENTS.md)
+- [`docs/MILESTONE_BETA.md`](<repo-root>/docs/MILESTONE_BETA.md)
+- [`docs/MILESTONES.md`](<repo-root>/docs/MILESTONES.md)
+- [`docs/MILESTONE_NEXT.md`](<repo-root>/docs/MILESTONE_NEXT.md)
+- [`docs/RELEASE_CHECKLIST.md`](<repo-root>/docs/RELEASE_CHECKLIST.md)
+- [`docs/DOGFOOD_RUNBOOK.md`](<repo-root>/docs/DOGFOOD_RUNBOOK.md)
+- [`docs/DOGFOOD_LOG.md`](<repo-root>/docs/DOGFOOD_LOG.md)
+- [`docs/AI_CONSUMPTION_MODEL.md`](<repo-root>/docs/AI_CONSUMPTION_MODEL.md)
+- [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](<repo-root>/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)
+- [`docs/DOGFOOD_STATUS.md`](<repo-root>/docs/DOGFOOD_STATUS.md)
 
 其中：
 
@@ -34,35 +34,35 @@
 
 以下文件是当前仓库的唯一权威入口：
 
-- [`README.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/README.md)
-- [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)
-- [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)
-- [`docs/PROJECT_SCOPE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PROJECT_SCOPE.md)
-- [`docs/GOVERNANCE_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/GOVERNANCE_MODEL.md)
-- [`docs/INTERFACE_CONTRACT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INTERFACE_CONTRACT.md)
-- [`docs/PRODUCT_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/PRODUCT_REQUIREMENTS.md)
-- [`docs/MILESTONE_BETA.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_BETA.md)
-- [`docs/MILESTONES.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONES.md)
-- [`docs/MILESTONE_NEXT.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MILESTONE_NEXT.md)
-- [`docs/RELEASE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RELEASE_CHECKLIST.md)
-- [`docs/DOGFOOD_RUNBOOK.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_RUNBOOK.md)
-- [`docs/DOGFOOD_LOG.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_LOG.md)
-- [`docs/FEATURE_LIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/FEATURE_LIST.md)
-- [`docs/AI_CONSUMPTION_MODEL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AI_CONSUMPTION_MODEL.md)
-- [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)
-- [`docs/DOGFOOD_STATUS.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/DOGFOOD_STATUS.md)
-- [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)
-- [`docs/INSTALL_VERIFICATION.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/INSTALL_VERIFICATION.md)
-- [`docs/IMPLEMENTATION_PLAN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/IMPLEMENTATION_PLAN.md)
-- [`docs/ACCEPTANCE_CHECKLIST.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/ACCEPTANCE_CHECKLIST.md)
+- [`README.md`](<repo-root>/README.md)
+- [`SKILL.md`](<repo-root>/SKILL.md)
+- [`skill-dev.md`](<repo-root>/skill-dev.md)
+- [`docs/PROJECT_SCOPE.md`](<repo-root>/docs/PROJECT_SCOPE.md)
+- [`docs/GOVERNANCE_MODEL.md`](<repo-root>/docs/GOVERNANCE_MODEL.md)
+- [`docs/INTERFACE_CONTRACT.md`](<repo-root>/docs/INTERFACE_CONTRACT.md)
+- [`docs/PRODUCT_REQUIREMENTS.md`](<repo-root>/docs/PRODUCT_REQUIREMENTS.md)
+- [`docs/MILESTONE_BETA.md`](<repo-root>/docs/MILESTONE_BETA.md)
+- [`docs/MILESTONES.md`](<repo-root>/docs/MILESTONES.md)
+- [`docs/MILESTONE_NEXT.md`](<repo-root>/docs/MILESTONE_NEXT.md)
+- [`docs/RELEASE_CHECKLIST.md`](<repo-root>/docs/RELEASE_CHECKLIST.md)
+- [`docs/DOGFOOD_RUNBOOK.md`](<repo-root>/docs/DOGFOOD_RUNBOOK.md)
+- [`docs/DOGFOOD_LOG.md`](<repo-root>/docs/DOGFOOD_LOG.md)
+- [`docs/FEATURE_LIST.md`](<repo-root>/docs/FEATURE_LIST.md)
+- [`docs/AI_CONSUMPTION_MODEL.md`](<repo-root>/docs/AI_CONSUMPTION_MODEL.md)
+- [`docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md`](<repo-root>/docs/AUTOMATION_CONSUMPTION_REQUIREMENTS.md)
+- [`docs/DOGFOOD_STATUS.md`](<repo-root>/docs/DOGFOOD_STATUS.md)
+- [`docs/CODEX_SESSION_INGEST_DESIGN.md`](<repo-root>/docs/CODEX_SESSION_INGEST_DESIGN.md)
+- [`docs/INSTALL_VERIFICATION.md`](<repo-root>/docs/INSTALL_VERIFICATION.md)
+- [`docs/IMPLEMENTATION_PLAN.md`](<repo-root>/docs/IMPLEMENTATION_PLAN.md)
+- [`docs/ACCEPTANCE_CHECKLIST.md`](<repo-root>/docs/ACCEPTANCE_CHECKLIST.md)
 
 它们用于回答“MemArk 是什么、当前仓库已经实现到哪里、AI 助手该如何理解这些材料”。
 
-[`docs/MAINTAINER_SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/MAINTAINER_SKILL.md) 是维护说明，不是用户入口。
+[`docs/MAINTAINER_SKILL.md`](<repo-root>/docs/MAINTAINER_SKILL.md) 是维护说明，不是用户入口。
 
 ## 研究归档
 
-[`docs/raw/`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/raw) 保存的是研究过程，不是并列正式版本。
+[`docs/raw/`](<repo-root>/docs/raw) 保存的是研究过程，不是并列正式版本。
 
 建议按以下方式理解 `a-f`：
 
@@ -82,7 +82,7 @@
 
 ## 最终裁定来源
 
-当前最重要的判断依据是 [`docs/raw/最终评审.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/raw/最终评审.md)。
+当前最重要的判断依据是 [`docs/raw/最终评审.md`](<repo-root>/docs/raw/最终评审.md)。
 
 它已经明确了三件事：
 

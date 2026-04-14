@@ -4,7 +4,7 @@ This repository follows a strict branch-to-worktree mapping.
 
 ## Required Layout
 
-- The main worktree at `/Users/zhaoyu/Downloads/code/my-memark/memark` must stay on `develop`.
+- The main worktree at `<repo-root>` must stay on `develop`.
 - Any feature branch must use its own dedicated worktree.
 - Dogfood branches must use their own dedicated worktree.
 - Research branches must use their own dedicated worktree.
@@ -12,13 +12,13 @@ This repository follows a strict branch-to-worktree mapping.
 ## Current Intended Mapping
 
 - Main development baseline:
-  - worktree: `/Users/zhaoyu/Downloads/code/my-memark/memark`
+  - worktree: `<repo-root>`
   - branch: `develop`
 - Dogfood runtime:
-  - worktree: `/Users/zhaoyu/Downloads/code/my-memark/memark-dogfood`
+  - worktree: `<repo-root>-dogfood`
   - branch: `dogfood/runtime`
 - Research:
-  - worktree: `/Users/zhaoyu/Downloads/code/my-memark/memark-research-mempal`
+  - worktree: `<repo-root>-research-mempal`
   - branch: `research/mempal-evaluation`
 
 ## Operating Rules

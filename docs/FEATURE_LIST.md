@@ -4,9 +4,9 @@
 
 依据文件：
 
-- [`docs/RESEARCH_MEMPALACE_USAGE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RESEARCH_MEMPALACE_USAGE.md)
-- [`docs/RESEARCH_GRAPHIFY_USAGE.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/RESEARCH_GRAPHIFY_USAGE.md)
-- [`docs/CODEX_SESSION_INGEST_DESIGN.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/docs/CODEX_SESSION_INGEST_DESIGN.md)
+- [`docs/RESEARCH_MEMPALACE_USAGE.md`](<repo-root>/docs/RESEARCH_MEMPALACE_USAGE.md)
+- [`docs/RESEARCH_GRAPHIFY_USAGE.md`](<repo-root>/docs/RESEARCH_GRAPHIFY_USAGE.md)
+- [`docs/CODEX_SESSION_INGEST_DESIGN.md`](<repo-root>/docs/CODEX_SESSION_INGEST_DESIGN.md)
 
 ## 产品定位
 
@@ -50,7 +50,7 @@
 
 说明：
 
-- 根目录 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md) 不再只是“当前项目临时安装说明”
+- 根目录 [`SKILL.md`](<repo-root>/SKILL.md) 不再只是“当前项目临时安装说明”
 - 它应是用户提供给 AI 工具的生产安装入口
 - 它的目标是把一整组 `MemArk` skills 和运行脚本安装到用户 AI 工具的 skill 目录
 - 安装后，AI 工具应能在用户任意项目对话中自动使用 `MemArk`
@@ -77,7 +77,7 @@
   - `memark doctor`
   - 安装后 launcher `~/.agents/skills/memark/bin/memark`
 - 已实现开发期隔离验收入口：
-  - [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md)
+  - [`skill-dev.md`](<repo-root>/skill-dev.md)
 
 当前文档中应删除的旧假设：
 

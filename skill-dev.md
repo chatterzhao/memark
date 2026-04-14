@@ -17,7 +17,7 @@ description: Development-stage installer skill for isolated fake-HOME reset, rep
 - 在不污染真实 `HOME` 的前提下做完整安装
 - 回归测试 `memark install` 与 `memark doctor`
 
-正式入口仍然是 [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md)。
+正式入口仍然是 [`SKILL.md`](<repo-root>/SKILL.md)。
 
 ## Dev 默认策略
 
@@ -140,6 +140,6 @@ New-Item -ItemType Directory -Force -Path $env:HOME | Out-Null
 
 ## 与正式入口的关系
 
-- [`SKILL.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/SKILL.md) 面向用户机器上的正式安装
-- [`skill-dev.md`](/Users/zhaoyu/Downloads/code/my-memark/memark/skill-dev.md) 面向开发期隔离验证
+- [`SKILL.md`](<repo-root>/SKILL.md) 面向用户机器上的正式安装
+- [`skill-dev.md`](<repo-root>/skill-dev.md) 面向开发期隔离验证
 - 两者都只负责安装与验证，不负责项目接入
