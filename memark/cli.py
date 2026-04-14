@@ -969,12 +969,12 @@ def cmd_init(args: argparse.Namespace) -> int:
     # init always requires the workspace directory to be a git repo root (not a worktree)
     is_root, reason = _check_git_repo_root(workspace)
     if not is_root:
-        print(f"Error: memark init must be run from a git repository root.", file=sys.stderr)
+        print("Error: memark init must be run from a git repository root.", file=sys.stderr)
         print(f"  {reason}", file=sys.stderr)
         if "worktree" in reason.lower():
-            print(f"  Run 'memark worktree-attach --source-dir <main-repo> --target-dir .' instead.", file=sys.stderr)
+            print("  Run 'memark worktree-attach --source-dir <main-repo> --target-dir .' instead.", file=sys.stderr)
         else:
-            print(f"  Please cd to the project root directory, or run 'git init' first.", file=sys.stderr)
+            print("  Please cd to the project root directory, or run 'git init' first.", file=sys.stderr)
         return 1
 
     # Step 1: Create workspace
