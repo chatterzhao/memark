@@ -155,6 +155,28 @@ def resolve_workspace(path: str | None) -> Path:
     return Path(path).expanduser().resolve()
 
 
+def _ensure_gitignore(workspace: Path) -> None:
+    """Add .memark/ to .gitignore if the workspace is a git repo and it's not already ignored."""
+    gitignore = workspace / ".gitignore"
+    entry = ".memark/"
+
+    # Check if already in .gitignore
+    if gitignore.exists():
+        content = gitignore.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            if line.strip() == entry or line.strip() == ".memark":
+                return  # Already present
+
+    # Append .memark/ entry
+    with gitignore.open("a", encoding="utf-8") as f:
+        # Add a blank line separator if file is non-empty and doesn't end with newline
+        if gitignore.exists():
+            content = gitignore.read_text(encoding="utf-8")
+            if content and not content.endswith("\n"):
+                f.write("\n")
+        f.write(f"\n# MemArk local runtime state\n{entry}\n")
+
+
 def create_workspace(
     workspace: Path,
     project: str,
@@ -191,6 +213,10 @@ def create_workspace(
     )
     if not config.projects_file.exists():
         config.projects_file.write_text("version = 1\n", encoding="utf-8")
+
+    # Ensure .memark/ is listed in .gitignore
+    _ensure_gitignore(workspace)
+
     return config
 
 

@@ -146,6 +146,34 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
 
+    def test_init_adds_memark_to_gitignore(self) -> None:
+        """init should add .memark/ to .gitignore."""
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        gitignore = self.workspace / ".gitignore"
+        self.assertTrue(gitignore.exists())
+        content = gitignore.read_text(encoding="utf-8")
+        self.assertIn(".memark/", content)
+
+    def test_init_does_not_duplicate_gitignore_entry(self) -> None:
+        """init should not add .memark/ to .gitignore if already present."""
+        gitignore = self.workspace / ".gitignore"
+        gitignore.write_text(".memark/\n", encoding="utf-8")
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        content = gitignore.read_text(encoding="utf-8")
+        self.assertEqual(content.count(".memark/"), 1)
+
+    def test_init_appends_to_existing_gitignore(self) -> None:
+        """init should append .memark/ to an existing .gitignore."""
+        gitignore = self.workspace / ".gitignore"
+        gitignore.write_text("node_modules/\n*.pyc\n", encoding="utf-8")
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        content = gitignore.read_text(encoding="utf-8")
+        self.assertIn("node_modules/", content)
+        self.assertIn(".memark/", content)
+
     def test_init_rejects_git_worktree(self) -> None:
         """init must reject a git worktree directory and suggest worktree-attach."""
         # Create a main repo and a worktree
