@@ -42,8 +42,11 @@ class MemArkCliTests(unittest.TestCase):
         self.workspace.mkdir(parents=True, exist_ok=True)
         # Most tests require a git repo root for init
         subprocess.run(["git", "init"], cwd=self.workspace, capture_output=True, check=True)
+        # Prevent tests from installing real launchd services
+        os.environ["MEMARK_SKIP_SERVICE"] = "1"
 
     def tearDown(self) -> None:
+        os.environ.pop("MEMARK_SKIP_SERVICE", None)
         self.tmpdir.cleanup()
 
     def _write_mempal_drawers(
@@ -83,7 +86,7 @@ class MemArkCliTests(unittest.TestCase):
             conn.close()
 
     def test_init_creates_workspace_layout(self) -> None:
-        result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
         self.assertTrue((self.workspace / ".memark" / "projects.toml").exists())
@@ -99,30 +102,30 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn(f'path = "{self.workspace.resolve()}"', projects_toml)
 
     def test_init_can_select_mempal_tool(self) -> None:
-        result = run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["mem_tool"], "mempal")
         self.assertEqual(Path(payload["mem_tool_bin"]).name, "mempal")
         self.assertIn("Project: memark", result.stdout)
 
-    def test_init_auto_rejects_non_git_directory(self) -> None:
+    def test_init_rejects_non_git_directory(self) -> None:
         """init must fail if the workspace dir is not a git repo root."""
         non_git = Path(self.tmpdir.name) / "non_git"
         non_git.mkdir()
-        result = run_cli("init", str(non_git), "--auto", cwd=ROOT)
+        result = run_cli("init", str(non_git), cwd=ROOT)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("git repository root", result.stderr)
 
-    def test_init_rejects_non_git_directory_without_auto(self) -> None:
-        """init without --auto must also fail on non-git directories."""
+    def test_init_no_auto_rejects_non_git_directory(self) -> None:
+        """init --no-auto must also fail on non-git directories."""
         non_git = Path(self.tmpdir.name) / "non_git2"
         non_git.mkdir()
-        result = run_cli("init", str(non_git), "--project", "MemArk", cwd=ROOT)
+        result = run_cli("init", str(non_git), "--no-auto", cwd=ROOT)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("git repository root", result.stderr)
 
-    def test_init_auto_rejects_git_subdirectory(self) -> None:
+    def test_init_rejects_git_subdirectory(self) -> None:
         """init must fail if cwd is inside a git repo but not at the root."""
         # self.workspace is a temp dir; make it a subdirectory of a git repo
         git_root = self.workspace.parent / "git_root"
@@ -130,25 +133,27 @@ class MemArkCliTests(unittest.TestCase):
         subprocess.run(["git", "init"], cwd=git_root, capture_output=True, check=True)
         sub = git_root / "subdir"
         sub.mkdir()
-        result = run_cli("init", str(sub), "--auto", cwd=ROOT)
+        result = run_cli("init", str(sub), cwd=ROOT)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("git repository root", result.stderr)
 
-    def test_init_auto_accepts_git_root(self) -> None:
-        """--auto should succeed when the workspace dir is a git repo root."""
-        result = run_cli("init", str(self.workspace), "--auto", "--no-service", "--no-run", cwd=ROOT)
+    def test_init_accepts_git_root(self) -> None:
+        """init should succeed when the workspace dir is a git repo root."""
+        result = run_cli("init", str(self.workspace), "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
 
-    def test_init_accepts_git_root_without_auto(self) -> None:
-        """init without --auto should succeed on a git repo root."""
-        result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+    def test_init_no_auto_accepts_git_root(self) -> None:
+        """init --no-auto should succeed on a git repo root."""
+        result = run_cli("init", str(self.workspace), "--no-auto", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
+        # --no-auto should output minimal setup hint
+        self.assertIn("Minimal init completed", result.stdout)
 
     def test_init_adds_memark_to_gitignore(self) -> None:
         """init should add .memark/ to .gitignore."""
-        result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         gitignore = self.workspace / ".gitignore"
         self.assertTrue(gitignore.exists())
@@ -159,7 +164,7 @@ class MemArkCliTests(unittest.TestCase):
         """init should not add .memark/ to .gitignore if already present."""
         gitignore = self.workspace / ".gitignore"
         gitignore.write_text(".memark/\n", encoding="utf-8")
-        result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         content = gitignore.read_text(encoding="utf-8")
         self.assertEqual(content.count(".memark/"), 1)
@@ -168,7 +173,7 @@ class MemArkCliTests(unittest.TestCase):
         """init should append .memark/ to an existing .gitignore."""
         gitignore = self.workspace / ".gitignore"
         gitignore.write_text("node_modules/\n*.pyc\n", encoding="utf-8")
-        result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         content = gitignore.read_text(encoding="utf-8")
         self.assertIn("node_modules/", content)
@@ -186,7 +191,7 @@ class MemArkCliTests(unittest.TestCase):
             ["git", "worktree", "add", str(worktree_dir), "-b", "test-branch"],
             cwd=main_repo, capture_output=True, check=True,
         )
-        result = run_cli("init", str(worktree_dir), "--auto", cwd=ROOT)
+        result = run_cli("init", str(worktree_dir), cwd=ROOT)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("worktree", result.stderr.lower())
         self.assertIn("worktree-attach", result.stderr)
@@ -326,7 +331,7 @@ class MemArkCliTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Next steps:", result.stdout)
-        self.assertIn("init . --auto", result.stdout)
+        self.assertIn("init", result.stdout)
 
     def test_doctor_reports_missing_runtime(self) -> None:
         fake_home = Path(self.tmpdir.name) / "home"

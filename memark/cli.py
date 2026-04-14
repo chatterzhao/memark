@@ -254,7 +254,7 @@ def _build_parser() -> argparse.ArgumentParser:
         target.add_argument("--dry-run", action="store_true", help="Print the memory-tool command without executing it")
         target.add_argument("--json", action="store_true", help="Render machine-readable JSON")
 
-    init_parser = subparsers.add_parser("init", help="Create a MemArk workspace and optionally complete all setup in one step")
+    init_parser = subparsers.add_parser("init", help="Initialize MemArk workspace with full automated setup")
     init_parser.add_argument("workspace", nargs="?", default=".", help="Workspace directory (default: current directory)")
     init_parser.add_argument("--project", help="Project slug (default: directory name)")
     init_parser.add_argument("--graphify-bin", default="graphify", help="Graphify executable name")
@@ -262,17 +262,22 @@ def _build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--mem-tool-bin", help="Memory tool executable name")
     init_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
     init_parser.add_argument(
+        "--no-auto",
+        action="store_true",
+        help="Only create workspace and register project; skip scheduler install and automation cycle",
+    )
+    init_parser.add_argument(
         "--auto",
         action="store_true",
-        help="Non-interactive mode: auto-infer all parameters, register project, install scheduler, and run one automation cycle",
-    )
+        help=argparse.SUPPRESS,
+    )  # deprecated: auto is now the default; kept for backward compatibility
     init_parser.add_argument(
         "--sessions-root",
         default="~/.codex/sessions",
         help="Root directory for Codex session files (default: ~/.codex/sessions)",
     )
-    init_parser.add_argument("--no-service", action="store_true", help="Skip scheduler installation (only used with --auto)")
-    init_parser.add_argument("--no-run", action="store_true", help="Skip initial automation-run (only used with --auto)")
+    init_parser.add_argument("--no-service", action="store_true", help="Skip scheduler installation")
+    init_parser.add_argument("--no-run", action="store_true", help="Skip initial automation-run")
     init_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     init_parser.set_defaults(func=cmd_init)
 
@@ -1001,30 +1006,26 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"Project: {config.default_project}")
         print(f"Sessions root: {args.sessions_root}")
 
-    if not args.auto and not args.json:
-        # Interactive hint: tell the user how to do it non-interactively
+    if args.no_auto and not args.json:
+        # Minimal mode: only workspace + project registration, skip scheduler and automation
         memark_bin = _resolve_memark_bin()
-        non_interactive_cmd = (
-            f"{shlex.quote(memark_bin)} init . --auto"
-        )
         print("")
-        print(f"To complete setup non-interactively, press Ctrl+C and run: {non_interactive_cmd}")
-        print("Or continue manually with:")
-        print(f"  {shlex.quote(memark_bin)} project-set --workspace . --project {config.default_project} --path . --sessions-root {args.sessions_root}")
+        print("Minimal init completed. To complete setup, run:")
         print(f"  {shlex.quote(memark_bin)} service-install --workspace .")
         print(f"  {shlex.quote(memark_bin)} automation-run --workspace .")
         return 0
 
-    # --auto path: complete all remaining setup steps
+    # Default auto path: complete all remaining setup steps
     if args.json:
         # Still output init result, but continue
         pass
     else:
         print("")
 
-    # Step 3: Install scheduler (unless --no-service)
+    # Step 3: Install scheduler (unless --no-service or env override)
     service_installed = False
-    if not args.no_service:
+    skip_service = args.no_service or os.environ.get("MEMARK_SKIP_SERVICE", "").strip() in ("1", "true", "yes")
+    if not skip_service:
         try:
             scheduler = resolve_scheduler("auto")
             if scheduler == "launchd":
@@ -1044,9 +1045,10 @@ def cmd_init(args: argparse.Namespace) -> int:
             if not args.json:
                 print(f"Scheduler install skipped: {exc}")
 
-    # Step 4: Run one automation cycle (unless --no-run)
+    # Step 4: Run one automation cycle (unless --no-run or env override)
     cycle_result = None
-    if not args.no_run:
+    skip_run = args.no_run or os.environ.get("MEMARK_SKIP_SERVICE", "").strip() in ("1", "true", "yes")
+    if not skip_run:
         try:
             cycle_results = run_automation_cycle(
                 config=config,
@@ -1114,17 +1116,14 @@ def _install_next_step_lines(*, memark_bin: Path, symlinked: list[str] | None = 
     command = "memark" if use_bare else shlex.quote(str(memark_bin))
     return [
         "Next steps:",
-        f"- In your project directory, run: {command} init . --auto",
+        f"- In your project directory, run: {command} init",
         "  This will create a workspace, register the project, install the scheduler, and run one automation cycle.",
         "",
-        "If you prefer manual step-by-step setup:",
-        f"  {command} init . --project \"$(basename \"$PWD\")\"",
-        f"  {command} project-set --workspace . --sessions-root ~/.codex/sessions",
-        f"  {command} service-install --workspace .",
-        f"  {command} automation-run --workspace .",
+        "If you prefer minimal setup (skip scheduler and automation):",
+        f"  {command} init --no-auto",
         "",
         "Non-interactive (for AI tools and scripts):",
-        f"  {command} init . --auto --json",
+        f"  {command} init --json",
     ]
 
 

@@ -1,11 +1,26 @@
 # MemArk
 
-> 把 `MemPalace` 里的项目记忆，整理成 `Graphify` 最适合消费的项目语料。
+> **自动串联 MemPalace 记忆和 Graphify 图谱——安装后，在任何项目执行 `memark init` 即可。**
 
 上游项目：
 
 - `MemPalace` GitHub: <https://github.com/milla-jovovich/mempalace>
 - `Graphify` GitHub: <https://github.com/safishamsi/graphify>
+
+## 快速开始
+
+```bash
+# 安装 MemArk
+python3 -m venv .memark-bootstrap
+.memark-bootstrap/bin/python -m pip install .
+.memark-bootstrap/bin/python -m memark install --platform codex --source-spec "$(pwd)"
+
+# 在任何项目目录接入
+cd your-project
+memark init
+```
+
+`memark init` 一条命令完成：创建 workspace → 注册项目 → 安装后台调度 → 运行首轮自动化 cycle。
 
 ## 平台支持
 
@@ -331,27 +346,27 @@
 
 如果你希望某个仓库自己带一份独立状态：
 
-- 就在该仓库根目录执行 `memark init . --auto`，一键完成所有设置
-- 或者逐步执行：`memark init .` → `memark project-set` → `memark service-install` → `memark automation-run`
+- 就在该仓库根目录执行 `memark init`，一键完成所有设置
+- 如果只想创建 workspace，用 `memark init --no-auto`，再逐步执行后续步骤
 
 所以更准确的结论是：
 
 - 一台机器通常只需要做一次 `memark install`
-- 一个新的项目用 `memark init . --auto` 一键接入
-- 如果需要逐步控制，再分别执行 `memark init`、`memark project-set`、`memark service-install`、`memark automation-run`
+- 一个新的项目用 `memark init` 一键接入
+- 如果需要逐步控制，用 `memark init --no-auto`，再分别执行 `memark service-install`、`memark automation-run`
 
 ### 常见接法
 
 单仓库就地接入（推荐）：
 
 ```bash
-~/.memark/venv/bin/memark init . --auto
+~/.memark/venv/bin/memark init
 ```
 
 逐步控制：
 
 ```bash
-~/.memark/venv/bin/memark init . --project myproject
+~/.memark/venv/bin/memark init --no-auto --project myproject
 ~/.memark/venv/bin/memark project-set \
   --workspace . \
   --project myproject \
@@ -364,7 +379,7 @@
 共享 workspace 管多个项目：
 
 ```bash
-~/.memark/venv/bin/memark init ~/memark-work --auto
+~/.memark/venv/bin/memark init ~/memark-work
 # 后续新增项目只需：
 ~/.memark/venv/bin/memark project-set \
   --workspace ~/memark-work \
