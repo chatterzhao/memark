@@ -910,11 +910,46 @@ def _infer_single_project_from_results(results, fallback_project: str) -> str:
     return slugify(projects[0])
 
 
+def _check_git_repo_root(directory: Path) -> tuple[bool, str]:
+    """Check if *directory* is the root of a git repository.
+
+    Returns (is_root, reason).
+    """
+    git_dir = directory / ".git"
+    if git_dir.exists():
+        return True, ""
+    # Not a git repo at all — check if a parent is
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            cwd=str(directory),
+            timeout=5,
+        )
+        if result.returncode == 0:
+            toplevel = result.stdout.strip()
+            if toplevel and Path(toplevel).resolve() != directory.resolve():
+                return False, f"Current directory is inside a git repository rooted at {toplevel}, not at the repository root."
+        return False, "Current directory is not a git repository."
+    except FileNotFoundError:
+        return False, "git is not installed or not on PATH."
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     workspace = resolve_workspace(args.workspace)
     project_name = args.project or workspace.name
     project_slug = slugify(project_name)
     mem_tool_bin = args.mem_tool_bin or args.mempalace_bin or args.mem_tool
+
+    # --auto requires the workspace directory to be a git repo root
+    if args.auto:
+        is_root, reason = _check_git_repo_root(workspace)
+        if not is_root:
+            print(f"Error: memark init --auto must be run from a git repository root.", file=sys.stderr)
+            print(f"  {reason}", file=sys.stderr)
+            print(f"  Please cd to the project root directory, or run 'git init' first.", file=sys.stderr)
+            return 1
 
     # Step 1: Create workspace
     config = create_workspace(

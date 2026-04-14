@@ -103,6 +103,37 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(Path(payload["mem_tool_bin"]).name, "mempal")
         self.assertIn("Project: memark", result.stdout)
 
+    def test_init_auto_rejects_non_git_directory(self) -> None:
+        """--auto must fail if the workspace dir is not a git repo root."""
+        result = run_cli("init", str(self.workspace), "--auto", cwd=ROOT)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("git repository root", result.stderr)
+
+    def test_init_auto_rejects_git_subdirectory(self) -> None:
+        """--auto must fail if cwd is inside a git repo but not at the root."""
+        # self.workspace is a temp dir; make it a subdirectory of a git repo
+        git_root = self.workspace.parent / "git_root"
+        git_root.mkdir()
+        subprocess.run(["git", "init"], cwd=git_root, capture_output=True, check=True)
+        sub = git_root / "subdir"
+        sub.mkdir()
+        result = run_cli("init", str(sub), "--auto", cwd=ROOT)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("git repository root", result.stderr)
+
+    def test_init_auto_accepts_git_root(self) -> None:
+        """--auto should succeed when the workspace dir is a git repo root."""
+        subprocess.run(["git", "init"], cwd=self.workspace, capture_output=True, check=True)
+        result = run_cli("init", str(self.workspace), "--auto", "--no-service", "--no-run", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.workspace / ".memark" / "config.json").exists())
+
+    def test_init_without_auto_allows_non_git(self) -> None:
+        """Without --auto, init should still work on non-git directories."""
+        result = run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((self.workspace / ".memark" / "config.json").exists())
+
     def test_load_workspace_prefers_user_runtime_binaries(self) -> None:
         with (
             mock.patch("memark.workspace.shutil.which", return_value=None),
