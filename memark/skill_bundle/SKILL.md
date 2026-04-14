@@ -42,13 +42,21 @@ When starting work on a new project, first check installation health:
 "$MEMARK_BIN" doctor --platform auto
 ```
 
-For project intake and cycle runs, prefer the default `mempalace` path:
+For project setup, the simplest path is:
 
 ```bash
-"$MEMARK_BIN" init "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT"
-"$MEMARK_BIN" project-set --workspace "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT" --path "$PWD" --sessions-root "$MEMARK_SESSIONS_ROOT"
-"$MEMARK_BIN" service-install --workspace "$MEMARK_WORKSPACE"
-"$MEMARK_BIN" automation-run --workspace "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT"
+"$MEMARK_BIN" init . --auto
+```
+
+That single command creates a workspace, registers the project, installs the background scheduler, and runs one automation cycle. After that, everything runs automatically.
+
+If you need more control:
+
+```bash
+"$MEMARK_BIN" init . --project "$MEMARK_PROJECT"
+"$MEMARK_BIN" project-set --workspace . --sessions-root "$MEMARK_SESSIONS_ROOT"
+"$MEMARK_BIN" service-install --workspace .
+"$MEMARK_BIN" automation-run --workspace . --project "$MEMARK_PROJECT"
 ```
 
 When starting a concrete task inside one project, load the prepared context first:
@@ -140,8 +148,7 @@ That command copies directory-local `.memark`, memory-tool config such as `.memp
 Optional `mempal` backend:
 
 ```bash
-"$MEMARK_BIN" init "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT" --mem-tool mempal
-"$MEMARK_BIN" project-set --workspace "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT" --path "$PWD" --sessions-root "$MEMARK_SESSIONS_ROOT"
+"$MEMARK_BIN" init . --auto --mem-tool mempal
 ```
 
 That path is still CLI-first and non-interactive, but MemArk will generate a workspace-local starter config at `.memark/palaces/<project>/.mempal-home-<project>/.mempal/config.toml` on first mine. The starter config defaults to `backend = "api"` with `http://localhost:11434/api/embeddings` and `nomic-embed-text` so install does not block on model downloads. If no compatible embedding API is available yet, edit that generated config before `automation-run`, `projects-run`, or `mem-tool-mine`.

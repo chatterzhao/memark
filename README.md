@@ -327,18 +327,24 @@
 
 如果你希望某个仓库自己带一份独立状态：
 
-- 就在该仓库根目录执行 `memark init . --project <name>`
-- 然后再执行 `memark project-set`
+- 就在该仓库根目录执行 `memark init . --auto`，一键完成所有设置
+- 或者逐步执行：`memark init .` → `memark project-set` → `memark service-install` → `memark automation-run`
 
 所以更准确的结论是：
 
 - 一台机器通常只需要做一次 `memark install`
-- 一个新的 workspace 需要做一次 `memark init`
-- 一个新的项目目录需要做一次 `memark project-set`
+- 一个新的项目用 `memark init . --auto` 一键接入
+- 如果需要逐步控制，再分别执行 `memark init`、`memark project-set`、`memark service-install`、`memark automation-run`
 
 ### 常见接法
 
-单仓库就地接入：
+单仓库就地接入（推荐）：
+
+```bash
+~/.memark/venv/bin/memark init . --auto
+```
+
+逐步控制：
 
 ```bash
 ~/.memark/venv/bin/memark init . --project myproject
@@ -347,19 +353,20 @@
   --project myproject \
   --path "$(pwd)" \
   --sessions-root ~/.codex/sessions
+~/.memark/venv/bin/memark service-install --workspace .
 ~/.memark/venv/bin/memark automation-run --workspace . --no-build
 ```
 
 共享 workspace 管多个项目：
 
 ```bash
-~/.memark/venv/bin/memark init ~/memark-work --project default
+~/.memark/venv/bin/memark init ~/memark-work --auto
+# 后续新增项目只需：
 ~/.memark/venv/bin/memark project-set \
   --workspace ~/memark-work \
   --project myproject \
   --path /abs/path/to/project \
   --sessions-root ~/.codex/sessions
-~/.memark/venv/bin/memark automation-run --workspace ~/memark-work --project myproject --no-build
 ```
 
 ## 当前 CLI 怎么用

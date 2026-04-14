@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -253,13 +254,26 @@ def _build_parser() -> argparse.ArgumentParser:
         target.add_argument("--dry-run", action="store_true", help="Print the memory-tool command without executing it")
         target.add_argument("--json", action="store_true", help="Render machine-readable JSON")
 
-    init_parser = subparsers.add_parser("init", help="Create a MemArk workspace")
-    init_parser.add_argument("workspace", nargs="?", default=".", help="Workspace directory")
-    init_parser.add_argument("--project", default="default", help="Default project slug")
+    init_parser = subparsers.add_parser("init", help="Create a MemArk workspace and optionally complete all setup in one step")
+    init_parser.add_argument("workspace", nargs="?", default=".", help="Workspace directory (default: current directory)")
+    init_parser.add_argument("--project", help="Project slug (default: directory name)")
     init_parser.add_argument("--graphify-bin", default="graphify", help="Graphify executable name")
     init_parser.add_argument("--mem-tool", choices=("mempalace", "mempal"), default="mempalace", help="Memory tool implementation")
     init_parser.add_argument("--mem-tool-bin", help="Memory tool executable name")
     init_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
+    init_parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Non-interactive mode: auto-infer all parameters, register project, install scheduler, and run one automation cycle",
+    )
+    init_parser.add_argument(
+        "--sessions-root",
+        default="~/.codex/sessions",
+        help="Root directory for Codex session files (default: ~/.codex/sessions)",
+    )
+    init_parser.add_argument("--no-service", action="store_true", help="Skip scheduler installation (only used with --auto)")
+    init_parser.add_argument("--no-run", action="store_true", help="Skip initial automation-run (only used with --auto)")
+    init_parser.add_argument("--json", action="store_true", help="Render machine-readable JSON")
     init_parser.set_defaults(func=cmd_init)
 
     install_parser = subparsers.add_parser(
@@ -608,11 +622,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Create or update a tracked-path registry entry for single-cycle sync and mine orchestration",
     )
     project_set_parser.add_argument("--workspace", default=".", help="Workspace directory")
-    project_set_parser.add_argument("--project", required=True, help="Project slug")
+    project_set_parser.add_argument("--project", help="Project slug (default: workspace directory name)")
     project_set_parser.add_argument(
         "--path",
         dest="tracked_path",
-        help="Tracked directory path used to match session_meta.payload.cwd",
+        help="Tracked directory path (default: workspace directory)",
     )
     project_set_parser.add_argument(
         "--root",
@@ -898,32 +912,133 @@ def _infer_single_project_from_results(results, fallback_project: str) -> str:
 
 def cmd_init(args: argparse.Namespace) -> int:
     workspace = resolve_workspace(args.workspace)
+    project_name = args.project or workspace.name
+    project_slug = slugify(project_name)
     mem_tool_bin = args.mem_tool_bin or args.mempalace_bin or args.mem_tool
+
+    # Step 1: Create workspace
     config = create_workspace(
         workspace=workspace,
-        project=args.project,
+        project=project_slug,
         graphify_bin=args.graphify_bin,
         mem_tool=args.mem_tool,
         mem_tool_bin=mem_tool_bin,
     )
+
+    # Step 2: Register project with auto-inferred path
     upsert_project_profile(
         config.projects_file,
         ProjectProfile(
             name=config.default_project,
             path=str(config.workspace),
-            sessions_root="~/.codex/sessions",
+            sessions_root=args.sessions_root,
         ),
     )
-    print(f"Initialized MemArk workspace: {config.workspace}")
-    print(f"Default project: {config.default_project}")
-    print(f"Inbox: {config.inbox_dir}")
-    print(f"Inbox promoted: {config.inbox_promoted_dir}")
-    print(f"Inbox documents: {config.inbox_documents_dir}")
-    print(f"Corpus: {config.corpus_project_dir()}")
-    print(f"Mem tool: {config.mem_tool}")
-    print(f"Mem tool bin: {config.mem_tool_bin}")
-    print(f"Registered project: {config.default_project}")
+
+    if not args.json:
+        print(f"Initialized MemArk workspace: {config.workspace}")
+        print(f"Project: {config.default_project}")
+        print(f"Sessions root: {args.sessions_root}")
+
+    if not args.auto and not args.json:
+        # Interactive hint: tell the user how to do it non-interactively
+        memark_bin = _resolve_memark_bin()
+        non_interactive_cmd = (
+            f"{shlex.quote(memark_bin)} init . --auto"
+        )
+        print("")
+        print(f"To complete setup non-interactively, press Ctrl+C and run: {non_interactive_cmd}")
+        print("Or continue manually with:")
+        print(f"  {shlex.quote(memark_bin)} project-set --workspace . --project {config.default_project} --path . --sessions-root {args.sessions_root}")
+        print(f"  {shlex.quote(memark_bin)} service-install --workspace .")
+        print(f"  {shlex.quote(memark_bin)} automation-run --workspace .")
+        return 0
+
+    # --auto path: complete all remaining setup steps
+    if args.json:
+        # Still output init result, but continue
+        pass
+    else:
+        print("")
+
+    # Step 3: Install scheduler (unless --no-service)
+    service_installed = False
+    if not args.no_service:
+        try:
+            scheduler = resolve_scheduler("auto")
+            if scheduler == "launchd":
+                service_result = install_launchd_service(
+                    workspace,
+                    project=None,
+                    interval_seconds=300,
+                )
+                service_installed = True
+                if not args.json:
+                    print(f"Scheduler installed: {service_result.label}")
+                    print(f"  Interval: {service_result.interval_seconds}s")
+            else:
+                if not args.json:
+                    print(f"Scheduler: {scheduler} not yet supported, skipping")
+        except Exception as exc:
+            if not args.json:
+                print(f"Scheduler install skipped: {exc}")
+
+    # Step 4: Run one automation cycle (unless --no-run)
+    cycle_result = None
+    if not args.no_run:
+        try:
+            cycle_results = run_automation_cycle(
+                config=config,
+                project_filter=None,
+                retry_attempts=3,
+                retry_delay_seconds=0.2,
+                graphify_bin=config.graphify_bin,
+                build_graph=True,
+            )
+            cycle_result = cycle_results[0] if cycle_results else None
+            if not args.json and cycle_result:
+                print(f"Automation cycle completed: {cycle_result.project}")
+                if cycle_result.graphify:
+                    print(f"  Graph: {cycle_result.graphify.status}")
+        except Exception as exc:
+            if not args.json:
+                print(f"Automation cycle failed: {exc}")
+
+    if args.json:
+        payload = {
+            "workspace": str(config.workspace),
+            "project": config.default_project,
+            "sessions_root": args.sessions_root,
+            "mem_tool": config.mem_tool,
+            "service_installed": service_installed,
+            "automation_status": cycle_result.graphify.status if cycle_result and cycle_result.graphify else "not_run",
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
+        return 0
+
+    print("")
+    print("Setup complete. MemArk is now running in the background.")
+    print("")
+    print("What happens next:")
+    print("  - MemArk will automatically sync Codex sessions every 5 minutes")
+    print("  - Sessions are ingested into the memory tool and promoted to corpus")
+    print("  - Your AI tools can consume project context via: memark context --workspace .")
+    print("")
+    memark_bin = _resolve_memark_bin()
+    print("Useful commands:")
+    print(f"  {shlex.quote(memark_bin)} status --workspace . --json")
+    print(f"  {shlex.quote(memark_bin)} context --workspace .")
+    print(f"  {shlex.quote(memark_bin)} query \"<topic>\" --workspace . --project {config.default_project}")
     return 0
+
+
+def _resolve_memark_bin() -> str:
+    """Resolve the memark binary path for use in user-facing hints."""
+    from .install import default_memark_home
+    memark_bin = default_memark_home() / "venv" / ("Scripts" if os.name == "nt" else "bin") / "memark"
+    if memark_bin.is_file():
+        return str(memark_bin)
+    return "memark"
 
 
 def _resolve_mem_tool_args(args: argparse.Namespace, config: object) -> tuple[str, str]:
@@ -936,27 +1051,17 @@ def _install_next_step_lines(*, memark_bin: Path, platform: str) -> list[str]:
     command = shlex.quote(str(memark_bin))
     return [
         "Next steps:",
-        f"- Check installation health: {command} doctor --platform {platform}",
-        f'- Start a workspace with defaults: {command} init . --project "$(basename "$PWD")"',
-        (
-            f'- Register the current repo and run one cycle: {command} project-set --workspace . '
-            '--project "$(basename "$PWD")" --path "$PWD" --sessions-root ~/.codex/sessions'
-        ),
-        f'- Refresh feed/process/consume once: {command} automation-run --workspace . --project "$(basename "$PWD")"',
-        "- Default memory tool is mempalace; the commands above run non-interactively as shown.",
-        (
-            "- Optional mem_tool=mempal: initialize with "
-            f'{command} init . --project "$(basename "$PWD")" --mem-tool mempal'
-        ),
-        (
-            "- On the first mempal mine, MemArk writes workspace-local starter config at "
-            '.memark/palaces/<project>/.mempal-home-<project>/.mempal/config.toml'
-        ),
-        (
-            "- That starter config defaults to embed backend api with "
-            "http://localhost:11434/api/embeddings and model nomic-embed-text to avoid blocking model downloads."
-        ),
-        "- If that API is not available yet, edit the generated config first or start a compatible embedding API before mining.",
+        f"- In your project directory, run: {command} init . --auto",
+        "  This will create a workspace, register the project, install the scheduler, and run one automation cycle.",
+        "",
+        "If you prefer manual step-by-step setup:",
+        f"  {command} init . --project \"$(basename \"$PWD\")\"",
+        f"  {command} project-set --workspace . --sessions-root ~/.codex/sessions",
+        f"  {command} service-install --workspace .",
+        f"  {command} automation-run --workspace .",
+        "",
+        "Non-interactive (for AI tools and scripts):",
+        f"  {command} init . --auto --json",
     ]
 
 
@@ -2130,15 +2235,13 @@ def cmd_codex_sync(args: argparse.Namespace) -> int:
 
 def cmd_project_set(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
-    tracked_path = args.tracked_path or args.tracked_path_compat
-    if not tracked_path:
-        print("project-set requires --path", file=sys.stderr)
-        return 2
+    tracked_path = args.tracked_path or args.tracked_path_compat or str(config.workspace)
+    project_name = args.project or config.workspace.name
     extra_paths = [*args.extra_path_compat, *args.extra_path]
     profiles = upsert_project_profile(
         config.projects_file,
         ProjectProfile(
-            name=args.project,
+            name=project_name,
             path=tracked_path,
             sessions_root=args.sessions_root,
             extra_paths=extra_paths,
@@ -2147,7 +2250,7 @@ def cmd_project_set(args: argparse.Namespace) -> int:
             enabled=not args.disabled,
         ),
     )
-    current = next(profile for profile in profiles if profile.normalized_name() == slugify(args.project))
+    current = next(profile for profile in profiles if profile.normalized_name() == slugify(project_name))
     payload = {
         "project": current.normalized_name(),
         "path": str(current.normalized_path()),

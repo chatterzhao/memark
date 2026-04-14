@@ -43,7 +43,7 @@
 
 ## C. 当前仓库 Dogfood
 
-- [ ] 当前仓库已完成 `memark init` / `project-set` 接入
+- [ ] 当前仓库已完成 `memark init . --auto` 接入
 - [ ] `python3 -m memark automation-run --workspace . --no-build --json` 可完成
 - [ ] `automation-run` 后已生成：
   - `latest-summary.md`
@@ -71,8 +71,8 @@
 
 - [ ] `README.md` 仍明确区分：
   - `install`
-  - `init`
-  - `project-set`
+  - `init --auto`（一键接入）
+  - `init`（交互式）/ `project-set`（逐步控制）
 - [ ] `SKILL.md` 仍只承担安装入口职责
 - [ ] `docs/MILESTONE_BETA.md` 仍与当前真实能力一致
 - [ ] `docs/DOGFOOD_STATUS.md` 与 `docs/INSTALL_VERIFICATION.md` 已更新到最新 smoke 结果

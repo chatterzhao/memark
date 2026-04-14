@@ -501,12 +501,7 @@ codex exec --dangerously-bypass-approvals-and-sandbox \
 随后对该 worktree 执行：
 
 ```bash
-PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark init /tmp/memark-worktree-auto2 --project MemArk
-PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark project-set \
-  --workspace /tmp/memark-worktree-auto2 \
-  --project MemArk \
-  --path /tmp/memark-worktree-auto2 \
-  --sessions-root ~/.codex/sessions
+PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark init /tmp/memark-worktree-auto2 --auto --project MemArk
 PATH="$HOME/.memark/venv/bin:$PATH" ~/.memark/venv/bin/memark projects-run \
   --workspace /tmp/memark-worktree-auto2 \
   --json

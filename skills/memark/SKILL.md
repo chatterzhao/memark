@@ -30,7 +30,15 @@ When starting work on a new project, first check installation health:
 __MEMARK_BIN__ doctor --platform auto
 ```
 
-For project intake and cycle runs, prefer:
+For project setup, the simplest path is:
+
+```bash
+__MEMARK_BIN__ init . --auto
+```
+
+That single command creates a workspace, registers the project, installs the background scheduler, and runs one automation cycle.
+
+If you need step-by-step control:
 
 ```bash
 __MEMARK_BIN__ project-set --workspace <workspace> --project <name> --path <directory-path> --sessions-root ~/.codex/sessions

@@ -101,7 +101,7 @@ class MemArkCliTests(unittest.TestCase):
         payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["mem_tool"], "mempal")
         self.assertEqual(Path(payload["mem_tool_bin"]).name, "mempal")
-        self.assertIn("Registered project: memark", result.stdout)
+        self.assertIn("Project: memark", result.stdout)
 
     def test_load_workspace_prefers_user_runtime_binaries(self) -> None:
         with (
@@ -202,11 +202,7 @@ class MemArkCliTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("Next steps:", result.stdout)
-        self.assertIn("doctor --platform auto", result.stdout)
-        self.assertIn('init . --project "$(basename "$PWD")"', result.stdout)
-        self.assertIn("Default memory tool is mempalace", result.stdout)
-        self.assertIn(".mempal-home-<project>/.mempal/config.toml", result.stdout)
-        self.assertIn("http://localhost:11434/api/embeddings", result.stdout)
+        self.assertIn("init . --auto", result.stdout)
 
     def test_doctor_reports_missing_runtime(self) -> None:
         fake_home = Path(self.tmpdir.name) / "home"

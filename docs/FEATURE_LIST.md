@@ -440,6 +440,7 @@
 - 已实现 `.memark/projects.toml`
 - 已实现 `memark project-set`
 - 已实现 `memark projects-list`
+- 已实现 `memark init --auto`，一键完成 workspace 初始化 + 项目注册 + 调度安装 + 首轮 cycle
 
 还需要扩展：
 
