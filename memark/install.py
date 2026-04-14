@@ -8,7 +8,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -45,6 +45,7 @@ class InstallResult:
     source_spec: str
     targets: list[InstallTarget]
     manifest_files: list[Path]
+    symlinked: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -65,6 +66,7 @@ class InstallResult:
                 for target in self.targets
             ],
             "manifest_files": [str(path) for path in self.manifest_files],
+            "symlinked": list(self.symlinked),
         }
 
 
@@ -324,6 +326,33 @@ def install_skill_bundle(
     return targets, manifest_files
 
 
+def _ensure_user_local_bin() -> Path:
+    """Return ~/.local/bin, creating it if needed."""
+    local_bin = Path("~/.local/bin").expanduser().resolve()
+    local_bin.mkdir(parents=True, exist_ok=True)
+    return local_bin
+
+
+def _symlink_to_user_local_bin(venv_bin: Path, local_bin: Path) -> list[str]:
+    """Symlink memark, mempalace, graphify from venv into ~/.local/bin/.
+
+    Returns list of symlinked command names.
+    """
+    commands = ["memark", "mempalace", "graphify"]
+    symlinked: list[str] = []
+    for name in commands:
+        source = venv_bin / name
+        target = local_bin / name
+        if not source.exists():
+            continue
+        # Remove stale symlink or file
+        if target.is_symlink() or target.exists():
+            target.unlink()
+        target.symlink_to(source)
+        symlinked.append(name)
+    return symlinked
+
+
 def install_memark(
     *,
     platform: str,
@@ -352,6 +381,12 @@ def install_memark(
         python_bin=python_bin,
         platform=platform,
     )
+
+    # Symlink commands into ~/.local/bin so they are on PATH
+    local_bin = _ensure_user_local_bin()
+    venv_bin = venv_dir / ("Scripts" if os.name == "nt" else "bin")
+    symlinked = _symlink_to_user_local_bin(venv_bin, local_bin)
+
     return InstallResult(
         memark_home=resolved_home,
         venv_dir=venv_dir,
@@ -363,6 +398,7 @@ def install_memark(
         source_spec=resolved_source,
         targets=targets,
         manifest_files=manifest_files,
+        symlinked=symlinked,
     )
 
 

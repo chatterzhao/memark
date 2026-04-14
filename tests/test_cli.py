@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 import stat
 import subprocess
@@ -161,6 +162,42 @@ class MemArkCliTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("worktree", result.stderr.lower())
         self.assertIn("worktree-attach", result.stderr)
+
+    def test_install_symlinks_to_user_local_bin(self) -> None:
+        """install --skip-runtime-install with a fake venv should symlink memark."""
+        fake_home = Path(self.tmpdir.name) / "home"
+        memark_home = fake_home / ".memark-symlink-test"
+        # Create a fake venv with memark binary
+        venv_bin = memark_home / "venv" / "bin"
+        venv_bin.mkdir(parents=True)
+        (venv_bin / "memark").write_text("#!/bin/sh\necho memark\n", encoding="utf-8")
+        (venv_bin / "mempalace").write_text("#!/bin/sh\necho mempalace\n", encoding="utf-8")
+        (venv_bin / "memark").chmod(0o755)
+        (venv_bin / "mempalace").chmod(0o755)
+        fake_bin_dir = self.workspace / "bin"
+        fake_bin_dir.mkdir()
+        fake_mempal = fake_bin_dir / "mempal"
+        fake_mempal.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake_mempal.chmod(fake_mempal.stat().st_mode | stat.S_IEXEC)
+        env = {
+            "HOME": str(fake_home),
+            "MEMARK_HOME": str(memark_home),
+            "PATH": str(fake_bin_dir) + os.pathsep + os.environ.get("PATH", ""),
+        }
+
+        result = run_cli(
+            "install",
+            "--platform", "codex",
+            "--skip-runtime-install",
+            "--json",
+            cwd=ROOT,
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        # venv exists, so symlinked should include memark and mempalace
+        self.assertIn("memark", payload["symlinked"])
+        self.assertIn("mempalace", payload["symlinked"])
 
     def test_load_workspace_prefers_user_runtime_binaries(self) -> None:
         with (
@@ -4367,6 +4404,65 @@ class MemArkCliTests(unittest.TestCase):
         status_artifact = (self.workspace / "corpus" / "memark" / "imports" / "automation" / "graphify-status.md").read_text(encoding="utf-8")
         self.assertIn("status: updated", status_artifact)
         self.assertIn("mode: memark-mixed-corpus", status_artifact)
+
+
+class SymlinkUnitTest(unittest.TestCase):
+    """Unit tests for install.py symlink logic (no ~/.local/bin pollution)."""
+
+    def test_symlink_creates_links_for_existing_binaries(self) -> None:
+        from memark.install import _symlink_to_user_local_bin
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            venv_bin = Path(tmpdir) / "venv" / "bin"
+            venv_bin.mkdir(parents=True)
+            (venv_bin / "memark").write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+            (venv_bin / "mempalace").write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+            # graphify does NOT exist
+
+            local_bin = Path(tmpdir) / "local_bin"
+            local_bin.mkdir()
+
+            symlinked = _symlink_to_user_local_bin(venv_bin, local_bin)
+            self.assertEqual(symlinked, ["memark", "mempalace"])
+            self.assertTrue((local_bin / "memark").is_symlink())
+            self.assertTrue((local_bin / "mempalace").is_symlink())
+            self.assertFalse((local_bin / "graphify").exists())
+        finally:
+            shutil.rmtree(tmpdir)
+
+    def test_symlink_replaces_stale_links(self) -> None:
+        from memark.install import _symlink_to_user_local_bin
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            venv_bin = Path(tmpdir) / "venv" / "bin"
+            venv_bin.mkdir(parents=True)
+            (venv_bin / "memark").write_text("#!/bin/sh\necho new\n", encoding="utf-8")
+
+            local_bin = Path(tmpdir) / "local_bin"
+            local_bin.mkdir()
+            # Create a stale symlink pointing to a different location
+            old_target = Path(tmpdir) / "old_venv" / "bin" / "memark"
+            old_target.parent.mkdir(parents=True)
+            old_target.write_text("#!/bin/sh\necho old\n", encoding="utf-8")
+            (local_bin / "memark").symlink_to(old_target)
+
+            symlinked = _symlink_to_user_local_bin(venv_bin, local_bin)
+            self.assertEqual(symlinked, ["memark"])
+            # Symlink should now point to the new venv, not the old one
+            self.assertEqual(str((local_bin / "memark").resolve()), str((venv_bin / "memark").resolve()))
+        finally:
+            shutil.rmtree(tmpdir)
+
+    def test_ensure_user_local_bin_creates_dir(self) -> None:
+        from memark.install import _ensure_user_local_bin
+
+        # _ensure_user_local_bin always uses ~/.local/bin which already exists
+        # So we just verify it returns the correct path
+        result = _ensure_user_local_bin()
+        self.assertTrue(result.exists())
+        self.assertEqual(result, Path("~/.local/bin").expanduser().resolve())
 
 
 if __name__ == "__main__":

@@ -1108,8 +1108,10 @@ def _resolve_mem_tool_args(args: argparse.Namespace, config: object) -> tuple[st
     return mem_tool, mem_tool_bin
 
 
-def _install_next_step_lines(*, memark_bin: Path, platform: str) -> list[str]:
-    command = shlex.quote(str(memark_bin))
+def _install_next_step_lines(*, memark_bin: Path, symlinked: list[str] | None = None) -> list[str]:
+    # If symlinked to ~/.local/bin, use bare command name
+    use_bare = bool(symlinked and "memark" in symlinked)
+    command = "memark" if use_bare else shlex.quote(str(memark_bin))
     return [
         "Next steps:",
         f"- In your project directory, run: {command} init . --auto",
@@ -1148,7 +1150,10 @@ def cmd_install(args: argparse.Namespace) -> int:
     print(f"Source spec: {result.source_spec}")
     for target in result.targets:
         print(f"Installed skill bundle: {target.platform} -> {target.bundle_dir}")
-    for line in _install_next_step_lines(memark_bin=result.memark_bin, platform=args.platform):
+    if result.symlinked:
+        local_bin = Path("~/.local/bin").expanduser().resolve()
+        print(f"Symlinked to {local_bin}: {', '.join(result.symlinked)}")
+    for line in _install_next_step_lines(memark_bin=result.memark_bin, symlinked=result.symlinked):
         print(line)
     return 0
 
