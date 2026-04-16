@@ -4,7 +4,7 @@
 
 当前 `MemArk` 是否可以按“当前仓库自己吃自己”的 Beta 口径发布。
 
-Gitflow 的 `develop -> main -> tag -> push` 正式发布顺序不在本文重复定义，统一以
+Gitflow 的 `develop -> release/* -> develop -> main -> tag -> push` 正式发布顺序不在本文重复定义，统一以
 [`docs/GITFLOW_RELEASE_FLOW.md`](<repo-root>/docs/GITFLOW_RELEASE_FLOW.md) 为准。
 
 这里的“发布”不是 GA，也不是全平台正式生产承诺，而是：

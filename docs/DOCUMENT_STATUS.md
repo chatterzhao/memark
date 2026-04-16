@@ -25,7 +25,7 @@
 - `MILESTONES.md` 作为阶段能力账本，汇总各里程碑已经做成的功能
 - `MILESTONE_NEXT.md` 定义 Beta 之后下一条更合理的里程碑
 - `RELEASE_CHECKLIST.md` 定义当前 Beta 口径对外说明前必须执行的发布检查
-- `GITFLOW_RELEASE_FLOW.md` 定义 `develop -> main -> tag -> push` 的正式发布流程真源
+- `GITFLOW_RELEASE_FLOW.md` 定义 `develop -> release/* -> develop -> main -> tag -> push` 的正式发布流程真源
 - `DOGFOOD_RUNBOOK.md` 定义当前仓库持续自己吃自己时的运维与排障入口
 - `DOGFOOD_LOG.md` 记录按时间推进的真实 dogfood 证据
 - `AI_CONSUMPTION_MODEL.md` 定义当前 AI 应如何消费这些产物

@@ -2,12 +2,13 @@
 
 本文件定义当前仓库唯一正式的 Gitflow 发布流程真源。
 
-它回答四个问题：
+它回答五个问题：
 
 1. 什么时候可以从 `develop` 发版
-2. `develop`、`main`、`tag` 各自承担什么职责
+2. `develop`、`release/*`、`main`、`tag` 各自承担什么职责
 3. 版本号从哪里读取，tag 应该怎么命名
-4. 具体应该按什么顺序执行 `push`、`merge`、`tag`
+4. 版本号应该在哪个分支提升
+5. 具体应该按什么顺序执行 `push`、`merge`、`tag`
 
 ## 角色分工
 
@@ -15,9 +16,14 @@
   - 功能主线
   - 所有 feature branch 最终先合并到这里
   - 日常 dogfood、修复、文档收敛先在这里完成
+- `release/*`
+  - 发布装配分支
+  - 从准备发版的 `develop` 切出
+  - 只承接这次发布所需的版本号提升与最小发布修正
+  - 完成后先合回 `develop`，再由 `develop` 进入 `main`
 - `main`
   - 发布主线
-  - 只接收已经准备对外说明或内部稳定分发的 `develop`
+  - 只接收已经完成 release 装配的 `develop`
   - 不承接日常 feature 开发
 - annotated tag
   - 发布锚点
@@ -49,18 +55,23 @@
 2. `develop` 工作树是干净的
 3. 所有要进入这次发布的 feature branch 都已经被 `develop` 吸收
 4. 不把 `dogfood/runtime` 或 research worktree 的本地运行产物带进发布提交
+5. 本次发布需要的版本号提升尚未直接写在 `develop` 或 `main` 上
 
 ## 正式发布顺序
 
 当前仓库正式发布时，按下面顺序执行：
 
 1. 在 `develop` 完成最终验证
-2. `git push origin develop`
-3. 切到 `main`
-4. `git merge --no-ff develop`
-5. 在合并后的 `main` 提交上创建 annotated tag
-6. `git push origin main`
-7. `git push origin <tag>`
+2. 从 `develop` 切出 dedicated `release/*` worktree
+3. 在 `release/*` 提升版本号，并完成这次发布需要的最小修正
+4. 在 `release/*` 完成发布前测试
+5. 把 `release/*` 合回 `develop`
+6. `git push origin develop`
+7. 切到 `main`
+8. `git merge --no-ff develop`
+9. 在合并后的 `main` 提交上创建 annotated tag
+10. `git push origin main`
+11. `git push origin <tag>`
 
 推荐命令模板：
 
@@ -69,7 +80,19 @@ cd <repo-root>
 git checkout develop
 git status --short
 
-# 确认发布前检查已通过后
+git worktree add -b release/<version> ../<repo-root>-worktrees/release-<version> develop
+cd ../<repo-root>-worktrees/release-<version>
+
+# 在 release worktree 中提升版本号并完成最小发布修正
+git status --short
+python3 -m unittest discover -s tests -p 'test_*.py' -q
+
+git add pyproject.toml memark/version.py
+git commit -m "Bump version to <version>"
+
+cd <repo-root>
+git checkout develop
+git merge --no-ff release/<version>
 git push origin develop
 
 git checkout main
@@ -111,12 +134,14 @@ git merge --no-ff --allow-unrelated-histories develop
 
 ## 什么时候需要改版本号
 
-如果这次发布代表新的对外版本，就应先更新：
+如果这次发布代表新的对外版本，就应先在 `release/*` 分支中更新：
 
 - [`pyproject.toml`](<repo-root>/pyproject.toml)
 - 如有需要，再同步更新 README 或发布说明中的显式版本文本
 
-如果只是把当前未发布主线第一次整理到 `main`，且 `pyproject.toml` 当前版本尚未被正式打 tag，则可以直接按当前版本发出第一枚 tag。
+不要直接在 `develop` 或 `main` 上临时提升版本号再发布。版本提升属于 release 装配动作，应随 `release/*` 一起被消费回 `develop` 和 `main`。
+
+如果只是把当前未发布主线第一次整理到 `main`，且 `pyproject.toml` 当前版本尚未被正式打 tag，则仍可以直接按当前版本发出第一枚 tag；但如果需要补发布策略修正或版本变更，仍应优先通过 `release/*` 完成。
 
 ## 文档分工
 
@@ -139,8 +164,9 @@ git merge --no-ff --allow-unrelated-histories develop
 
 对当前仓库来说，“发布成功”的最小判定是：
 
-1. `develop` 已包含这次准备发布的内容并已 push
-2. `main` 已 merge `develop` 并已 push
-3. 对应版本 annotated tag 已创建并 push
+1. 对应 `release/*` 已完成版本装配并被 `develop` 吸收
+2. `develop` 已包含这次准备发布的内容并已 push
+3. `main` 已 merge `develop` 并已 push
+4. 对应版本 annotated tag 已创建并 push
 
-只有这三条同时满足，才应把一次 Gitflow 发布动作视为完成。
+只有这四条同时满足，才应把一次 Gitflow 发布动作视为完成。
