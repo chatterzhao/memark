@@ -90,6 +90,25 @@ git push origin "v${VERSION}"
 git checkout develop
 ```
 
+## 首次对齐 `main` 的特例
+
+如果当前仓库的 `main` 仍是初始化壳提交，而 `develop` 已经承载了实际工作历史，可能会出现：
+
+- `git merge-base main develop` 为空
+- 普通 `git merge develop` 报 `refusing to merge unrelated histories`
+
+这种情况下，允许在首次把 `develop` 正式提升到 `main` 时执行一次：
+
+```bash
+git merge --no-ff --allow-unrelated-histories develop
+```
+
+约束：
+
+- 这只是把历史壳 `main` 与真实主线 `develop` 对齐的一次性动作
+- 完成后，后续发布恢复为普通 `git merge --no-ff develop`
+- 不要把 `--allow-unrelated-histories` 当成日常发布默认参数
+
 ## 什么时候需要改版本号
 
 如果这次发布代表新的对外版本，就应先更新：
