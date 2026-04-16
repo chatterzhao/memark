@@ -143,11 +143,6 @@ def _service_label(workspace: Path, project: str | None) -> str:
 
 
 def _service_invocation() -> tuple[list[str], dict[str, str]]:
-    runtime_scripts_dir = default_memark_home() / "venv" / ("Scripts" if os.name == "nt" else "bin")
-    runtime_memark = runtime_scripts_dir / ("memark.exe" if os.name == "nt" else "memark")
-    if runtime_memark.exists():
-        return [str(runtime_memark)], {}
-
     package_root = Path(__file__).resolve().parents[1]
     if (package_root / "pyproject.toml").exists():
         pythonpath_entries = [str(package_root)]
@@ -157,6 +152,11 @@ def _service_invocation() -> tuple[list[str], dict[str, str]]:
                 if entry and entry not in pythonpath_entries:
                     pythonpath_entries.append(entry)
         return [sys.executable, "-m", "memark"], {"PYTHONPATH": os.pathsep.join(pythonpath_entries)}
+
+    runtime_scripts_dir = default_memark_home() / "venv" / ("Scripts" if os.name == "nt" else "bin")
+    runtime_memark = runtime_scripts_dir / ("memark.exe" if os.name == "nt" else "memark")
+    if runtime_memark.exists():
+        return [str(runtime_memark)], {}
 
     argv0 = Path(sys.argv[0]).expanduser()
     if argv0.exists() and not argv0.name.startswith("python"):
