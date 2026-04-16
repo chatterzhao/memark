@@ -24,7 +24,6 @@ from .graphify_proof import (
 )
 from .handoff import build_graphify_handoff
 from .install import InstallError, ensure_mempal_bin, install_memark, run_doctor
-from .io import copy_document
 from .mempalace import MemPalaceError, reset_palace_dir
 from .mem_tool import MemToolError, build_mem_tool_mine_command, mem_tool_available, run_mem_tool_convo_mine
 from .milestones import assess_current_milestone, milestone_catalog
@@ -37,6 +36,7 @@ from .package_builder import (
     package_to_dict,
     write_package_payloads,
 )
+from .pipeline import iter_project_documents
 from .palace import PalaceReadError, read_palace_drawers
 from .project_registry import (
     ProjectProfile,
@@ -135,16 +135,16 @@ def _project_profile_for(config, project: str) -> ProjectProfile | None:
     return None
 
 
-def _document_destination(config, *, project: str, source: Path) -> Path:
+def _project_root_for(config, project: str) -> Path | None:
     profile = _project_profile_for(config, project)
-    if profile is not None:
-        try:
-            relative = source.resolve().relative_to(profile.normalized_path())
-        except ValueError:
-            relative = None
-        if relative is not None:
-            return config.documents_dir(project) / relative
-    return config.documents_dir(project) / source.name
+    return None if profile is None else profile.normalized_path()
+
+
+def _project_document_files(config, project: str) -> list[Path]:
+    root = _project_root_for(config, project)
+    if root is None:
+        return []
+    return iter_project_documents(root)
 
 
 def _attach_worktree_configs(source_dir: Path, target_dir: Path) -> dict[str, list[str]]:
@@ -431,12 +431,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     promote_parser.set_defaults(func=cmd_promote)
 
-    docs_parser = subparsers.add_parser("add-documents", help="Copy project documents into the corpus")
-    docs_parser.add_argument("sources", nargs="+", help="Files to copy")
-    docs_parser.add_argument("--workspace", default=".", help="Workspace directory")
-    docs_parser.add_argument("--project", help="Target project slug")
-    docs_parser.set_defaults(func=cmd_add_documents)
-
     query_parser = subparsers.add_parser(
         "query",
         help="Search promoted project corpus content without relying on Graphify",
@@ -446,7 +440,7 @@ def _build_parser() -> argparse.ArgumentParser:
     query_parser.add_argument("--project", help="Target project slug")
     query_parser.add_argument(
         "--scope",
-        choices=("all", "promoted", "documents", "imports"),
+        choices=("all", "promoted", "project", "imports"),
         default="all",
         help="Corpus scope to search",
     )
@@ -582,7 +576,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_parser = subparsers.add_parser(
         "run",
-        help="Promote inbox room packages, copy inbox documents, then optionally run Graphify",
+        help="Promote inbox room packages, then optionally run Graphify against promoted/project/imports",
     )
     run_parser.add_argument("--workspace", default=".", help="Workspace directory")
     run_parser.add_argument("--project", help="Target project slug")
@@ -1424,23 +1418,9 @@ def cmd_promote(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_add_documents(args: argparse.Namespace) -> int:
-    config = load_workspace(args.workspace)
-    project = slugify(args.project or config.default_project)
-    copied = 0
-    for source_name in args.sources:
-        source = Path(source_name).expanduser().resolve()
-        destination = _document_destination(config, project=project, source=source)
-        copy_document(source, destination)
-        print(f"copied: {source} -> {destination}")
-        copied += 1
-    print(f"Document summary: {copied} copied")
-    return 0
-
-
 def _query_scopes(scope: str) -> tuple[str, ...]:
     if scope == "all":
-        return ("promoted", "documents", "imports")
+        return ("promoted", "project", "imports")
     return (scope,)
 
 
@@ -1516,7 +1496,11 @@ def cmd_context(args: argparse.Namespace) -> int:
 def cmd_graphify_handoff(args: argparse.Namespace) -> int:
     config = load_workspace(args.workspace)
     project = slugify(args.project or config.default_project)
-    handoff = build_graphify_handoff(project, config.corpus_project_dir(project))
+    handoff = build_graphify_handoff(
+        project,
+        config.corpus_project_dir(project),
+        project_root=_project_root_for(config, project),
+    )
 
     if args.json:
         print(json.dumps(handoff.to_dict(), indent=2, ensure_ascii=True))
@@ -1857,15 +1841,16 @@ def _build_milestones_payload(
         resolved_project = slugify(project or config.default_project)
         project_dir = config.corpus_project_dir(resolved_project)
         promoted_files = list(config.promoted_dir(resolved_project).glob("*.md"))
-        document_files = [item for item in config.documents_dir(resolved_project).rglob("*") if item.is_file()]
+        project_document_files = _project_document_files(config, resolved_project)
         import_files = [item for item in config.imports_dir(resolved_project).rglob("*") if item.is_file()]
         automation = load_automation_cycle_state(config)
         workspace_snapshot: dict[str, object] = {
             "workspace": str(config.workspace),
             "project": resolved_project,
             "project_dir": str(project_dir),
+            "project_root": None if _project_root_for(config, resolved_project) is None else str(_project_root_for(config, resolved_project)),
             "promoted_rooms": len(promoted_files),
-            "documents": len(document_files),
+            "project_documents": len(project_document_files),
             "imports": len(import_files),
             "automation": automation,
         }
@@ -1917,8 +1902,9 @@ def _execute_milestones(
         print("Workspace snapshot:")
         print(f"  Workspace: {snapshot['workspace']}")
         print(f"  Project: {snapshot['project']}")
+        print(f"  Project root: {snapshot.get('project_root')}")
         print(f"  Promoted rooms: {snapshot['promoted_rooms']}")
-        print(f"  Documents: {snapshot['documents']}")
+        print(f"  Project documents: {snapshot['project_documents']}")
         print(f"  Imports: {snapshot['imports']}")
         automation = snapshot.get("automation")
         if isinstance(automation, dict):
@@ -2277,14 +2263,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         promote_results,
         fallback_project=config.default_project,
     )
-
-    copied = 0
-    for source in sorted(path for path in config.inbox_documents_dir.rglob("*") if path.is_file()):
-        destination = config.documents_dir(project) / source.name
-        copy_document(source, destination)
-        print(f"copied: {source} -> {destination}")
-        copied += 1
-    print(f"Document summary: {copied} copied")
+    project_root = _project_root_for(config, project)
+    project_documents = _project_document_files(config, project)
+    print(
+        "Project documents:"
+        f" root={project_root if project_root is not None else 'unregistered'}"
+        f" files={len(project_documents)}"
+    )
 
     if args.no_build:
         return 0
@@ -2526,10 +2511,9 @@ def cmd_automation_run(args: argparse.Namespace) -> int:
                 f" mined={'yes' if item.intake.mined else 'no'}"
             )
         print(
-            "  Process documents:"
-            f" copied={item.documents.copied}"
-            f" updated={item.documents.updated}"
-            f" unchanged={item.documents.unchanged}"
+            "  Process project:"
+            f" root={item.project_documents.get('root')}"
+            f" documents={item.project_documents.get('documents')}"
         )
         print(f"  Process palace drawers: {item.palace_drawers}")
         print(f"  Process packages: {item.packages}")
@@ -3078,7 +3062,8 @@ def _execute_status(
 ) -> int:
     project_dir = config.corpus_project_dir(project)
     promoted_files = list(config.promoted_dir(project).glob("*.md"))
-    document_files = [item for item in config.documents_dir(project).rglob("*") if item.is_file()]
+    project_root = _project_root_for(config, project)
+    project_document_files = _project_document_files(config, project)
     import_files = [item for item in config.imports_dir(project).rglob("*") if item.is_file()]
     inbox_files = [item for item in config.inbox_dir.rglob("*") if item.is_file()]
     staged_codex_sessions = [item for item in config.codex_sessions_dir(project).rglob("*.jsonl") if item.is_file()]
@@ -3088,11 +3073,11 @@ def _execute_status(
         "workspace": str(config.workspace),
         "project": project,
         "project_dir": str(project_dir),
+        "project_root": None if project_root is None else str(project_root),
         "inbox_promoted_dir": str(config.inbox_promoted_dir),
-        "inbox_documents_dir": str(config.inbox_documents_dir),
         "palace_dir": str(config.palace_dir(project)),
         "promoted_rooms": len(promoted_files),
-        "documents": len(document_files),
+        "project_documents": len(project_document_files),
         "imports": len(import_files),
         "inbox_files": len(inbox_files),
         "codex_staged_sessions": len(staged_codex_sessions),
@@ -3121,11 +3106,11 @@ def _execute_status(
     print(f"Workspace: {payload['workspace']}")
     print(f"Project: {payload['project']}")
     print(f"Project dir: {payload['project_dir']}")
+    print(f"Project root: {payload['project_root']}")
     print(f"Inbox promoted dir: {payload['inbox_promoted_dir']}")
-    print(f"Inbox documents dir: {payload['inbox_documents_dir']}")
     print(f"Palace dir: {payload['palace_dir']}")
     print(f"Promoted rooms: {payload['promoted_rooms']}")
-    print(f"Documents: {payload['documents']}")
+    print(f"Project documents: {payload['project_documents']}")
     print(f"Imports: {payload['imports']}")
     print(f"Inbox files: {payload['inbox_files']}")
     print(f"Codex staged sessions: {payload['codex_staged_sessions']}")

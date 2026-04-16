@@ -115,7 +115,7 @@
 - `memark palace-package`
 - `memark palace-run`
 - `memark promote`
-- `memark add-documents`
+- `memark project-set`
 
 这一层已实现：
 
@@ -123,7 +123,7 @@
 - 从 drawers 导出只读数据
 - 按 `room` 或 `logical session` 打包
 - 把 package 晋升为 `Graphify-ready` corpus
-- 把正式文档同步进 `documents/`
+- 直接消费注册项目根目录中的正式文档
 
 ### 4. 本地消费入口
 
@@ -132,7 +132,7 @@
 
 当前已做成：
 
-- 直接搜索本地 `promoted/`、`documents/`、`imports/`
+- 直接搜索本地 `promoted/`、注册项目文档、`imports/`
 - 一次读取 `latest-summary`、`decisions-digest`、`risks-digest`、`ai-context`、`graphify-status`
 
 ### 5. 调度、状态与持续 dogfood

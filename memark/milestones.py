@@ -58,7 +58,7 @@ def milestone_catalog() -> dict[str, object]:
                         "memark palace-run",
                     ],
                 },
-                {"name": "Corpus Promotion", "commands": ["memark promote", "memark add-documents"]},
+                {"name": "Corpus Promotion", "commands": ["memark promote", "memark project-set"]},
                 {"name": "Consumption Surface", "commands": ["memark query", "memark context"]},
                 {
                     "name": "Scheduler and Status",
@@ -152,9 +152,9 @@ def assess_current_milestone(payload: dict[str, object]) -> dict[str, object]:
         else "automation evidence unavailable"
     )
 
-    corpus_ok = all(snapshot.get(name, 0) > 0 for name in ("promoted_rooms", "documents", "imports"))
+    corpus_ok = all(snapshot.get(name, 0) > 0 for name in ("promoted_rooms", "project_documents", "imports"))
     corpus_detail = (
-        f"promoted={snapshot.get('promoted_rooms', 0)}, documents={snapshot.get('documents', 0)}, imports={snapshot.get('imports', 0)}"
+        f"promoted={snapshot.get('promoted_rooms', 0)}, project_documents={snapshot.get('project_documents', 0)}, imports={snapshot.get('imports', 0)}"
     )
 
     auto_consumption_ok = any(isinstance(item, dict) and item.get("artifacts") for item in results)

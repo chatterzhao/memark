@@ -90,7 +90,7 @@
 - 它用于在上游 `Graphify` skill 真实 ingest 当前 `corpus/<project>` 后，把证据写回 `.memark/state`
 - 现在即使不走上游 slash skill，`python3 -m memark build --workspace .` 也会在 `corpus/<project>/graphify-out/` 生成 mixed-corpus graph
 - 同时现在也能通过 `python3 -m memark slash --workspace . /graphify . --update` 走 `MemArk` 自己的 slash-compatible adapter surface
-- 只要该 graph 里真实包含来自 `promoted/documents/imports` 的节点，系统就会自动识别这条 proof
+- 只要该 graph 里真实包含来自 `promoted/project/imports` 的节点，系统就会自动识别这条 proof
 - 当前仓库已实测进入：
   - `graphify_proof.status = ingested`
   - `M1 = ready`

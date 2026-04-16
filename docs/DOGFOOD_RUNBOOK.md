@@ -28,7 +28,7 @@ python3 -m memark automation-run --workspace . --no-build --json
 如果只是要保留当前仓库的 dogfood 运行，不想新开 worktree，也至少保持：
 
 - `.memark/`、`.mempalace/`、`graphify-out/` 这类运行时目录不入库
-- `corpus/<project>/documents/`、`imports/`、`.codex/`、`AGENTS.md` 这类自动生成产物不入库
+- `corpus/<project>/imports/`、`.codex/`、`AGENTS.md` 这类自动生成产物不入库；项目文档继续留在项目根目录
 - 时间戳型 dogfood rollout 文件默认不入库；如果确实要保留，显式挑选后再提交
 
 当前仓库已经进一步收口为：
@@ -140,7 +140,7 @@ python3 -m memark service-uninstall --workspace . --scheduler launchd --json
 - staging：`.memark/staging/memark/sessions/`
 - palace：`.memark/palaces/memark/`
 - promoted：`corpus/memark/promoted/`
-- documents：`corpus/memark/documents/`
+- project docs：注册项目根目录下被识别的正式文档
 - automation imports：`corpus/memark/imports/automation/`
 
 当前最重要的五个自动消费产物是：

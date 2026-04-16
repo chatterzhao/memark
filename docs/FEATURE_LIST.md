@@ -205,8 +205,8 @@
 - 落成统一的目录 corpus 目录
 - 至少保留：
   - `promoted/`
-  - `documents/`
   - `imports/`
+- 正式项目文档直接从注册项目的 `project-root` 消费，不再复制到 `corpus/`
 
 ### F9. Graphify 兼容编排
 
@@ -309,7 +309,7 @@
   - `corpus/<project>/imports/automation/risks-digest.md`
   - `corpus/<project>/imports/automation/ai-context.md`
   - `corpus/<project>/imports/automation/graphify-status.md`
-- 这些文件当前主要基于 promoted/documents 语料做启发式整理
+- 这些文件当前主要基于 promoted/project 语料做启发式整理
 - 因此它们已经构成自动消费基线，但还不能等同于“高质量项目治理智能体”
 
 ### F10.4. 自动消费统一入口
@@ -339,7 +339,7 @@
 - 当任务明确要求上游 `Graphify` skill / AGENTS/hooks 互操作时，`MemArk` 仍需要给 AI 一个准确 handoff
 - 这个 handoff 至少应明确：
   - 当前项目 `corpus/<project>` 的绝对路径
-  - `promoted/documents/imports` 的文件规模
+  - `promoted/project/imports` 的文件规模
   - 推荐命令 `/graphify <corpus> --update`
   - 这是可选互操作路径，而不是默认构建路径
 
@@ -370,7 +370,7 @@
   - 备注
 - 也可自动识别：
   - `corpus/<project>/graphify-out/graph.json`
-  - 其中存在来自 `promoted/`、`documents/` 或 `imports/` 的节点
+  - 其中存在来自 `promoted/`、注册项目文档或 `imports/` 的节点
 - `memark milestones --workspace ...` 已会把这条 proof 作为 mixed-corpus 闭环判断依据
 
 ### F10.4. Graphify corpus onboarding

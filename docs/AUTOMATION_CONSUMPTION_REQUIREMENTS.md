@@ -42,7 +42,7 @@
 - 能自动触发 `MemPalace mine --mode convos`
 - 能把 palace drawers 按 `room` 或逻辑 `session` 自动打包
 - 能把 package 自动晋升为 `corpus/<project>/promoted/*.md`
-- 能把项目文档纳入 `documents/`
+- 能直接从注册项目的 `project-root` 纳入正式项目文档
 - 文档同步会排除研究归档、构建产物、缓存和其他派生产物，避免自动消费被噪音稀释
 - 能对 promoted corpus 做本地固定字符串查询
 - 能在需要时生成给上游 `Graphify` skill 的 handoff
@@ -131,13 +131,13 @@ AI 在任务结束时应该自动沉淀：
 
 ### F3. 文档自动同步
 
-- 项目内正式文档、ADR、计划文档、复盘文档应自动进入 `documents/`
+- 项目内正式文档、ADR、计划文档、复盘文档应由注册项目根目录直接提供
 - 同步应受忽略规则治理，不能把派生产物重新喂回系统
 - 当前至少应排除 `.experiments/`、`build/`、`dist/`、`.pytest_cache/`、`*.egg-info/`、`docs/raw/`
 
 验收标准：
 
-- 新增或更新文档后，无需手工 `add-documents`
+- 新增或更新文档后，无需手工同步
 
 ### F4. Intake 调度自动化
 

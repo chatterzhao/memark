@@ -218,7 +218,7 @@ memark init
 - `memark graphify-onboard`
 - `memark slash`
 - `memark promote`
-- `memark add-documents`
+- `memark project-set`
 - `memark build`
 - `memark slash --workspace <workspace> /graphify <workspace-or-corpus> --update`
 - `memark slash --workspace <workspace> /context <workspace> --no-refresh --json`
@@ -647,14 +647,7 @@ memark-work/
     myproject/
       promoted/
         room-*.md
-      documents/
       imports/
-```
-
-如果还要把已落盘文档一起喂给 `Graphify`：
-
-```bash
-python3 -m memark add-documents --workspace ./memark-work ./docs/adr-001.md
 ```
 
 最后由 `MemArk` 触发 `Graphify`：
@@ -672,7 +665,7 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 其中当前实现约定：
 
 - `inbox/promoted/` 放 room package JSON
-- `inbox/documents/` 放待并入 corpus 的正式文档
+- 注册项目根目录中的正式文档会被直接消费
 - `run` 会先消费这两个目录，再触发 `Graphify`
 
 注意：
@@ -682,7 +675,7 @@ python3 -m memark run --workspace ./memark-work --update --wiki
 - 当前版本已经能把 `palace-package -> promote -> 可选 build` 串成一条 CLI
 - 但“哪些 drawer 值得晋升、哪些只该停留在原始记忆层”仍是治理问题，不是上游自动保证
 - `MemArk` 当前负责的是稳定消费这些 package，并落成 `Graphify` 能直接吃的 corpus
-- 如果当前走的是 `_rebuild_code` fallback，真正进入图谱的主要还是代码树；`promoted/` 与 `documents/` 仍更像是已整理好的待编译语料
+- 如果当前走的是 `_rebuild_code` fallback，真正进入图谱的主要还是代码树；`promoted/` 与注册项目文档仍更像是已整理好的待编译语料
 - `memark status --json` 可作为脚本化验收入口
 - 如果要让 `MemPalace` 与 `Graphify` 的实测结果保持干净，项目本身还应维护 `.gitignore` 和 `.graphifyignore`
 
@@ -732,7 +725,7 @@ python3 -m memark status --workspace . --json
 如果上游 `Graphify` skill 已经真实 ingest 了当前 corpus，可以用两种方式让系统认出这条闭环证据：
 
 - 显式记录：`python3 -m memark graphify-proof --workspace . --record-ingested ...`
-- 自动识别：让 `corpus/<project>/graphify-out/graph.json` 里真实包含来自 `promoted/documents/imports` 的节点；之后 `memark graphify-proof` / `milestones` 会自动认出它
+- 自动识别：让 `corpus/<project>/graphify-out/graph.json` 里真实包含来自 `promoted`、注册项目文档、`imports` 的节点；之后 `memark graphify-proof` / `milestones` 会自动认出它
 
 ## 开源价值
 

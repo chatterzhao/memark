@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .io import copy_document, dump_json_file, load_json_file, sha256_text
 from .package_builder import (
     build_session_package_from_drawers,
     group_drawers_by_logical_session,
@@ -15,7 +14,7 @@ from .package_builder import (
 from .palace import PalaceReadError, read_palace_drawers
 from .project_registry import ProjectCycleResult, run_projects_cycle
 from .promote import PromoteResult, promote_file
-from .workspace import WorkspaceConfig, slugify
+from .workspace import WorkspaceConfig
 
 
 _DOC_SUFFIXES = {".md", ".mdx", ".rst", ".txt", ".adoc"}
@@ -40,22 +39,6 @@ _DOC_IGNORE_PARTS = {
 
 
 @dataclass(slots=True)
-class DocumentSyncResult:
-    copied: int
-    updated: int
-    unchanged: int
-    files: list[str]
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "copied": self.copied,
-            "updated": self.updated,
-            "unchanged": self.unchanged,
-            "files": list(self.files),
-        }
-
-
-@dataclass(slots=True)
 class FeedPhaseResult:
     intake: ProjectCycleResult | None
 
@@ -65,14 +48,14 @@ class FeedPhaseResult:
 
 @dataclass(slots=True)
 class ProcessPhaseResult:
-    documents: DocumentSyncResult
+    project: dict[str, object]
     palace_drawers: int
     packages: int
     promoted: list[PromoteResult]
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "documents": self.documents.to_dict(),
+            "project": dict(self.project),
             "palace_drawers": self.palace_drawers,
             "packages": self.packages,
             "promoted": [
@@ -85,29 +68,11 @@ class ProcessPhaseResult:
             ],
         }
 
-
-def _documents_ledger_path(config: WorkspaceConfig, project: str) -> Path:
-    return config.state_dir / f"{slugify(project)}-documents.json"
-
-
 def _automation_packages_dir(config: WorkspaceConfig, project: str) -> Path:
-    return config.staging_dir / slugify(project) / "packages"
+    return config.staging_dir / project / "packages"
 
 
-def _load_documents_ledger(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-    payload = load_json_file(path)
-    if not isinstance(payload, dict):
-        return {}
-    return {str(key): str(value) for key, value in payload.items()}
-
-
-def _save_documents_ledger(path: Path, payload: dict[str, str]) -> None:
-    dump_json_file(path, payload)
-
-
-def _iter_project_documents(root: Path) -> list[Path]:
+def iter_project_documents(root: Path) -> list[Path]:
     if not root.exists():
         return []
     results: list[Path] = []
@@ -123,54 +88,13 @@ def _iter_project_documents(root: Path) -> list[Path]:
     return results
 
 
-def sync_project_documents(config: WorkspaceConfig, *, project: str, source_root: Path) -> DocumentSyncResult:
-    project_slug = slugify(project)
-    destination_root = config.documents_dir(project_slug)
-    ledger_path = _documents_ledger_path(config, project_slug)
-    ledger = _load_documents_ledger(ledger_path)
-    next_ledger = dict(ledger)
-    copied = 0
-    updated = 0
-    unchanged = 0
-    files: list[str] = []
-
-    sources = _iter_project_documents(source_root)
-    for source in sources:
-        relative = source.relative_to(source_root)
-        destination = destination_root / relative
-        fingerprint = sha256_text(source.read_text(encoding="utf-8", errors="ignore"))
-        key = str(relative)
-        existing = ledger.get(key)
-        if existing == fingerprint and destination.exists():
-            unchanged += 1
-            next_ledger[key] = fingerprint
-            files.append(str(destination))
-            continue
-        existed_before = destination.exists()
-        copy_document(source, destination)
-        if existing is None or not existed_before:
-            copied += 1
-        else:
-            updated += 1
-        next_ledger[key] = fingerprint
-        files.append(str(destination))
-
-    stale_keys = sorted(set(next_ledger) - {str(path.relative_to(source_root)) for path in sources})
-    for key in stale_keys:
-        next_ledger.pop(key, None)
-        destination = destination_root / key
-        if destination.exists():
-            destination.unlink()
-            parent = destination.parent
-            while parent != destination_root and parent.exists():
-                try:
-                    parent.rmdir()
-                except OSError:
-                    break
-                parent = parent.parent
-
-    _save_documents_ledger(ledger_path, next_ledger)
-    return DocumentSyncResult(copied=copied, updated=updated, unchanged=unchanged, files=files)
+def scan_project_documents(source_root: Path) -> dict[str, object]:
+    files = iter_project_documents(source_root)
+    return {
+        "root": str(source_root.resolve()),
+        "documents": len(files),
+        "files": [str(path.resolve()) for path in files],
+    }
 
 
 def build_palace_packages(config: WorkspaceConfig, *, project: str) -> tuple[int, int, list[PromoteResult]]:

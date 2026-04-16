@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .pipeline import iter_project_documents
+from .project_registry import load_project_profiles
 from .workspace import WorkspaceConfig, slugify
 
-_VALID_SCOPES = {"promoted", "documents", "imports"}
+_VALID_SCOPES = {"promoted", "project", "imports"}
 
 
 @dataclass(slots=True)
@@ -33,11 +35,20 @@ class CorpusHit:
 def _iter_scope_files(config: WorkspaceConfig, project: str, scopes: tuple[str, ...]) -> list[tuple[str, Path]]:
     base = config.corpus_project_dir(project)
     files: list[tuple[str, Path]] = []
+    project_root = None
+    for profile in load_project_profiles(config.projects_file):
+        if profile.normalized_name() == project:
+            project_root = profile.normalized_path()
+            break
     for scope in scopes:
-        root = base / scope
-        if not root.exists():
+        if scope == "project":
+            if project_root is None:
+                continue
+            files.extend((scope, path) for path in iter_project_documents(project_root))
             continue
-        files.extend((scope, path) for path in sorted(root.rglob("*")) if path.is_file())
+        root = base / scope
+        if root.exists():
+            files.extend((scope, path) for path in sorted(root.rglob("*")) if path.is_file())
     return files
 
 
@@ -145,4 +156,3 @@ def search_payload(
         "scopes": list(scopes),
         "hits": [hit.to_dict() for hit in hits],
     }
-

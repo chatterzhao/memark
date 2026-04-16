@@ -11,12 +11,12 @@ from .graphify_proof import graphify_corpus_status
 from .handoff import GraphifyHandoff, build_graphify_handoff
 from .io import dump_json_file, load_json_file
 from .pipeline import (
-    DocumentSyncResult,
     FeedPhaseResult,
     ProcessPhaseResult,
     build_palace_packages,
     run_feed_phase,
-    sync_project_documents,
+    iter_project_documents,
+    scan_project_documents,
 )
 from .project_registry import (
     ProjectCycleResult,
@@ -59,8 +59,8 @@ class AutomationProjectResult:
         return self.feed.intake
 
     @property
-    def documents(self) -> DocumentSyncResult:
-        return self.process.documents
+    def project_documents(self) -> dict[str, object]:
+        return self.process.project
 
     @property
     def palace_drawers(self) -> int:
@@ -89,7 +89,7 @@ class AutomationProjectResult:
             "process": self.process.to_dict(),
             "consume": self.consume.to_dict(),
             "intake": self.intake.to_dict() if self.intake is not None else None,
-            "documents": self.documents.to_dict(),
+            "project_documents": dict(self.project_documents),
             "palace_drawers": self.palace_drawers,
             "packages": self.packages,
             "promoted": self.process.to_dict()["promoted"],
@@ -173,11 +173,7 @@ def _automation_summary(result: AutomationProjectResult) -> dict[str, object]:
             "mine_skipped_reason": result.intake.mine_skipped_reason,
         },
         "process": {
-            "documents": {
-                "copied": result.documents.copied,
-                "updated": result.documents.updated,
-                "unchanged": result.documents.unchanged,
-            },
+            "project": dict(result.project_documents),
             "palace_drawers": result.palace_drawers,
             "packages": result.packages,
             "promoted_changed": sum(1 for item in result.promoted if item.changed),
@@ -187,11 +183,7 @@ def _automation_summary(result: AutomationProjectResult) -> dict[str, object]:
             "graphify_status": result.graphify.status,
             "artifacts": list(result.artifacts),
         },
-        "documents": {
-            "copied": result.documents.copied,
-            "updated": result.documents.updated,
-            "unchanged": result.documents.unchanged,
-        },
+        "project_documents": dict(result.project_documents),
         "palace_drawers": result.palace_drawers,
         "packages": result.packages,
         "promoted_changed": sum(1 for item in result.promoted if item.changed),
@@ -334,14 +326,19 @@ def generate_consumption_artifacts(
         key=lambda path: path.stat().st_mtime,
         reverse=True,
     )
-    documents = sorted(
-        (path for path in config.documents_dir(project_slug).rglob("*") if path.is_file()),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
+    project_root = None
+    for profile in load_project_profiles(config.projects_file):
+        if profile.normalized_name() == project_slug:
+            project_root = profile.normalized_path()
+            break
+    project_documents = (
+        sorted(iter_project_documents(project_root), key=lambda path: path.stat().st_mtime, reverse=True)
+        if project_root is not None
+        else []
     )
     recent_titles = _extract_titles(promoted, limit=5)
-    decision_lines = _extract_matching_lines([*promoted, *documents], _DECISION_MARKERS, limit=10)
-    risk_lines = _extract_matching_lines([*promoted, *documents], _RISK_MARKERS, limit=10)
+    decision_lines = _extract_matching_lines([*promoted, *project_documents], _DECISION_MARKERS, limit=10)
+    risk_lines = _extract_matching_lines([*promoted, *project_documents], _RISK_MARKERS, limit=10)
 
     written: list[str] = []
     recent_lines = [f"- {title}" for title in recent_titles] or ["- No promoted knowledge yet."]
@@ -356,7 +353,7 @@ def generate_consumption_artifacts(
                 "",
                 f"- project: {project_slug}",
                 f"- promoted_files: {len(promoted)}",
-                f"- document_files: {len(documents)}",
+                f"- project_documents: {len(project_documents)}",
                 f"- graphify_status: {graphify.status}",
                 f"- graphify_corpus_status: {graphify_corpus.get('status')}",
                 "",
@@ -552,13 +549,13 @@ def run_automation_cycle(
     try:
         for profile in profiles:
             project = profile.normalized_name()
-            documents = sync_project_documents(
-                config,
-                project=project,
-                source_root=profile.normalized_path(),
-            )
+            project_snapshot = scan_project_documents(profile.normalized_path())
             palace_drawers, packages, promoted = build_palace_packages(config, project=project)
-            handoff = build_graphify_handoff(project, config.corpus_project_dir(project))
+            handoff = build_graphify_handoff(
+                project,
+                config.corpus_project_dir(project),
+                project_root=profile.normalized_path(),
+            )
 
             graphify_result: GraphifyBuildResult | None = None
             graphify_error: str | None = None
@@ -590,7 +587,7 @@ def run_automation_cycle(
                     project=project,
                     feed=FeedPhaseResult(intake=intake_by_project.get(project)),
                     process=ProcessPhaseResult(
-                        documents=documents,
+                        project=project_snapshot,
                         palace_drawers=palace_drawers,
                         packages=packages,
                         promoted=promoted,

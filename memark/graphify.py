@@ -11,6 +11,8 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+from .pipeline import iter_project_documents
+from .project_registry import load_project_profiles
 
 class GraphifyError(RuntimeError):
     """Raised when Graphify is unavailable or its command fails."""
@@ -142,6 +144,25 @@ _HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 _MD_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 
 
+@dataclass(frozen=True)
+class _CorpusSource:
+    scope: str
+    relative_path: str
+    source_path: Path
+
+
+def _project_root_for(corpus_dir: Path) -> Path | None:
+    workspace = corpus_dir.parent.parent
+    projects_file = workspace / ".memark" / "projects.toml"
+    if not projects_file.exists():
+        return None
+    project = corpus_dir.name
+    for profile in load_project_profiles(projects_file):
+        if profile.normalized_name() == project:
+            return profile.normalized_path()
+    return None
+
+
 def _is_candidate_file(path: Path, project_dir: Path) -> bool:
     relative = path.relative_to(project_dir)
     if any(part in _IGNORE_PARTS or part.startswith(".graphify") for part in relative.parts):
@@ -153,21 +174,27 @@ def _is_candidate_file(path: Path, project_dir: Path) -> bool:
     return path.is_file()
 
 
-def _iter_corpus_files(project_dir: Path) -> list[Path]:
-    return [
-        path
-        for path in sorted(project_dir.rglob("*"))
-        if _is_candidate_file(path, project_dir)
-    ]
+def _iter_corpus_sources(project_dir: Path) -> list[_CorpusSource]:
+    sources: list[_CorpusSource] = []
+    for path in sorted(project_dir.rglob("*")):
+        if not _is_candidate_file(path, project_dir):
+            continue
+        relative = path.relative_to(project_dir).as_posix()
+        scope = relative.split("/", 1)[0] if "/" in relative else relative
+        if scope not in {"promoted", "imports"}:
+            scope = "code" if path.suffix.lower() in _CODE_SUFFIXES else "other"
+        sources.append(_CorpusSource(scope=scope, relative_path=relative, source_path=path.resolve()))
+
+    project_root = _project_root_for(project_dir)
+    if project_root is not None:
+        for path in iter_project_documents(project_root):
+            relative = path.relative_to(project_root).as_posix()
+            sources.append(_CorpusSource(scope="project", relative_path=f"project/{relative}", source_path=path.resolve()))
+    return sources
 
 
-def _scope_for(path: Path, project_dir: Path) -> str:
-    relative = path.relative_to(project_dir)
-    if relative.parts and relative.parts[0] in {"promoted", "documents", "imports"}:
-        return relative.parts[0]
-    if path.suffix.lower() in _CODE_SUFFIXES:
-        return "code"
-    return "other"
+def _scope_for(source: _CorpusSource) -> str:
+    return source.scope
 
 
 def _read_text(path: Path) -> str:
@@ -207,19 +234,15 @@ def _file_summary(scope: str, title: str, relative_path: str, keywords: list[str
     return " | ".join(parts)
 
 
-def _resolve_markdown_target(source: Path, target: str, project_dir: Path) -> Path | None:
+def _resolve_markdown_target(source: _CorpusSource, target: str, sources_by_path: dict[Path, _CorpusSource]) -> _CorpusSource | None:
     cleaned = target.strip()
     if not cleaned or "://" in cleaned or cleaned.startswith("#"):
         return None
     cleaned = cleaned.split("#", 1)[0].split("?", 1)[0].strip()
     if not cleaned:
         return None
-    candidate = (source.parent / cleaned).resolve()
-    try:
-        candidate.relative_to(project_dir.resolve())
-    except ValueError:
-        return None
-    return candidate if candidate.exists() else None
+    candidate = (source.source_path.parent / cleaned).resolve()
+    return sources_by_path.get(candidate)
 
 
 def _render_autonomous_report(
@@ -244,7 +267,7 @@ def _render_autonomous_report(
         "## Scope Coverage",
         "",
     ]
-    for scope in ("promoted", "documents", "imports", "code", "other"):
+    for scope in ("promoted", "project", "imports", "code", "other"):
         lines.append(f"- {scope}: {scope_counts.get(scope, 0)} files")
     lines.extend(
         [
@@ -264,30 +287,32 @@ def _render_autonomous_report(
 
 def _run_memark_mixed_corpus_build(project_dir: Path, *, reason: str) -> GraphifyBuildResult:
     project_dir = project_dir.resolve()
-    files = _iter_corpus_files(project_dir)
+    sources = _iter_corpus_sources(project_dir)
     graphify_out = project_dir / "graphify-out"
     graphify_out.mkdir(parents=True, exist_ok=True)
 
     nodes: list[dict[str, object]] = []
     edges: list[dict[str, object]] = []
     seen_edges: set[tuple[str, str, str]] = set()
-    file_nodes: dict[Path, str] = {}
-    file_keywords: dict[Path, set[str]] = {}
+    file_nodes: dict[str, str] = {}
+    file_keywords: dict[str, set[str]] = {}
     scope_counts: Counter[str] = Counter()
-    concept_sources: dict[str, list[Path]] = defaultdict(list)
+    concept_sources: dict[str, list[str]] = defaultdict(list)
+    sources_by_path = {item.source_path: item for item in sources}
 
-    for path in files:
-        relative = path.relative_to(project_dir).as_posix()
-        scope = _scope_for(path, project_dir)
+    for source in sources:
+        path = source.source_path
+        relative = source.relative_path
+        scope = _scope_for(source)
         scope_counts[scope] += 1
         text = _read_text(path)
         keywords = _file_keywords(text) if text else []
         title = _file_title(path, text) if text else path.name
         file_id = f"file:{relative}"
-        file_nodes[path.resolve()] = file_id
-        file_keywords[path.resolve()] = set(keywords)
+        file_nodes[relative] = file_id
+        file_keywords[relative] = set(keywords)
         for keyword in keywords:
-            concept_sources[keyword].append(path.resolve())
+            concept_sources[keyword].append(relative)
 
         nodes.append(
             {
@@ -333,10 +358,10 @@ def _run_memark_mixed_corpus_build(project_dir: Path, *, reason: str) -> Graphif
                     break
         if text and path.suffix.lower() in {".md", ".mdx", ".rst", ".txt", ".adoc"}:
             for raw_target in _MD_LINK_RE.findall(text):
-                target = _resolve_markdown_target(path, raw_target, project_dir)
+                target = _resolve_markdown_target(source, raw_target, sources_by_path)
                 if target is None:
                     continue
-                target_id = f"file:{target.relative_to(project_dir).as_posix()}"
+                target_id = f"file:{target.relative_path}"
                 edge_key = (file_id, target_id, "references")
                 if edge_key in seen_edges:
                     continue
@@ -385,8 +410,8 @@ def _run_memark_mixed_corpus_build(project_dir: Path, *, reason: str) -> Graphif
     resolved_paths = sorted(file_nodes)
     for index, left in enumerate(resolved_paths):
         for right in resolved_paths[index + 1 :]:
-            left_scope = _scope_for(left, project_dir)
-            right_scope = _scope_for(right, project_dir)
+            left_scope = next(item.scope for item in sources if item.relative_path == left)
+            right_scope = next(item.scope for item in sources if item.relative_path == right)
             if left_scope == "other" and right_scope == "other":
                 continue
             overlap = sorted(file_keywords[left] & file_keywords[right])
@@ -415,8 +440,8 @@ def _run_memark_mixed_corpus_build(project_dir: Path, *, reason: str) -> Graphif
         degree[str(edge["target"])] += 1
 
     top_files = []
-    for path, file_id in file_nodes.items():
-        top_files.append((path.relative_to(project_dir).as_posix(), degree[file_id]))
+    for relative, file_id in file_nodes.items():
+        top_files.append((relative, degree[file_id]))
     top_files.sort(key=lambda item: (-item[1], item[0]))
 
     payload = {

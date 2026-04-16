@@ -123,7 +123,7 @@ If an upstream Graphify flow really ingests that corpus separately, persist the 
 "$MEMARK_BIN" graphify-proof --workspace "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT" --record-ingested --evidence-path <path-to-proof-file>
 ```
 
-If either MemArk or an upstream Graphify flow writes `graphify-out/graph.json` inside `corpus/<project>` and that graph contains nodes sourced from `promoted/`, `documents/`, or `imports/`, MemArk can auto-detect the proof later via `graphify-proof` or `milestones`.
+If either MemArk or an upstream Graphify flow writes `graphify-out/graph.json` inside `corpus/<project>` and that graph contains nodes sourced from `promoted/`, registered project documents, or `imports/`, MemArk can auto-detect the proof later via `graphify-proof` or `milestones`.
 
 Important boundary:
 

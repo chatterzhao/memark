@@ -90,10 +90,6 @@ class WorkspaceConfig:
         return self.inbox_dir / "promoted"
 
     @property
-    def inbox_documents_dir(self) -> Path:
-        return self.inbox_dir / "documents"
-
-    @property
     def archive_dir(self) -> Path:
         return self.config_dir / "archive"
 
@@ -111,9 +107,6 @@ class WorkspaceConfig:
 
     def promoted_dir(self, project: str | None = None) -> Path:
         return self.corpus_project_dir(project) / "promoted"
-
-    def documents_dir(self, project: str | None = None) -> Path:
-        return self.corpus_project_dir(project) / "documents"
 
     def imports_dir(self, project: str | None = None) -> Path:
         return self.corpus_project_dir(project) / "imports"
@@ -147,13 +140,11 @@ class WorkspaceConfig:
             self.config_dir,
             self.inbox_dir,
             self.inbox_promoted_dir,
-            self.inbox_documents_dir,
             self.archive_dir,
             self.state_dir,
             self.codex_sessions_dir(project),
             self.palace_dir(project),
             self.promoted_dir(project),
-            self.documents_dir(project),
             self.imports_dir(project),
         ]:
             path.mkdir(parents=True, exist_ok=True)

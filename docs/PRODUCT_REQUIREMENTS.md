@@ -181,7 +181,7 @@
 ### R4. 项目会话和正式文档必须分层进入同一 corpus
 
 - 项目对话晋升结果进入 `corpus/<project>/promoted`
-- 已落盘文档进入 `corpus/<project>/documents`
+- 已落盘正式文档直接从注册项目的 `project-root` 消费
 - 其他预处理材料进入 `corpus/<project>/imports`
 
 ### R4.1. 派生产物必须先隔离
@@ -209,7 +209,7 @@
 - `MemArk` 的目标不只是 ingest 成功
 - 必须明确区分三类可消费结果：
   - 记忆找回：由 `MemPalace search / wake-up / MCP` 消费
-  - 项目知识语料：由 `promoted/*.md` 和 `documents/` 消费
+  - 项目知识语料：由 `promoted/*.md` 和注册项目根目录中的正式文档共同消费
   - 结构化导航：由 `Graphify` 的 `GRAPH_REPORT.md`、`graph.json`、query、wiki、MCP 消费
 
 说明：
@@ -254,8 +254,8 @@
 
 ### R6.1. 必须区分“语料已整理”与“语料已进图”
 
-- `promoted/` 和 `documents/` 可以先作为 Graphify-ready corpus 落盘
-- 只有当 `graphify-out/graph.json` 里真实出现来自 `promoted/`、`documents/` 或 `imports/` 的节点，才能宣称这些 Markdown 已进入最终图谱
+- `promoted/`、注册项目根目录中的正式文档，以及 `imports/` 可以先作为 Graphify-ready 输入边界存在
+- 只有当 `graphify-out/graph.json` 里真实出现来自 `promoted/`、项目正式文档或 `imports/` 的节点，才能宣称这些 Markdown 已进入最终图谱
 - 当前更准确的说法是：
   - `MemArk` 负责把会话整理成 `Graphify` 能消费的目录边界
   - `MemArk` 默认也负责把这批 mixed-corpus 文件编译成一个本地图谱

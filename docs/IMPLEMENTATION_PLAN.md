@@ -15,7 +15,7 @@
 1. `memark init`
 2. `memark validate`
 3. `memark promote`
-4. `memark add-documents`
+4. `memark project-set`
 5. `memark build`
 6. `memark run`
 7. `memark codex-sync`
@@ -47,7 +47,7 @@
 1. 外部抽取器、AI 助手或人工步骤先产出 room package JSON
 2. `MemArk` 负责校验这些 package
 3. `MemArk` 负责把 package 稳定晋升为 corpus Markdown
-4. `MemArk` 负责把正式文档一起纳入 corpus
+4. `MemArk` 负责直接消费注册项目根目录中的正式文档
 5. `MemArk` 负责触发 `Graphify`
 
 这一段现在已经有了第一版正式能力：
@@ -77,20 +77,17 @@ workspace/
       <project>/
   inbox/
     promoted/
-    documents/
   corpus/
     <project>/
       promoted/
-      documents/
       imports/
 ```
 
 说明：
 
 - `inbox/promoted/`：外部抽取器投递 room package JSON 的位置
-- `inbox/documents/`：待纳入 corpus 的正式文档
+- 注册项目根目录：正式文档的直接消费源
 - `promoted/`：由 `MemArk` 生成的 Graphify-ready Markdown
-- `documents/`：已落盘项目文档
 - `imports/`：预留给后续其他输入源
 - `<project>-ledger.json`：记录每个 room 的内容指纹，避免重复写入
 - `<project>-codex-sessions.json`：记录每个同步过的 `Codex` session 文件指纹

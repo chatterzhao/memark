@@ -473,8 +473,8 @@ python3 -m memark automation-run --workspace . --no-build --json
 
 这次 smoke 同时暴露并促成修正了一条实现边界：
 
-- 自动文档同步原先会把 `.experiments/`、`build/`、`.pytest_cache/`、`*.egg-info/`、`docs/raw/` 也带进 `documents/`
-- 当前已补过滤，自动消费语料会优先保持在“正式项目文档”范围内
+- 旧实现会把 `.experiments/`、`build/`、`.pytest_cache/`、`*.egg-info/`、`docs/raw/` 也混进项目文档消费面
+- 当前已补过滤，并直接从 `project-root` 选择正式项目文档，不再复制到 `documents/`
 
 ### 5. 新 worktree 中的 `codex exec` 验证
 
@@ -616,7 +616,7 @@ PYTHONPATH=~/Downloads/code/my-memark/mempalace \
   - `140 edges`
   - `7 communities`
 - 继续用 `graphify query` 检查时，命中的是 `memark/` 代码节点和函数关系
-- 手写晋升进去的 Markdown room 与 `documents/` 文档没有出现在图输出里
+- 手写晋升进去的 Markdown room 与项目正式文档没有出现在图输出里
 
 这也再次说明：
 

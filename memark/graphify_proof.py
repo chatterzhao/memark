@@ -9,6 +9,8 @@ from pathlib import Path
 
 from .handoff import build_graphify_handoff
 from .io import dump_json_file, load_json_file
+from .pipeline import iter_project_documents
+from .project_registry import load_project_profiles
 from .workspace import WorkspaceConfig, slugify
 
 
@@ -50,7 +52,15 @@ def _graphify_out_dir(config: WorkspaceConfig, project: str) -> Path:
     return config.corpus_project_dir(project) / "graphify-out"
 
 
-def _graph_node_counts(graph_path: Path, corpus_dir: Path) -> tuple[int, int] | None:
+def _project_root_for(config: WorkspaceConfig, project: str) -> Path | None:
+    project_slug = slugify(project)
+    for profile in load_project_profiles(config.projects_file):
+        if profile.normalized_name() == project_slug:
+            return profile.normalized_path()
+    return None
+
+
+def _graph_node_counts(graph_path: Path, corpus_dir: Path, project_root: Path | None) -> tuple[int, int] | None:
     try:
         payload = json.loads(graph_path.read_text(encoding="utf-8"))
     except Exception:
@@ -60,9 +70,12 @@ def _graph_node_counts(graph_path: Path, corpus_dir: Path) -> tuple[int, int] | 
         return None
     scope_markers = (
         str((corpus_dir / "promoted").resolve()) + "/",
-        str((corpus_dir / "documents").resolve()) + "/",
         str((corpus_dir / "imports").resolve()) + "/",
     )
+    project_documents = {
+        str(path.resolve()).replace("\\", "/")
+        for path in iter_project_documents(project_root)
+    } if project_root is not None else set()
     mixed_corpus_nodes = 0
     for item in nodes:
         if not isinstance(item, dict):
@@ -71,7 +84,7 @@ def _graph_node_counts(graph_path: Path, corpus_dir: Path) -> tuple[int, int] | 
         if not isinstance(source_file, str):
             continue
         normalized = source_file.replace("\\", "/")
-        if any(marker.replace("\\", "/") in normalized for marker in scope_markers):
+        if any(marker.replace("\\", "/") in normalized for marker in scope_markers) or normalized in project_documents:
             mixed_corpus_nodes += 1
     return (len(nodes), mixed_corpus_nodes)
 
@@ -79,6 +92,7 @@ def _graph_node_counts(graph_path: Path, corpus_dir: Path) -> tuple[int, int] | 
 def graphify_proof_diagnostics(config: WorkspaceConfig, project: str) -> dict[str, object]:
     project_slug = slugify(project)
     corpus_dir = config.corpus_project_dir(project_slug).resolve()
+    project_root = _project_root_for(config, project_slug)
     graphify_out = _graphify_out_dir(config, project_slug)
     graph_path = graphify_out / "graph.json"
     report_path = graphify_out / "GRAPH_REPORT.md"
@@ -91,7 +105,7 @@ def graphify_proof_diagnostics(config: WorkspaceConfig, project: str) -> dict[st
     }
     workspace_graph_path = (config.workspace / "graphify-out" / "graph.json").resolve()
     if workspace_graph_path != graph_path.resolve():
-        workspace_counts = _graph_node_counts(workspace_graph_path, corpus_dir) if workspace_graph_path.exists() else None
+        workspace_counts = _graph_node_counts(workspace_graph_path, corpus_dir, project_root) if workspace_graph_path.exists() else None
         diagnostics["workspace_graph_path"] = str(workspace_graph_path)
         diagnostics["workspace_graph_status"] = (
             "graph_missing"
@@ -106,7 +120,7 @@ def graphify_proof_diagnostics(config: WorkspaceConfig, project: str) -> dict[st
         diagnostics["workspace_mixed_corpus_nodes"] = 0 if workspace_counts is None else workspace_counts[1]
     if not graph_path.exists():
         return diagnostics
-    counts = _graph_node_counts(graph_path, corpus_dir)
+    counts = _graph_node_counts(graph_path, corpus_dir, project_root)
     if counts is None:
         diagnostics["status"] = "graph_unreadable"
         return diagnostics
@@ -178,18 +192,19 @@ def graphify_corpus_status(config: WorkspaceConfig, project: str) -> dict[str, o
 def detect_graphify_proof(config: WorkspaceConfig, project: str) -> dict[str, object] | None:
     project_slug = slugify(project)
     corpus_dir = config.corpus_project_dir(project_slug).resolve()
+    project_root = _project_root_for(config, project_slug)
     graphify_out = _graphify_out_dir(config, project_slug)
     graph_path = graphify_out / "graph.json"
     report_path = graphify_out / "GRAPH_REPORT.md"
     if not graph_path.exists():
         return None
-    counts = _graph_node_counts(graph_path, corpus_dir)
+    counts = _graph_node_counts(graph_path, corpus_dir, project_root)
     if counts is None:
         return None
     _, mixed_corpus_nodes = counts
     if mixed_corpus_nodes <= 0:
         return None
-    handoff = build_graphify_handoff(project_slug, corpus_dir)
+    handoff = build_graphify_handoff(project_slug, corpus_dir, project_root=project_root)
     evidence_paths = [str(graph_path.resolve())]
     if report_path.exists():
         evidence_paths.append(str(report_path.resolve()))
@@ -201,7 +216,7 @@ def detect_graphify_proof(config: WorkspaceConfig, project: str) -> dict[str, ob
         recommended_command=handoff.recommended_command,
         command=None,
         evidence_paths=evidence_paths,
-        notes="auto-detected from graphify-out/graph.json nodes sourced from promoted/documents/imports",
+        notes="auto-detected from graphify-out/graph.json nodes sourced from promoted/project/imports",
         inventories=[item.to_dict() for item in handoff.inventories],
     ).to_dict()
 
@@ -225,7 +240,11 @@ def record_graphify_proof(
     notes: str | None,
 ) -> dict[str, object]:
     project_slug = slugify(project)
-    handoff = build_graphify_handoff(project_slug, config.corpus_project_dir(project_slug))
+    handoff = build_graphify_handoff(
+        project_slug,
+        config.corpus_project_dir(project_slug),
+        project_root=_project_root_for(config, project_slug),
+    )
     resolved_evidence = [str(Path(item).expanduser().resolve()) for item in evidence_paths]
     payload = GraphifyProof(
         project=project_slug,
