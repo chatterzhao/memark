@@ -74,7 +74,13 @@ MEMARK_ATTACH_FILES = (
     "projects.toml",
 )
 
-INIT_MEM_TOOL_HELP = """Memory tool quick guide:
+INIT_MEM_TOOL_HELP = """Init prerequisites:
+  - Run 'memark init' only from the main git repository root, not from a linked worktree.
+  - The repository root must already ignore '.memark/' and 'corpus/' via '.gitignore' or '.git/info/exclude'.
+  - If the main branch is protected and '.gitignore' is missing those entries, add them on a feature branch or dedicated worktree, merge that change back into the protected root branch, then return to the main repository root and run 'memark init'.
+  - After the main repository root has been initialized, use 'memark worktree-attach --source-dir <main-repo> --target-dir <worktree-dir>' for linked worktrees.
+
+Memory tool quick guide:
   mempalace: Default Python memory CLI with search, wake-up, and MCP access.
     Repo: https://github.com/milla-jovovich/mempalace
   mempal: Rust single-binary memory engine with local knowledge graph and tunnel primitives.
@@ -989,6 +995,9 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"  {reason}", file=sys.stderr)
         if "worktree" in reason.lower():
             print("  Run 'memark worktree-attach --source-dir <main-repo> --target-dir .' instead.", file=sys.stderr)
+            print("  If the main repository still needs '.gitignore' coverage for '.memark/' or 'corpus/',", file=sys.stderr)
+            print("  add those entries on a feature branch or dedicated worktree, merge them back into the main branch,", file=sys.stderr)
+            print("  then rerun 'memark init' from the main repository root.", file=sys.stderr)
         else:
             print("  Please cd to the project root directory, or run 'git init' first.", file=sys.stderr)
         return 1
@@ -1004,6 +1013,8 @@ def cmd_init(args: argparse.Namespace) -> int:
         print("Fix this before re-running 'memark init':", file=sys.stderr)
         print("  - add the entries to repository .gitignore, or", file=sys.stderr)
         print("  - add them to .git/info/exclude for local-only setup", file=sys.stderr)
+        print("  - if the repository root branch is protected, make the .gitignore change on a feature branch", file=sys.stderr)
+        print("    or dedicated worktree, merge it back into the protected root branch, then rerun 'memark init'", file=sys.stderr)
         print("", file=sys.stderr)
         print("Suggested entries:", file=sys.stderr)
         for path in missing_ignore_paths:
