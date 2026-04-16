@@ -1,0 +1,35 @@
+wing: memark
+rooms:
+- name: memark
+  description: Files from memark/
+  keywords:
+  - memark
+  - memark
+- name: testing
+  description: Files from tests/
+  keywords:
+  - testing
+  - tests
+- name: memark.egg_info
+  description: Files from memark.egg-info/
+  keywords:
+  - memark.egg_info
+  - memark.egg-info
+- name: documentation
+  description: Files from docs/
+  keywords:
+  - documentation
+  - docs
+- name: graphify_out
+  description: Files from graphify-out/
+  keywords:
+  - graphify_out
+  - graphify-out
+- name: examples
+  description: Files from examples/
+  keywords:
+  - examples
+  - examples
+- name: general
+  description: Files that don't fit other rooms
+  keywords: []

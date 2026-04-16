@@ -1,0 +1,36 @@
+# Freely project-level Codex config
+# Reference: https://developers.openai.com/codex/config-reference/
+#
+# This file is versioned on purpose so every worktree inherits the same project
+# defaults. `freely init` should create or update this file as a managed
+# bootstrap artifact instead of mutating user-global `~/.codex/config.toml`.
+#
+# Why these keys exist:
+# - `model_context_window`: keep the effective budget below the cost step-up zone
+#   observed during dogfooding so Codex compacts earlier instead of drifting
+#   into an expensive context shape.
+# - `model_auto_compact_token_limit`: trigger compaction before the window cap so
+#   long-running sessions compress predictably.
+# - `project_doc_max_bytes`: bound auto-loaded project docs so startup context is
+#   stable and large governance files do not dominate the prompt budget.
+# - `approval_policy`: follow the Freely runtime posture for this project so
+#   auto mode stays non-interactive by default.
+# - `sandbox_mode`: keep the recommended workspace-write safeguard as a
+#   project-local Codex baseline without making it a Freely hard prerequisite.
+# - `sandbox_workspace_write.writable_roots`: allow direct access to the sibling
+#   `{project}-worktrees` root, which is outside the project root by design.
+
+# Context window governance
+model_context_window = 200000
+model_auto_compact_token_limit = 150000
+
+# Project doc budget
+project_doc_max_bytes = 32768
+
+# Approval and sandbox defaults
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+network_access = false
+writable_roots = ["/Users/zhaoyu/Downloads/code/my-memark/memark-worktrees"]
