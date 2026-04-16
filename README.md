@@ -1,6 +1,6 @@
 # MemArk
 
-> **自动串联 MemPalace 记忆和 Graphify 图谱——安装后，在任何项目执行 `memark init` 即可。**
+> **自动串联 MemPalace 记忆和 Graphify 图谱——任何想用 MemPalace / mempal / Graphify 的人，只需 `cd <your-project-path>` 再执行 `memark init`，它将自动喂数据、自己加工、自己被您在这个项目工作的 AI 消费。**
 
 上游项目：
 
