@@ -4,6 +4,9 @@
 
 当前 `MemArk` 是否可以按“当前仓库自己吃自己”的 Beta 口径发布。
 
+Gitflow 的 `develop -> main -> tag -> push` 正式发布顺序不在本文重复定义，统一以
+[`docs/GITFLOW_RELEASE_FLOW.md`](<repo-root>/docs/GITFLOW_RELEASE_FLOW.md) 为准。
+
 这里的“发布”不是 GA，也不是全平台正式生产承诺，而是：
 
 - 当前仓库
@@ -22,6 +25,7 @@
 4. 后台调度证据是否成立
 5. 文档口径是否仍然准确
 6. 未承诺项是否没有被误写成已完成
+7. Gitflow 发布动作是否将按 [`docs/GITFLOW_RELEASE_FLOW.md`](<repo-root>/docs/GITFLOW_RELEASE_FLOW.md) 执行
 
 如果其中任一关键项失败，就不要把当前版本表述为“当前 Beta 可发布”。
 
