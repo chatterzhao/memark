@@ -149,7 +149,7 @@
 - [x] 能把 `.memark` / `.mempalace` / `.codex` / `.claude` / `AGENTS.md` 从一个目录复制到新 worktree
 - [x] `memark worktree-hook-install` 能把自动 attach hook 装到共享 git hooks 目录
 - [x] worktree attach 复制 `.memark` 时只复制 `config.json` 与 `projects.toml`，不复制 `state` / `staging` / `palaces`
-- [x] `memark query` 能在 `corpus/<project>/promoted|documents|imports` 上提供不依赖 `Graphify` 的本地搜索入口
+- [x] `memark query` 能在 `corpus/<project>/promoted|project|imports` 上提供不依赖 `Graphify` 的本地搜索入口
 - [x] `memark graphify-handoff` 能输出当前项目 corpus 的绝对路径、scope 规模和推荐 `/graphify <path> --update` 命令
 - [x] `memark graphify-handoff --json` 能输出可直接喂给 AI 的 prompt 与 machine-readable payload
 - [x] `memark slash --dry-run --json /graphify ...` 能输出 slash 到 `MemArk` 命令的 machine-readable 映射
