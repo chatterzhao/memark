@@ -7,7 +7,7 @@ description: Install MemArk — the bridge that automates MemPalace memory and G
 
 **MemArk 自动串联 MemPalace（记忆）和 Graphify（图谱），让项目记忆自动变成可消费的项目知识。**
 
-安装完成后，在任何项目目录下执行 `memark init`，即可一键完成：创建 workspace、注册项目、安装后台调度、运行首轮自动化。
+任何想用 MemPalace / mempal / Graphify 的人，只需 `cd <your-project-path>`，然后执行 `memark init`——它将自动喂数据、自己加工、自己被您在这个项目工作的 AI 消费。
 
 如果要做开发期反复重装、隔离验收，改看 [`skill-dev.md`](<repo-root>/skill-dev.md)。
 

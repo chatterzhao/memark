@@ -7,6 +7,8 @@ description: Development-stage installer skill for isolated fake-HOME reset, rep
 
 开发阶段入口，用于隔离环境下的反复安装验证。正式用户入口是 [`SKILL.md`](<repo-root>/SKILL.md)。
 
+用户侧核心体验：`cd <your-project-path>` → `memark init`——自动喂数据、自己加工、自己被 AI 消费。
+
 ## 平台支持
 
 当前仅支持 **macOS**。
