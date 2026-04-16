@@ -127,7 +127,7 @@
   - `corpus_status`
   - `onboarding_status`
   - `graph_path`
-  - 推荐上游命令 `/graphify <repo-root>/corpus/memark --update`
+  - 推荐上游命令 `/graphify <repo-root>/.memark/corpus/memark --update`
 
 这意味着当前仓库日常“自己吃自己”时，不用再额外翻 `status` 或 `milestones`，只读 `context` 就能看见 mixed-corpus graph 已经吃通。
 
