@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import io
 import os
 import shutil
 import sqlite3
@@ -15,6 +16,8 @@ from pathlib import Path
 from unittest import mock
 
 from memark import install as install_mod
+from memark import cli as cli_mod
+from memark import service as service_mod
 from memark import workspace as workspace_mod
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -206,6 +209,37 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         content = gitignore.read_text(encoding="utf-8")
         self.assertEqual(content, "node_modules/\n.memark/\ncorpus/\n")
+
+    def test_init_with_service_install_skips_inline_automation_run(self) -> None:
+        self._write_local_git_exclude(".memark/", "corpus/")
+        args = cli_mod._build_parser().parse_args(["init", str(self.workspace), "--json"])
+        service_result = service_mod.ServiceInstallResult(
+            scheduler="launchd",
+            workspace=self.workspace.resolve(),
+            project=None,
+            interval_seconds=300,
+            label="io.memark.test",
+            plist_path=self.workspace / "test.plist",
+            stdout_path=self.workspace / "stdout.log",
+            stderr_path=self.workspace / "stderr.log",
+            command=["python3", "-m", "memark", "automation-run"],
+            environment={},
+            loaded=True,
+        )
+        stdout = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, {"MEMARK_SKIP_SERVICE": ""}),
+            mock.patch("memark.cli.resolve_scheduler", return_value="launchd"),
+            mock.patch("memark.cli.install_launchd_service", return_value=service_result),
+            mock.patch("memark.cli.run_automation_cycle") as automation_mock,
+            mock.patch("sys.stdout", stdout),
+        ):
+            exit_code = cli_mod.cmd_init(args)
+        self.assertEqual(exit_code, 0)
+        automation_mock.assert_not_called()
+        payload = json.loads(stdout.getvalue())
+        self.assertTrue(payload["service_installed"])
+        self.assertEqual(payload["automation_status"], "scheduled")
 
     def test_init_rejects_git_worktree(self) -> None:
         """init must reject a git worktree directory and suggest worktree-attach."""
@@ -786,6 +820,16 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue(payload["dry_run"])
         self.assertFalse(Path(payload["plist_path"]).exists())
         self.assertFalse(payload["loaded"])
+
+    def test_service_install_prefers_current_checkout_invocation(self) -> None:
+        fake_home = Path(self.tmpdir.name) / "service-home"
+        runtime_bin = fake_home / "venv" / "bin"
+        runtime_bin.mkdir(parents=True, exist_ok=True)
+        (runtime_bin / "memark").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        with mock.patch("memark.service.default_memark_home", return_value=fake_home):
+            command, environment = service_mod._service_invocation()
+        self.assertEqual(command, [sys.executable, "-m", "memark"])
+        self.assertIn(str(ROOT), environment.get("PYTHONPATH", "").split(os.pathsep))
 
     def test_validate_and_promote_room_package(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)

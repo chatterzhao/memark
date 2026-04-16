@@ -1084,7 +1084,8 @@ def cmd_init(args: argparse.Namespace) -> int:
     # Step 4: Run one automation cycle (unless --no-run or env override)
     cycle_result = None
     skip_run = args.no_run or os.environ.get("MEMARK_SKIP_SERVICE", "").strip() in ("1", "true", "yes")
-    if not skip_run:
+    run_in_background = service_installed and not skip_service
+    if not skip_run and not run_in_background:
         try:
             cycle_results = run_automation_cycle(
                 config=config,
@@ -1110,7 +1111,11 @@ def cmd_init(args: argparse.Namespace) -> int:
             "sessions_root": args.sessions_root,
             "mem_tool": config.mem_tool,
             "service_installed": service_installed,
-            "automation_status": cycle_result.graphify.status if cycle_result and cycle_result.graphify else "not_run",
+            "automation_status": (
+                "scheduled"
+                if run_in_background and not skip_run
+                else cycle_result.graphify.status if cycle_result and cycle_result.graphify else "not_run"
+            ),
         }
         print(json.dumps(payload, indent=2, ensure_ascii=True))
         return 0
