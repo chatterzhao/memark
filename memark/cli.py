@@ -23,7 +23,7 @@ from .graphify_proof import (
     record_graphify_proof,
 )
 from .handoff import build_graphify_handoff
-from .install import InstallError, install_memark, run_doctor
+from .install import InstallError, ensure_mempal_bin, install_memark, run_doctor
 from .io import copy_document
 from .mempalace import MemPalaceError, reset_palace_dir
 from .mem_tool import MemToolError, build_mem_tool_mine_command, mem_tool_available, run_mem_tool_convo_mine
@@ -998,6 +998,14 @@ def cmd_init(args: argparse.Namespace) -> int:
         for path in missing_ignore_paths:
             print(f"  {path}/", file=sys.stderr)
         return 1
+
+    explicit_mem_tool_bin = args.mem_tool_bin or args.mempalace_bin
+    if args.mem_tool == "mempal" and explicit_mem_tool_bin is None and mem_tool_bin == "mempal":
+        try:
+            mem_tool_bin = str(ensure_mempal_bin())
+        except InstallError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
 
     # Step 1: Create workspace
     config = create_workspace(

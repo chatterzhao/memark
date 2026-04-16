@@ -39,6 +39,15 @@ def resolve_workspace_binary(configured: str, *, default_name: str) -> str:
         return str(candidate.resolve())
     if shutil.which(value) is not None:
         return value
+    if value == "mempal":
+        try:
+            from .install import resolve_mempal_bin
+        except Exception:
+            return value
+        resolved = resolve_mempal_bin()
+        resolved_path = Path(resolved).expanduser()
+        if resolved_path.is_file():
+            return str(resolved_path.resolve())
     if value == default_name:
         runtime = _runtime_binary(default_name)
         if runtime is not None:

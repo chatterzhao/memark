@@ -115,7 +115,19 @@ class MemArkCliTests(unittest.TestCase):
 
     def test_init_can_select_mempal_tool(self) -> None:
         self._write_local_git_exclude(".memark/", "corpus/")
-        result = run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--no-service", "--no-run", cwd=ROOT)
+        result = run_cli(
+            "init",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--mem-tool",
+            "mempal",
+            "--mem-tool-bin",
+            "mempal",
+            "--no-service",
+            "--no-run",
+            cwd=ROOT,
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["mem_tool"], "mempal")
@@ -3250,7 +3262,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("not found in PATH", result.stderr)
 
     def test_mem_tool_mine_dry_run_uses_backend_neutral_entrypoint(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--mem-tool-bin", "mempal", cwd=ROOT)
         result = run_cli(
             "mem-tool-mine",
             "--workspace",
@@ -3262,10 +3274,10 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["mem_tool"], "mempal")
-        self.assertEqual(payload["command"][0], "mempal")
+        self.assertEqual(Path(payload["command"][0]).name, "mempal")
 
     def test_mempal_mine_runs_against_project_staging(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--mem-tool-bin", "mempal", cwd=ROOT)
         staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
         staging_file.parent.mkdir(parents=True, exist_ok=True)
         staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
@@ -3308,8 +3320,90 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn('api_endpoint = "http://localhost:11434/api/embeddings"', logged)
         self.assertIn('api_model = "nomic-embed-text"', logged)
 
+    def test_init_mempal_auto_installs_managed_binary_and_mine_uses_it_without_path(self) -> None:
+        fake_home = Path(self.tmpdir.name) / "home"
+        fake_cargo_home = Path(self.tmpdir.name) / "cargo-home"
+        fake_cargo_bin = fake_cargo_home / "bin"
+        fake_cargo_bin.mkdir(parents=True, exist_ok=True)
+        fake_cargo = fake_cargo_bin / "cargo"
+        log_file = self.workspace / "managed-mempal.log"
+        fake_cargo.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                root=""
+                while [ "$#" -gt 0 ]; do
+                  if [ "$1" = "--root" ]; then
+                    shift
+                    root="$1"
+                  fi
+                  shift
+                done
+                if [ -z "$root" ]; then
+                  echo "missing --root" >&2
+                  exit 1
+                fi
+                mkdir -p "$root/bin"
+                cat > "$root/bin/mempal" <<'EOF'
+                #!/bin/sh
+                echo "ARGS:$@" > "{log_file}"
+                echo "HOME:$HOME" >> "{log_file}"
+                if [ -f "$HOME/.mempal/config.toml" ]; then
+                  cat "$HOME/.mempal/config.toml" >> "{log_file}"
+                fi
+                exit 0
+                EOF
+                chmod +x "$root/bin/mempal"
+                exit 0
+                """
+            ),
+            encoding="utf-8",
+        )
+        fake_cargo.chmod(fake_cargo.stat().st_mode | stat.S_IEXEC)
+        init_env = {
+            "HOME": str(fake_home),
+            "CARGO_HOME": str(fake_cargo_home),
+            "PATH": str(fake_cargo_bin) + os.pathsep + os.environ.get("PATH", ""),
+        }
+
+        init_result = run_cli(
+            "init",
+            str(self.workspace),
+            "--project",
+            "MemArk",
+            "--mem-tool",
+            "mempal",
+            "--no-service",
+            "--no-run",
+            cwd=ROOT,
+            env=init_env,
+        )
+        self.assertEqual(init_result.returncode, 0, init_result.stderr)
+        payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
+        expected_bin = (fake_home / ".memark" / "bin" / "mempal").resolve()
+        self.assertEqual(Path(payload["mem_tool_bin"]), expected_bin)
+
+        staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
+        staging_file.parent.mkdir(parents=True, exist_ok=True)
+        staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
+
+        mine_env = {
+            "HOME": str(fake_home),
+            "CARGO_HOME": str(fake_cargo_home),
+            "PATH": os.environ.get("PATH", ""),
+        }
+        result = run_cli("mem-tool-mine", "--workspace", str(self.workspace), "--json", cwd=ROOT, env=mine_env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        mine_payload = json.loads(result.stdout)
+        self.assertEqual(mine_payload["mem_tool"], "mempal")
+        self.assertEqual(Path(mine_payload["mem_tool_bin"]), expected_bin)
+        logged = log_file.read_text(encoding="utf-8")
+        self.assertIn("ARGS:ingest", logged)
+        self.assertIn("HOME:", logged)
+        self.assertIn(str(self.workspace / ".memark" / "staging" / "memark" / "sessions"), logged)
+
     def test_mempal_mine_reports_embedder_bootstrap_hint(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--mem-tool-bin", "mempal", cwd=ROOT)
         staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
         staging_file.parent.mkdir(parents=True, exist_ok=True)
         staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
@@ -3341,7 +3435,7 @@ class MemArkCliTests(unittest.TestCase):
         )
 
     def test_mempal_mine_reports_api_backend_hint(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--mem-tool-bin", "mempal", cwd=ROOT)
         staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
         staging_file.parent.mkdir(parents=True, exist_ok=True)
         staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
@@ -3373,7 +3467,7 @@ class MemArkCliTests(unittest.TestCase):
         )
 
     def test_palace_rebuild_uses_selected_mempal_tool(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--mem-tool-bin", "mempal", cwd=ROOT)
         staging_file = self.workspace / ".memark" / "staging" / "memark" / "sessions" / "2026" / "04" / "09" / "rollout-a.jsonl"
         staging_file.parent.mkdir(parents=True, exist_ok=True)
         staging_file.write_text('{"type":"session_meta","payload":{"cwd":"%s"}}\n' % ROOT, encoding="utf-8")
@@ -3980,7 +4074,7 @@ class MemArkCliTests(unittest.TestCase):
             self.assertNotIn("mempal", item["closets"][0]["tags"])
 
     def test_palace_package_reads_mempal_sqlite_store(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--mem-tool-bin", "mempal", cwd=ROOT)
         palace_dir = self.workspace / ".memark" / "palaces" / "memark"
         snapshot_dir = self.workspace / ".memark" / "staging" / "memark" / "sessions"
         snapshot_dir.mkdir(parents=True, exist_ok=True)
@@ -4304,7 +4398,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("corpus_status", (imports_dir / "graphify-status.md").read_text(encoding="utf-8"))
 
     def test_automation_run_consumes_mempal_store_without_build(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", cwd=ROOT)
+        run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--mem-tool-bin", "mempal", cwd=ROOT)
         sessions_root = self.workspace / "sessions"
         sessions_root.mkdir(parents=True, exist_ok=True)
         project_docs = self.workspace / "docs"
