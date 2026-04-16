@@ -281,14 +281,14 @@
 说明：
 
 - 当 `Graphify` 尚未稳定把 promoted markdown 编进图时，`MemArk` 仍需要一个独立消费入口
-- 这个入口至少应支持对 `corpus/<project>/promoted`、`documents`、`imports` 做固定字符串搜索
+- 这个入口至少应支持对 `corpus/<project>/promoted`、注册项目根目录中的正式文档、`imports` 做固定字符串搜索
 - 输出应包含标题、路径、命中行、片段
 
 当前状态：
 
 - 已实现 `memark query`
 - 已支持：
-  - `--scope promoted|documents|imports|all`
+  - `--scope promoted|project|imports|all`
   - `--limit`
   - `--json`
 - 该命令不依赖 `Graphify`，是当前阶段项目 AI 直接读取晋升知识的最小可用入口

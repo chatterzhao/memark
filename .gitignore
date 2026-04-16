@@ -50,7 +50,6 @@ memark-work/
 # Corpus runtime artifacts
 corpus/*/.codex/
 corpus/*/AGENTS.md
-corpus/*/documents/
 corpus/*/imports/
 corpus/*/promoted/room-*-rollout-*.md
 
