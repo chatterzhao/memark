@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -155,26 +156,36 @@ def resolve_workspace(path: str | None) -> Path:
     return Path(path).expanduser().resolve()
 
 
-def _ensure_gitignore(workspace: Path) -> None:
-    """Add .memark/ to .gitignore if the workspace is a git repo and it's not already ignored."""
-    gitignore = workspace / ".gitignore"
-    entry = ".memark/"
+INIT_REQUIRED_IGNORE_PATHS = (".memark", "corpus")
 
-    # Check if already in .gitignore
-    if gitignore.exists():
-        content = gitignore.read_text(encoding="utf-8")
-        for line in content.splitlines():
-            if line.strip() == entry or line.strip() == ".memark":
-                return  # Already present
 
-    # Append .memark/ entry
-    with gitignore.open("a", encoding="utf-8") as f:
-        # Add a blank line separator if file is non-empty and doesn't end with newline
-        if gitignore.exists():
-            content = gitignore.read_text(encoding="utf-8")
-            if content and not content.endswith("\n"):
-                f.write("\n")
-        f.write(f"\n# MemArk local runtime state\n{entry}\n")
+def missing_init_ignore_paths(workspace: Path) -> list[str]:
+    missing: list[str] = []
+    for entry in INIT_REQUIRED_IGNORE_PATHS:
+        probe_dir = workspace / entry
+        probe_file = probe_dir / ".memark-ignore-probe"
+        created_dir = False
+        created_file = False
+        if not probe_dir.exists():
+            probe_dir.mkdir(parents=True, exist_ok=True)
+            created_dir = True
+        if not probe_file.exists():
+            probe_file.write_text("", encoding="utf-8")
+            created_file = True
+        result = subprocess.run(
+            ["git", "check-ignore", "-q", str(probe_file.relative_to(workspace))],
+            cwd=str(workspace),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if created_file:
+            probe_file.unlink()
+        if created_dir:
+            probe_dir.rmdir()
+        if result.returncode != 0:
+            missing.append(entry)
+    return missing
 
 
 def create_workspace(
@@ -213,9 +224,6 @@ def create_workspace(
     )
     if not config.projects_file.exists():
         config.projects_file.write_text("version = 1\n", encoding="utf-8")
-
-    # Ensure .memark/ is listed in .gitignore
-    _ensure_gitignore(workspace)
 
     return config
 

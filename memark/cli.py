@@ -56,7 +56,7 @@ from .service import (
 )
 from .slash import SlashContext, SlashError, available_slash_commands, dispatch_slash_command, slash_catalog
 from .version import __version__
-from .workspace import create_workspace, load_workspace, resolve_workspace, slugify
+from .workspace import create_workspace, load_workspace, missing_init_ignore_paths, resolve_workspace, slugify
 
 
 WORKTREE_ATTACH_CANDIDATES = (
@@ -980,6 +980,23 @@ def cmd_init(args: argparse.Namespace) -> int:
             print("  Run 'memark worktree-attach --source-dir <main-repo> --target-dir .' instead.", file=sys.stderr)
         else:
             print("  Please cd to the project root directory, or run 'git init' first.", file=sys.stderr)
+        return 1
+
+    missing_ignore_paths = missing_init_ignore_paths(workspace)
+    if missing_ignore_paths:
+        print("Error: memark init requires local runtime paths to already be ignored by git.", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Missing ignore coverage:", file=sys.stderr)
+        for path in missing_ignore_paths:
+            print(f"  - {path}/", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Fix this before re-running 'memark init':", file=sys.stderr)
+        print("  - add the entries to repository .gitignore, or", file=sys.stderr)
+        print("  - add them to .git/info/exclude for local-only setup", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Suggested entries:", file=sys.stderr)
+        for path in missing_ignore_paths:
+            print(f"  {path}/", file=sys.stderr)
         return 1
 
     # Step 1: Create workspace
