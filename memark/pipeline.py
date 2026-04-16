@@ -22,6 +22,7 @@ _DOC_IGNORE_PARTS = {
     ".experiments",
     ".git",
     ".memark",
+    ".memark-bootstrap",
     ".mempalace",
     ".pytest_cache",
     "corpus",
