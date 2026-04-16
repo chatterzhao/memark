@@ -17,6 +17,7 @@ from unittest import mock
 
 from memark import install as install_mod
 from memark import cli as cli_mod
+from memark import pipeline as pipeline_mod
 from memark import service as service_mod
 from memark import workspace as workspace_mod
 
@@ -257,6 +258,26 @@ class MemArkCliTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("worktree", result.stderr.lower())
         self.assertIn("worktree-attach", result.stderr)
+
+    def test_project_document_scan_ignores_memark_bootstrap(self) -> None:
+        docs_dir = self.workspace / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        (docs_dir / "plan.md").write_text("# Plan\n", encoding="utf-8")
+        bootstrap_doc = (
+            self.workspace
+            / ".memark-bootstrap"
+            / "lib"
+            / "python3.14"
+            / "site-packages"
+            / "demo"
+            / "README.md"
+        )
+        bootstrap_doc.parent.mkdir(parents=True, exist_ok=True)
+        bootstrap_doc.write_text("bootstrap\n", encoding="utf-8")
+
+        files = pipeline_mod.iter_project_documents(self.workspace)
+
+        self.assertEqual(files, [docs_dir / "plan.md"])
 
     def test_install_symlinks_to_user_local_bin(self) -> None:
         """install --skip-runtime-install with a fake venv should symlink memark."""
