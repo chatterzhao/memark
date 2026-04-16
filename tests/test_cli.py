@@ -103,7 +103,6 @@ class MemArkCliTests(unittest.TestCase):
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
         self.assertTrue((self.workspace / ".memark" / "projects.toml").exists())
         self.assertTrue((self.workspace / "inbox" / "promoted").exists())
-        self.assertTrue((self.workspace / "inbox" / "documents").exists())
         self.assertTrue((self.workspace / "corpus" / "memark" / "promoted").exists())
         payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["mem_tool"], "mempalace")
@@ -860,55 +859,10 @@ class MemArkCliTests(unittest.TestCase):
         self.assertNotEqual(promote.returncode, 0)
         self.assertIn("wing_kind must be 'project'", promote.stderr)
 
-    def test_add_documents_copies_files(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
-        doc = self.workspace / "architecture.md"
-        doc.write_text("# Architecture\n", encoding="utf-8")
-
-        result = run_cli(
-            "add-documents",
-            "--workspace",
-            str(self.workspace),
-            str(doc),
-            cwd=ROOT,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        copied = self.workspace / "corpus" / "memark" / "documents" / "architecture.md"
-        self.assertTrue(copied.exists())
-
-    def test_add_documents_uses_project_relative_path_when_source_is_tracked(self) -> None:
+    def test_query_searches_promoted_and_project_documents(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         docs_dir = self.workspace / "docs"
         docs_dir.mkdir(parents=True, exist_ok=True)
-        doc = docs_dir / "plan.md"
-        doc.write_text("# Plan\n", encoding="utf-8")
-        run_cli(
-            "project-set",
-            "--workspace",
-            str(self.workspace),
-            "--project",
-            "MemArk",
-            "--path",
-            str(self.workspace),
-            "--sessions-root",
-            str(self.workspace / "sessions"),
-            cwd=ROOT,
-        )
-
-        result = run_cli(
-            "add-documents",
-            "--workspace",
-            str(self.workspace),
-            str(doc),
-            cwd=ROOT,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        copied = self.workspace / "corpus" / "memark" / "documents" / "docs" / "plan.md"
-        self.assertTrue(copied.exists())
-        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / "plan.md").exists())
-
-    def test_query_searches_promoted_and_documents(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
         promoted.write_text(
             textwrap.dedent(
@@ -924,13 +878,13 @@ class MemArkCliTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
+        document = docs_dir / "notes.md"
         document.write_text("# Notes\n\nGraphify fallback is code-only today.\n", encoding="utf-8")
 
         result = run_cli("query", "graphify fallback", "--workspace", str(self.workspace), cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('[promoted] Bridge Governance', result.stdout)
-        self.assertIn('[documents] Notes', result.stdout)
+        self.assertIn('[project] Notes', result.stdout)
 
     def test_query_can_filter_scope_and_render_json(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
@@ -1226,9 +1180,11 @@ class MemArkCliTests(unittest.TestCase):
 
     def test_graphify_handoff_renders_prompt_and_command(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        docs_dir = self.workspace / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
         promoted.write_text("# Bridge Governance\n\nSession-derived project knowledge.\n", encoding="utf-8")
-        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
+        document = docs_dir / "notes.md"
         document.write_text("# Notes\n\nProject notes live here.\n", encoding="utf-8")
         imports = self.workspace / "corpus" / "memark" / "imports" / "paper.md"
         imports.parent.mkdir(parents=True, exist_ok=True)
@@ -1240,7 +1196,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn(f"Graphify handoff target: {corpus_dir}", result.stdout)
         self.assertIn(f"Recommended command: /graphify {corpus_dir} --update", result.stdout)
         self.assertIn("promoted: 1 files", result.stdout)
-        self.assertIn("documents: 1 files", result.stdout)
+        self.assertIn("project:", result.stdout)
         self.assertIn("imports: 1 files", result.stdout)
         self.assertIn("Use the Graphify skill, not bare memark build", result.stdout)
 
@@ -1523,10 +1479,11 @@ class MemArkCliTests(unittest.TestCase):
         }
         finished_at = datetime.now(timezone.utc)
         started_at = finished_at.replace(microsecond=0)
+        docs_dir = self.workspace / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
         promoted.write_text("# Bridge Governance\n\nSession-derived project knowledge.\n", encoding="utf-8")
-        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
-        document.parent.mkdir(parents=True, exist_ok=True)
+        document = docs_dir / "notes.md"
         document.write_text("# Notes\n\nProject notes live here.\n", encoding="utf-8")
         imported = self.workspace / "corpus" / "memark" / "imports" / "paper.md"
         imported.parent.mkdir(parents=True, exist_ok=True)
@@ -1660,10 +1617,11 @@ class MemArkCliTests(unittest.TestCase):
         }
         finished_at = datetime.now(timezone.utc)
         started_at = finished_at.replace(microsecond=0)
+        docs_dir = self.workspace / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-bridge.md"
         promoted.write_text("# Bridge Governance\n\nSession-derived project knowledge.\n", encoding="utf-8")
-        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
-        document.parent.mkdir(parents=True, exist_ok=True)
+        document = docs_dir / "notes.md"
         document.write_text("# Notes\n\nProject notes live here.\n", encoding="utf-8")
         imported = self.workspace / "corpus" / "memark" / "imports" / "paper.md"
         imported.parent.mkdir(parents=True, exist_ok=True)
@@ -1930,7 +1888,7 @@ class MemArkCliTests(unittest.TestCase):
             "graphify",
             "fallback",
             "--scope",
-            "documents",
+            "project",
             "--limit",
             "3",
             "--json",
@@ -1941,9 +1899,9 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(payload["adapter"], "query")
         self.assertEqual(payload["memark_command"], "query")
         self.assertEqual(payload["mapped_args"]["query"], "graphify fallback")
-        self.assertEqual(payload["mapped_args"]["scope"], "documents")
+        self.assertEqual(payload["mapped_args"]["scope"], "project")
         self.assertEqual(payload["mapped_args"]["limit"], 3)
-        self.assertEqual(payload["memark_argv"], ["query", "graphify fallback", "--scope", "documents", "--limit", "3", "--json"])
+        self.assertEqual(payload["memark_argv"], ["query", "graphify fallback", "--scope", "project", "--limit", "3", "--json"])
         self.assertIsNone(payload["target"])
 
     def test_slash_query_executes_query_command(self) -> None:
@@ -1964,7 +1922,7 @@ class MemArkCliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["project"], "memark")
         self.assertEqual(payload["query"], "graphify fallback")
-        self.assertEqual(payload["scopes"], ["promoted", "documents", "imports"])
+        self.assertEqual(payload["scopes"], ["promoted", "project", "imports"])
         self.assertTrue(payload["hits"])
 
     def test_slash_status_maps_workspace_root(self) -> None:
@@ -2242,10 +2200,11 @@ class MemArkCliTests(unittest.TestCase):
 
     def test_build_falls_back_to_memark_mixed_corpus_when_graphify_cli_contract_mismatches(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
+        docs_dir = self.workspace / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-demo.md"
         promoted.write_text("# Demo\n\nDecision: ship the autonomous graph builder.\n", encoding="utf-8")
-        document = self.workspace / "corpus" / "memark" / "documents" / "notes.md"
-        document.parent.mkdir(parents=True, exist_ok=True)
+        document = docs_dir / "notes.md"
         document.write_text("# Notes\n\nThe graph should link promoted and document files.\n", encoding="utf-8")
         fake_bin_dir = self.workspace / "bin"
         fake_bin_dir.mkdir()
@@ -2274,7 +2233,7 @@ class MemArkCliTests(unittest.TestCase):
         ]
         document_nodes = [
             node for node in graph["nodes"]
-            if isinstance(node, dict) and str(node.get("source_file", "")).endswith("/corpus/memark/documents/notes.md")
+            if isinstance(node, dict) and str(node.get("source_file", "")).endswith("/docs/notes.md")
         ]
         self.assertTrue(promoted_nodes)
         self.assertTrue(document_nodes)
@@ -2375,7 +2334,7 @@ class MemArkCliTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["imports"], 1)
 
-    def test_run_promotes_documents_then_builds(self) -> None:
+    def test_run_promotes_project_documents_then_builds(self) -> None:
         run_cli("init", str(self.workspace), "--project", "MemArk", cwd=ROOT)
         package = {
             "wing_id": "project/memark",
@@ -2387,7 +2346,9 @@ class MemArkCliTests(unittest.TestCase):
         }
         input_file = self.workspace / "inbox" / "promoted" / "release.json"
         input_file.write_text(json.dumps(package), encoding="utf-8")
-        doc = self.workspace / "inbox" / "documents" / "architecture.md"
+        docs_dir = self.workspace / "docs"
+        docs_dir.mkdir(parents=True, exist_ok=True)
+        doc = docs_dir / "architecture.md"
         doc.write_text("# Architecture\n", encoding="utf-8")
 
         fake_bin_dir = self.workspace / "bin"
@@ -2410,9 +2371,9 @@ class MemArkCliTests(unittest.TestCase):
         result = run_cli("run", "--workspace", str(self.workspace), "--update", cwd=ROOT, env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-release-cut.md"
-        copied = self.workspace / "corpus" / "memark" / "documents" / "architecture.md"
         self.assertTrue(promoted.exists())
-        self.assertTrue(copied.exists())
+        self.assertIn("Project documents: root=", result.stdout)
+        self.assertIn("files=1", result.stdout)
         self.assertIn("--update", log_file.read_text(encoding="utf-8"))
 
     def test_run_infers_project_from_room_package_when_not_overridden(self) -> None:
@@ -4371,8 +4332,8 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("feed", project)
         self.assertIn("process", project)
         self.assertIn("consume", project)
-        self.assertEqual(project["documents"]["copied"], 1)
-        self.assertEqual(project["process"]["documents"]["copied"], 1)
+        self.assertEqual(project["project_documents"]["documents"], 1)
+        self.assertEqual(project["process"]["project"]["documents"], 1)
         self.assertEqual(project["packages"], 1)
         self.assertEqual(project["process"]["packages"], 1)
         self.assertEqual(project["graphify"]["status"], "not_requested")
@@ -4389,13 +4350,7 @@ class MemArkCliTests(unittest.TestCase):
 
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-automation-loop-rollout-auto.md"
         self.assertTrue(promoted.exists())
-        copied_doc = self.workspace / "corpus" / "memark" / "documents" / "docs" / "plan.md"
-        self.assertTrue(copied_doc.exists())
-        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / "docs" / "raw" / "draft.md").exists())
-        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / "build" / "generated.md").exists())
-        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / ".experiments" / "scratch.md").exists())
-        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / ".pytest_cache" / "README.md").exists())
-        self.assertFalse((self.workspace / "corpus" / "memark" / "documents" / "memark.egg-info" / "PKG-INFO").exists())
+        self.assertEqual(project["project_documents"]["files"], [str((self.workspace / "docs" / "plan.md").resolve())])
         imports_dir = self.workspace / "corpus" / "memark" / "imports" / "automation"
         self.assertTrue((imports_dir / "latest-summary.md").exists())
         self.assertTrue((imports_dir / "decisions-digest.md").exists())
@@ -4474,8 +4429,8 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("process", project)
         self.assertIn("consume", project)
         self.assertFalse(project["feed"]["mined"])
-        self.assertEqual(project["documents"]["copied"], 1)
-        self.assertEqual(project["process"]["documents"]["copied"], 1)
+        self.assertEqual(project["project_documents"]["documents"], 1)
+        self.assertEqual(project["process"]["project"]["documents"], 1)
         self.assertEqual(project["palace_drawers"], 1)
         self.assertEqual(project["process"]["palace_drawers"], 1)
         self.assertEqual(project["packages"], 1)
@@ -4486,8 +4441,7 @@ class MemArkCliTests(unittest.TestCase):
         promoted = self.workspace / "corpus" / "memark" / "promoted" / "room-automation-loop-rollout-auto.md"
         self.assertTrue(promoted.exists())
         self.assertIn("manual follow-up breaks adoption", promoted.read_text(encoding="utf-8"))
-        copied_doc = self.workspace / "corpus" / "memark" / "documents" / "docs" / "plan.md"
-        self.assertTrue(copied_doc.exists())
+        self.assertEqual(project["project_documents"]["files"], [str((self.workspace / "docs" / "plan.md").resolve())])
         imports_dir = self.workspace / "corpus" / "memark" / "imports" / "automation"
         self.assertTrue((imports_dir / "latest-summary.md").exists())
         self.assertTrue((imports_dir / "ai-context.md").exists())
@@ -4545,7 +4499,10 @@ class MemArkCliTests(unittest.TestCase):
             node
             for node in graph["nodes"]
             if isinstance(node, dict)
-            and any(part in str(node.get("source_file", "")) for part in ("/promoted/", "/documents/", "/imports/"))
+            and any(
+                part in str(node.get("source_file", ""))
+                for part in ("/promoted/", "/docs/", "/imports/")
+            )
         ]
         self.assertTrue(mixed_nodes)
         status_artifact = (self.workspace / "corpus" / "memark" / "imports" / "automation" / "graphify-status.md").read_text(encoding="utf-8")

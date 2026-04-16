@@ -46,7 +46,7 @@
 
 ### N2. Mixed-corpus graph 真实闭环
 
-- 至少一次真实证明 `corpus/<project>/promoted/*.md` 与 `documents/` 被 corpus 级 mixed-corpus graph 消费
+- 至少一次真实证明 `corpus/<project>/promoted/*.md` 与注册项目文档被 mixed-corpus graph 消费
 - 不再只停留在 `graphify-handoff` 或旧的 code-only fallback 口径
 - 把 slash-only 能力抽成 `MemArk` 自己的 CLI 适配层，而不是继续散在上游 client skill 里
 - 让 slash-only 状态观测也直接走 `MemArk` 的 catalog 与执行面

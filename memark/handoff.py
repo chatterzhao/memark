@@ -48,6 +48,7 @@ class CorpusInventory:
 class GraphifyHandoff:
     project: str
     corpus_dir: Path
+    project_root: Path | None
     inventories: tuple[CorpusInventory, ...]
     code_files: int
     recommended_command: str
@@ -57,6 +58,7 @@ class GraphifyHandoff:
         return {
             "project": self.project,
             "corpus_dir": str(self.corpus_dir),
+            "project_root": None if self.project_root is None else str(self.project_root),
             "inventories": [item.to_dict() for item in self.inventories],
             "code_files": self.code_files,
             "recommended_command": self.recommended_command,
@@ -91,10 +93,18 @@ def _count_code_files(root: Path) -> int:
     return sum(1 for path in _iter_files(root) if path.suffix.lower() in _CODE_SUFFIXES)
 
 
-def _render_prompt(project: str, corpus_dir: Path, recommended_command: str, inventories: tuple[CorpusInventory, ...], code_files: int) -> str:
+def _render_prompt(
+    project: str,
+    corpus_dir: Path,
+    project_root: Path | None,
+    recommended_command: str,
+    inventories: tuple[CorpusInventory, ...],
+    code_files: int,
+) -> str:
     lines = [
         f"Use the Graphify skill, not bare memark build, on the MemArk-prepared corpus at {corpus_dir}.",
         f"Project: {project}",
+        f"Project root: {project_root if project_root is not None else 'unregistered'}",
         f"Recommended command: {recommended_command}",
         "Corpus summary:",
     ]
@@ -105,28 +115,29 @@ def _render_prompt(project: str, corpus_dir: Path, recommended_command: str, inv
         [
             "Execution notes:",
             "- promoted/ contains session-derived project knowledge promoted out of MemPalace.",
-            "- documents/ contains project documents copied into the corpus.",
+            "- project documents are consumed directly from the registered project root; there is no documents/ mirror anymore.",
             "- imports/ contains imported external material.",
             "- MemArk can prepare this corpus, but mixed-corpus semantic extraction still needs the upstream Graphify skill path.",
-            "- Use --update because promoted markdown and documents are non-code inputs that Graphify watch mode does not semantically rebuild by itself.",
+            "- Use --update because promoted markdown and project documents are non-code inputs that Graphify watch mode does not semantically rebuild by itself.",
         ]
     )
     return "\n".join(lines)
 
 
-def build_graphify_handoff(project: str, corpus_dir: Path) -> GraphifyHandoff:
+def build_graphify_handoff(project: str, corpus_dir: Path, *, project_root: Path | None = None) -> GraphifyHandoff:
     resolved = corpus_dir.resolve()
     inventories = (
         _scope_inventory("promoted", resolved / "promoted"),
-        _scope_inventory("documents", resolved / "documents"),
+        _scope_inventory("project", project_root.resolve()) if project_root is not None else CorpusInventory("project", 0, 0),
         _scope_inventory("imports", resolved / "imports"),
     )
     code_files = _count_code_files(resolved)
     recommended_command = f"/graphify {resolved} --update"
-    prompt = _render_prompt(project, resolved, recommended_command, inventories, code_files)
+    prompt = _render_prompt(project, resolved, None if project_root is None else project_root.resolve(), recommended_command, inventories, code_files)
     return GraphifyHandoff(
         project=project,
         corpus_dir=resolved,
+        project_root=None if project_root is None else project_root.resolve(),
         inventories=inventories,
         code_files=code_files,
         recommended_command=recommended_command,

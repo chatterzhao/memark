@@ -212,9 +212,6 @@ corpus/
     promoted/
       room-auth-migration.md
       room-ci-pipeline.md
-    documents/
-      adr-001.md
-      architecture-overview.md
     imports/
       repo-index.md
 ```
@@ -222,7 +219,7 @@ corpus/
 说明：
 
 - `promoted/` 放从 `MemPalace` 晋升来的项目主题包
-- `documents/` 放已落盘的项目文档
+- 项目正式文档直接从注册项目的 `project-root` 消费，不再镜像到 `corpus/`
 - `imports/` 放其他预处理输入
 
 每个项目应有独立 corpus。
@@ -252,7 +249,7 @@ corpus/
 入口：
 
 - `corpus/<project>/promoted/*.md`
-- `corpus/<project>/documents/*`
+- 注册项目根目录中的正式文档
 
 适用问题：
 

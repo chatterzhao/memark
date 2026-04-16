@@ -45,9 +45,9 @@
 - [x] 初始化时会创建 `.memark/config.json`
 - [x] 初始化时会创建 `inbox/`
 - [x] 初始化时会创建 `inbox/promoted/`
-- [x] 初始化时会创建 `inbox/documents/`
+- [x] 初始化时不会创建 `inbox/documents/`
 - [x] 初始化时会创建 `corpus/<project>/promoted`
-- [x] 初始化时会创建 `corpus/<project>/documents`
+- [x] 初始化时不会创建 `corpus/<project>/documents`
 - [x] 初始化时会创建 `corpus/<project>/imports`
 
 ## D. 输入契约与治理
@@ -68,7 +68,7 @@
 
 ## F. 已实现文档纳入
 
-- [x] `memark add-documents` 能把已落盘文档复制进 corpus
+- [x] 正式文档直接从 registry 里的 `project-root` 消费
 - [x] 文档和晋升 room 会落在同一项目 corpus 边界内
 
 ## G. 已实现 Graphify 集成
@@ -82,7 +82,7 @@
 - [x] 当 `graphify` 不存在时，`memark build` 仍可构建本地 mixed-corpus graph
 - [x] 当遇到 helper/query 型 `graphify` CLI 时，会自动转入本地 mixed-corpus build
 - [x] `memark run` 能串联 promote + build
-- [x] `memark run` 会先消费 `inbox/promoted` 与 `inbox/documents`
+- [x] `memark run` 会先消费 `inbox/promoted`，并直接读取注册项目根目录中的正式文档
 - [x] `memark mempalace-mine` 能调用 `mempalace mine --mode convos`
 - [x] `memark mempalace-mine` 支持 `--dry-run`
 - [x] `memark mempalace-mine` 在 `mempalace` 不存在时会明确报错

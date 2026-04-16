@@ -19,7 +19,7 @@ python3 -m memark milestones --workspace .
 第二条会把当前 workspace 的实时证据也带上，例如：
 
 - 当前 project
-- promoted/documents/imports 规模
+- promoted/project/imports 规模
 - 最近 automation 状态
 - 当前 scheduler health
 
@@ -49,7 +49,7 @@ python3 -m memark milestones --workspace .
 - workspace 初始化与项目接入：`memark init`、`memark project-set`
 - 会话 intake 与单次自动闭环：`memark codex-sync`、`memark projects-run`、`memark automation-run`
 - `MemPalace` 运维入口：`mempalace-mine`、`palace-status`、`palace-clean`、`palace-rebuild`、`palace-retry`
-- 会话晋升与 corpus 落盘：`palace-export`、`palace-package`、`palace-run`、`promote`、`add-documents`
+- 会话晋升与 corpus 落盘：`palace-export`、`palace-package`、`palace-run`、`promote`、`project-set`
 - 本地消费入口：`memark query`、`memark context`
 - 调度与观测：`service-install`、`service-status`、`service-uninstall`、`automation-status`
 - worktree 接入：`worktree-attach`、`worktree-hook-install`

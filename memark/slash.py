@@ -319,7 +319,7 @@ _ADAPTERS = (
                 help="Corpus scope to search",
                 action="store",
                 default="all",
-                choices=("all", "promoted", "documents", "imports"),
+                choices=("all", "promoted", "project", "imports"),
                 metavar="SCOPE",
             ),
             SlashOption(
