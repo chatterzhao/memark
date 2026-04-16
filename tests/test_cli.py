@@ -42,12 +42,23 @@ class MemArkCliTests(unittest.TestCase):
         self.workspace.mkdir(parents=True, exist_ok=True)
         # Most tests require a git repo root for init
         subprocess.run(["git", "init"], cwd=self.workspace, capture_output=True, check=True)
+        self._write_local_git_exclude(".memark/", "corpus/")
         # Prevent tests from installing real launchd services
         os.environ["MEMARK_SKIP_SERVICE"] = "1"
 
     def tearDown(self) -> None:
         os.environ.pop("MEMARK_SKIP_SERVICE", None)
         self.tmpdir.cleanup()
+
+    def _write_local_git_exclude(self, *entries: str) -> None:
+        exclude_file = self.workspace / ".git" / "info" / "exclude"
+        with exclude_file.open("a", encoding="utf-8") as handle:
+            for entry in entries:
+                handle.write(f"{entry}\n")
+
+    def _clear_local_git_exclude(self) -> None:
+        exclude_file = self.workspace / ".git" / "info" / "exclude"
+        exclude_file.write_text("", encoding="utf-8")
 
     def _write_mempal_drawers(
         self,
@@ -86,6 +97,7 @@ class MemArkCliTests(unittest.TestCase):
             conn.close()
 
     def test_init_creates_workspace_layout(self) -> None:
+        self._write_local_git_exclude(".memark/", "corpus/")
         result = run_cli("init", str(self.workspace), "--project", "MemArk", "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
@@ -102,6 +114,7 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn(f'path = "{self.workspace.resolve()}"', projects_toml)
 
     def test_init_can_select_mempal_tool(self) -> None:
+        self._write_local_git_exclude(".memark/", "corpus/")
         result = run_cli("init", str(self.workspace), "--project", "MemArk", "--mem-tool", "mempal", "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads((self.workspace / ".memark" / "config.json").read_text(encoding="utf-8"))
@@ -139,45 +152,40 @@ class MemArkCliTests(unittest.TestCase):
 
     def test_init_accepts_git_root(self) -> None:
         """init should succeed when the workspace dir is a git repo root."""
+        self._write_local_git_exclude(".memark/", "corpus/")
         result = run_cli("init", str(self.workspace), "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
 
     def test_init_no_auto_accepts_git_root(self) -> None:
         """init --no-auto should succeed on a git repo root."""
+        self._write_local_git_exclude(".memark/", "corpus/")
         result = run_cli("init", str(self.workspace), "--no-auto", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue((self.workspace / ".memark" / "config.json").exists())
         # --no-auto should output minimal setup hint
         self.assertIn("Minimal init completed", result.stdout)
 
-    def test_init_adds_memark_to_gitignore(self) -> None:
-        """init should add .memark/ to .gitignore."""
+    def test_init_rejects_missing_ignore_coverage(self) -> None:
+        self._clear_local_git_exclude()
         result = run_cli("init", str(self.workspace), "--project", "MemArk", "--no-service", "--no-run", cwd=ROOT)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        gitignore = self.workspace / ".gitignore"
-        self.assertTrue(gitignore.exists())
-        content = gitignore.read_text(encoding="utf-8")
-        self.assertIn(".memark/", content)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("requires local runtime paths to already be ignored", result.stderr)
+        self.assertIn(".memark/", result.stderr)
+        self.assertIn("corpus/", result.stderr)
 
-    def test_init_does_not_duplicate_gitignore_entry(self) -> None:
-        """init should not add .memark/ to .gitignore if already present."""
-        gitignore = self.workspace / ".gitignore"
-        gitignore.write_text(".memark/\n", encoding="utf-8")
+    def test_init_accepts_local_git_exclude_coverage(self) -> None:
+        self._write_local_git_exclude(".memark/", "corpus/")
         result = run_cli("init", str(self.workspace), "--project", "MemArk", "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
-        content = gitignore.read_text(encoding="utf-8")
-        self.assertEqual(content.count(".memark/"), 1)
 
-    def test_init_appends_to_existing_gitignore(self) -> None:
-        """init should append .memark/ to an existing .gitignore."""
+    def test_init_accepts_repository_gitignore_coverage(self) -> None:
         gitignore = self.workspace / ".gitignore"
-        gitignore.write_text("node_modules/\n*.pyc\n", encoding="utf-8")
+        gitignore.write_text("node_modules/\n.memark/\ncorpus/\n", encoding="utf-8")
         result = run_cli("init", str(self.workspace), "--project", "MemArk", "--no-service", "--no-run", cwd=ROOT)
         self.assertEqual(result.returncode, 0, result.stderr)
         content = gitignore.read_text(encoding="utf-8")
-        self.assertIn("node_modules/", content)
-        self.assertIn(".memark/", content)
+        self.assertEqual(content, "node_modules/\n.memark/\ncorpus/\n")
 
     def test_init_rejects_git_worktree(self) -> None:
         """init must reject a git worktree directory and suggest worktree-attach."""
