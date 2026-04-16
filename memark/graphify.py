@@ -152,7 +152,11 @@ class _CorpusSource:
 
 
 def _project_root_for(corpus_dir: Path) -> Path | None:
-    workspace = corpus_dir.parent.parent
+    corpus_root = corpus_dir.parent
+    if corpus_root.name != "corpus":
+        return None
+    container = corpus_root.parent
+    workspace = container.parent if container.name == ".memark" else container
     projects_file = workspace / ".memark" / "projects.toml"
     if not projects_file.exists():
         return None
