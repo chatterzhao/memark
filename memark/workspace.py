@@ -82,10 +82,6 @@ class WorkspaceConfig:
         return self.config_dir / "corpus"
 
     @property
-    def legacy_corpus_root_dir(self) -> Path:
-        return self.workspace / "corpus"
-
-    @property
     def projects_file(self) -> Path:
         return self.config_dir / PROJECTS_FILE_NAME
 
@@ -112,10 +108,6 @@ class WorkspaceConfig:
     def corpus_project_dir(self, project: str | None = None) -> Path:
         name = slugify(project or self.default_project)
         return self.corpus_root_dir / name
-
-    def legacy_corpus_project_dir(self, project: str | None = None) -> Path:
-        name = slugify(project or self.default_project)
-        return self.legacy_corpus_root_dir / name
 
     def promoted_dir(self, project: str | None = None) -> Path:
         return self.corpus_project_dir(project) / "promoted"
@@ -147,20 +139,8 @@ class WorkspaceConfig:
     def mempalace_bin(self) -> str:
         return self.mem_tool_bin
 
-    def migrate_legacy_corpus(self) -> None:
-        legacy_root = self.legacy_corpus_root_dir
-        if not legacy_root.exists() or not legacy_root.is_dir():
-            return
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-        if self.corpus_root_dir.exists():
-            shutil.copytree(legacy_root, self.corpus_root_dir, dirs_exist_ok=True)
-            shutil.rmtree(legacy_root)
-            return
-        shutil.move(str(legacy_root), str(self.corpus_root_dir))
-
     def ensure_layout(self, project: str | None = None) -> None:
         self.config_dir.mkdir(parents=True, exist_ok=True)
-        self.migrate_legacy_corpus()
         for path in [
             self.inbox_dir,
             self.inbox_promoted_dir,

@@ -5,8 +5,8 @@ Use this helper when a project needs to be connected to MemArk.
 Before onboarding a project:
 
 - run `memark init` only from the main git repository root, not from a linked worktree
-- ensure the repository root already ignores `.memark/` and `corpus/` in `.gitignore` or `.git/info/exclude`
-- if the root branch is protected and those ignore entries are missing, add them on a feature branch or dedicated worktree, merge that change back into the protected root branch, then return to the main repository root and run `memark init`
+- ensure the repository root already ignores `.memark/` in `.gitignore` or `.git/info/exclude`
+- if the root branch is protected and that ignore entry is missing, add it on a feature branch or dedicated worktree, merge that change back into the protected root branch, then return to the main repository root and run `memark init`
 - after the main repository root has been initialized, attach linked worktrees with `memark worktree-attach --source-dir <main-repo> --target-dir <worktree-dir>`
 
 Default CLI-first onboarding:

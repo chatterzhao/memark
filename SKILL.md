@@ -7,7 +7,7 @@ description: Install MemArk — the bridge that automates MemPalace memory and G
 
 **MemArk 自动串联 MemPalace（记忆）和 Graphify（图谱），让项目记忆自动变成可消费的项目知识。**
 
-任何想用 MemPalace / mempal / Graphify 的人，先到项目主仓库根目录确认 `.gitignore` 或 `.git/info/exclude` 已忽略 `.memark/` 和 `corpus/`，然后执行 `memark init`。如果主分支受保护且缺少这些忽略项，先在 feature branch 或 dedicated worktree 补上并合并回主仓库根分支，再回到主仓库根执行 `memark init`。linked worktree 则在主仓库完成初始化后使用 `memark worktree-attach`。
+任何想用 MemPalace / mempal / Graphify 的人，先到项目主仓库根目录确认 `.gitignore` 或 `.git/info/exclude` 已忽略 `.memark/`，然后执行 `memark init`。如果主分支受保护且缺少这个忽略项，先在 feature branch 或 dedicated worktree 补上并合并回主仓库根分支，再回到主仓库根执行 `memark init`。linked worktree 则在主仓库完成初始化后使用 `memark worktree-attach`。
 
 如果要做开发期反复重装、隔离验收，改看 [`skill-dev.md`](<repo-root>/skill-dev.md)。
 
@@ -45,7 +45,7 @@ memark init
 前提：
 
 - 这里的“项目根目录”指主 git repository root，不是 linked worktree
-- 仓库必须已忽略 `.memark/` 和 `corpus/`
+- 仓库必须已忽略 `.memark/`
 
 这一条命令会自动完成：
 

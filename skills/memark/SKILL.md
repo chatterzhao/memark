@@ -33,7 +33,7 @@ __MEMARK_BIN__ doctor --platform auto
 Before project setup, verify the repository root is ready:
 
 - run `memark init` only from the main git repository root, not from a linked worktree
-- the repository root must already ignore `.memark/` and `corpus/` via `.gitignore` or `.git/info/exclude`
+- the repository root must already ignore `.memark/` via `.gitignore` or `.git/info/exclude`
 - if the root branch is protected and `.gitignore` is missing those entries, add them on a feature branch or dedicated worktree, merge that change back into the protected root branch, then return to the main repository root and run `memark init`
 - only after the main repository root has been initialized should linked worktrees use `memark worktree-attach`
 
