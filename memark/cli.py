@@ -74,6 +74,13 @@ MEMARK_ATTACH_FILES = (
     "projects.toml",
 )
 
+INIT_MEM_TOOL_HELP = """Memory tool quick guide:
+  mempalace: Default Python memory CLI with search, wake-up, and MCP access.
+    Repo: https://github.com/milla-jovovich/mempalace
+  mempal: Rust single-binary memory engine with local knowledge graph and tunnel primitives.
+    Repo: https://github.com/ZhangHanDong/mempal
+"""
+
 
 def _copy_attach_candidate(source: Path, destination: Path) -> None:
     if source.name == ".memark" and source.is_dir():
@@ -254,11 +261,21 @@ def _build_parser() -> argparse.ArgumentParser:
         target.add_argument("--dry-run", action="store_true", help="Print the memory-tool command without executing it")
         target.add_argument("--json", action="store_true", help="Render machine-readable JSON")
 
-    init_parser = subparsers.add_parser("init", help="Initialize MemArk workspace with full automated setup")
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Initialize MemArk workspace with full automated setup",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=INIT_MEM_TOOL_HELP,
+    )
     init_parser.add_argument("workspace", nargs="?", default=".", help="Workspace directory (default: current directory)")
     init_parser.add_argument("--project", help="Project slug (default: directory name)")
     init_parser.add_argument("--graphify-bin", default="graphify", help="Graphify executable name")
-    init_parser.add_argument("--mem-tool", choices=("mempalace", "mempal"), default="mempalace", help="Memory tool implementation")
+    init_parser.add_argument(
+        "--mem-tool",
+        choices=("mempalace", "mempal"),
+        default="mempalace",
+        help="Memory tool implementation. See below for a quick summary and repo links.",
+    )
     init_parser.add_argument("--mem-tool-bin", help="Memory tool executable name")
     init_parser.add_argument("--mempalace-bin", help=argparse.SUPPRESS)
     init_parser.add_argument(

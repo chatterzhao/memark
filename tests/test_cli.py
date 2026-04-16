@@ -134,6 +134,15 @@ class MemArkCliTests(unittest.TestCase):
         self.assertEqual(Path(payload["mem_tool_bin"]).name, "mempal")
         self.assertIn("Project: memark", result.stdout)
 
+    def test_init_help_describes_mem_tool_choices_with_repo_links(self) -> None:
+        result = run_cli("init", "--help", cwd=ROOT)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Memory tool quick guide:", result.stdout)
+        self.assertIn("mempalace: Default Python memory CLI with search, wake-up, and MCP access.", result.stdout)
+        self.assertIn("https://github.com/milla-jovovich/mempalace", result.stdout)
+        self.assertIn("mempal: Rust single-binary memory engine with local knowledge graph and tunnel primitives.", result.stdout)
+        self.assertIn("https://github.com/ZhangHanDong/mempal", result.stdout)
+
     def test_init_rejects_non_git_directory(self) -> None:
         """init must fail if the workspace dir is not a git repo root."""
         non_git = Path(self.tmpdir.name) / "non_git"
