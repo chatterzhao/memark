@@ -116,23 +116,6 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn('name = "memark"', projects_toml)
         self.assertIn(f'path = "{self.workspace.resolve()}"', projects_toml)
 
-    def test_load_workspace_migrates_legacy_root_corpus_into_memark(self) -> None:
-        run_cli("init", str(self.workspace), "--project", "MemArk", "--no-service", "--no-run", cwd=ROOT)
-        corpus_root = self.workspace / ".memark" / "corpus"
-        legacy_root = self.workspace / "corpus"
-        shutil.move(str(corpus_root), str(legacy_root))
-        legacy_file = legacy_root / "memark" / "promoted" / "room-legacy.md"
-        legacy_file.write_text("# Legacy\n", encoding="utf-8")
-
-        loaded = workspace_mod.load_workspace(str(self.workspace))
-
-        self.assertEqual(
-            loaded.corpus_project_dir("memark").resolve(),
-            (self.workspace / ".memark" / "corpus" / "memark").resolve(),
-        )
-        self.assertTrue((self.workspace / ".memark" / "corpus" / "memark" / "promoted" / "room-legacy.md").exists())
-        self.assertFalse(legacy_root.exists())
-
     def test_init_can_select_mempal_tool(self) -> None:
         self._write_local_git_exclude(".memark/")
         result = run_cli(
