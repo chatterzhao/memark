@@ -116,6 +116,32 @@ def default_memark_home() -> Path:
     return Path("~/.memark").expanduser().resolve()
 
 
+def managed_bin_dir(*, memark_home: Path | None = None) -> Path:
+    resolved_home = (memark_home or default_memark_home()).expanduser().resolve()
+    return resolved_home / ("Scripts" if os.name == "nt" else "bin")
+
+
+def _cargo_home() -> Path:
+    override = os.environ.get("CARGO_HOME")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path("~/.cargo").expanduser().resolve()
+
+
+def _optional_binary_path(path: Path) -> str | None:
+    if path.is_file():
+        return str(path.resolve())
+    return None
+
+
+def _resolve_cargo_command() -> str | None:
+    cargo_path = shutil.which("cargo")
+    if cargo_path is not None:
+        return cargo_path
+    cargo_candidate = _cargo_home() / "bin" / ("cargo.exe" if os.name == "nt" else "cargo")
+    return _optional_binary_path(cargo_candidate)
+
+
 def default_python_command() -> str:
     explicit = os.environ.get("MEMARK_PYTHON")
     if explicit:
@@ -241,7 +267,43 @@ def _venv_paths(memark_home: Path) -> tuple[Path, Path, Path, Path, Path]:
 
 
 def resolve_mempal_bin() -> str:
-    return shutil.which("mempal") or "mempal"
+    managed_candidate = managed_bin_dir() / ("mempal.exe" if os.name == "nt" else "mempal")
+    managed_path = _optional_binary_path(managed_candidate)
+    if managed_path is not None:
+        return managed_path
+    path_value = shutil.which("mempal")
+    if path_value is not None:
+        return path_value
+    cargo_candidate = _cargo_home() / "bin" / ("mempal.exe" if os.name == "nt" else "mempal")
+    cargo_path = _optional_binary_path(cargo_candidate)
+    if cargo_path is not None:
+        return cargo_path
+    return "mempal"
+
+
+def ensure_mempal_bin(*, memark_home: Path | None = None) -> Path:
+    resolved_home = (memark_home or default_memark_home()).expanduser().resolve()
+    resolved = resolve_mempal_bin()
+    resolved_path = Path(resolved).expanduser()
+    if resolved_path.is_file():
+        return resolved_path.resolve()
+
+    cargo_command = _resolve_cargo_command()
+    if cargo_command is None:
+        raise InstallError(
+            "MemPal CLI is required for mem_tool=mempal but is not installed. "
+            "Install Rust/cargo or install mempal manually, then retry."
+        )
+
+    managed_dir = managed_bin_dir(memark_home=resolved_home)
+    managed_dir.mkdir(parents=True, exist_ok=True)
+    _run_command([cargo_command, "install", "mempal", "--root", str(resolved_home)])
+
+    managed_candidate = managed_dir / ("mempal.exe" if os.name == "nt" else "mempal")
+    managed_path = _optional_binary_path(managed_candidate)
+    if managed_path is None:
+        raise InstallError(f"MemPal install completed without producing an executable at {managed_candidate}")
+    return Path(managed_path)
 
 
 def _run_command(command: list[str], *, cwd: Path | None = None) -> None:
