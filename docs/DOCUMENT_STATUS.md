@@ -60,6 +60,14 @@
 
 [`docs/MAINTAINER_SKILL.md`](<repo-root>/docs/MAINTAINER_SKILL.md) 是维护说明，不是用户入口。
 
+## Supporting Research
+
+以下文件是当前正式口径的支撑性研究，不应单独覆盖主线产品定义：
+
+- [`docs/RESEARCH_MEMPALACE_USAGE.md`](<repo-root>/docs/RESEARCH_MEMPALACE_USAGE.md)
+- [`docs/RESEARCH_GRAPHIFY_USAGE.md`](<repo-root>/docs/RESEARCH_GRAPHIFY_USAGE.md)
+- [`docs/RESEARCH_MEMPAL_EVALUATION.md`](<repo-root>/docs/RESEARCH_MEMPAL_EVALUATION.md)
+
 ## 研究归档
 
 [`docs/raw/`](<repo-root>/docs/raw) 保存的是研究过程，不是并列正式版本。
@@ -79,6 +87,11 @@
 2. 再讨论“系统到底是整合器还是处理管线”
 3. 然后收敛到“MemArk 的主要工作是把 MemPalace 内容输入 Graphify 处理”
 4. 最后由最终评审筛掉不可直接执行的内容
+
+另外：
+
+- [`docs/raw/UNIFIED_MEMARK_BOUNDARY_2026-04-12.md`](<repo-root>/docs/raw/UNIFIED_MEMARK_BOUNDARY_2026-04-12.md) 保留了一份未来统一 runtime 边界草案
+- 该文件已明确标注为 archived future-boundary sketch，不代表当前仓库的正式产品边界
 
 ## 最终裁定来源
 

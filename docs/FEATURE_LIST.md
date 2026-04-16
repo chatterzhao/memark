@@ -6,6 +6,7 @@
 
 - [`docs/RESEARCH_MEMPALACE_USAGE.md`](<repo-root>/docs/RESEARCH_MEMPALACE_USAGE.md)
 - [`docs/RESEARCH_GRAPHIFY_USAGE.md`](<repo-root>/docs/RESEARCH_GRAPHIFY_USAGE.md)
+- [`docs/RESEARCH_MEMPAL_EVALUATION.md`](<repo-root>/docs/RESEARCH_MEMPAL_EVALUATION.md)
 - [`docs/CODEX_SESSION_INGEST_DESIGN.md`](<repo-root>/docs/CODEX_SESSION_INGEST_DESIGN.md)
 
 ## 产品定位
