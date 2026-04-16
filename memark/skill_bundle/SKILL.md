@@ -45,7 +45,7 @@ When starting work on a new project, first check installation health:
 Before project setup, verify the repository root is ready:
 
 - run `memark init` only from the main git repository root, not from a linked worktree
-- the repository root must already ignore `.memark/` and `corpus/` via `.gitignore` or `.git/info/exclude`
+- the repository root must already ignore `.memark/` via `.gitignore` or `.git/info/exclude`
 - if the root branch is protected and `.gitignore` is missing those entries, add them on a feature branch or dedicated worktree, merge that change back into the protected root branch, then return to the main repository root and run `memark init`
 - only after the main repository root has been initialized should linked worktrees use `memark worktree-attach`
 
@@ -130,7 +130,7 @@ If an upstream Graphify flow really ingests that corpus separately, persist the 
 "$MEMARK_BIN" graphify-proof --workspace "$MEMARK_WORKSPACE" --project "$MEMARK_PROJECT" --record-ingested --evidence-path <path-to-proof-file>
 ```
 
-If either MemArk or an upstream Graphify flow writes `graphify-out/graph.json` inside `corpus/<project>` and that graph contains nodes sourced from `promoted/`, registered project documents, or `imports/`, MemArk can auto-detect the proof later via `graphify-proof` or `milestones`.
+If either MemArk or an upstream Graphify flow writes `graphify-out/graph.json` inside `.memark/corpus/<project>` and that graph contains nodes sourced from `promoted/`, registered project documents, or `imports/`, MemArk can auto-detect the proof later via `graphify-proof` or `milestones`.
 
 Important boundary:
 

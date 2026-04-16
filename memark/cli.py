@@ -76,7 +76,7 @@ MEMARK_ATTACH_FILES = (
 
 INIT_MEM_TOOL_HELP = """Init prerequisites:
   - Run 'memark init' only from the main git repository root, not from a linked worktree.
-  - The repository root must already ignore '.memark/' and 'corpus/' via '.gitignore' or '.git/info/exclude'.
+  - The repository root must already ignore '.memark/' via '.gitignore' or '.git/info/exclude'.
   - If the main branch is protected and '.gitignore' is missing those entries, add them on a feature branch or dedicated worktree, merge that change back into the protected root branch, then return to the main repository root and run 'memark init'.
   - After the main repository root has been initialized, use 'memark worktree-attach --source-dir <main-repo> --target-dir <worktree-dir>' for linked worktrees.
 
@@ -995,8 +995,8 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"  {reason}", file=sys.stderr)
         if "worktree" in reason.lower():
             print("  Run 'memark worktree-attach --source-dir <main-repo> --target-dir .' instead.", file=sys.stderr)
-            print("  If the main repository still needs '.gitignore' coverage for '.memark/' or 'corpus/',", file=sys.stderr)
-            print("  add those entries on a feature branch or dedicated worktree, merge them back into the main branch,", file=sys.stderr)
+            print("  If the main repository still needs '.gitignore' coverage for '.memark/',", file=sys.stderr)
+            print("  add that entry on a feature branch or dedicated worktree, merge it back into the main branch,", file=sys.stderr)
             print("  then rerun 'memark init' from the main repository root.", file=sys.stderr)
         else:
             print("  Please cd to the project root directory, or run 'git init' first.", file=sys.stderr)
