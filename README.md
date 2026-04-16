@@ -1,6 +1,8 @@
 # MemArk
 
-> 自动串联 MemPalace 记忆和 Graphify 图谱，让项目会话逐步变成 AI 可消费的项目知识。
+> 自动安装并操作 `MemPalace`、`mempal`、`Graphify`，把项目里的 AI 对话、决策和上下文变成后续 AI 和人都能继续消费的项目知识。
+
+`MemArk` 面向用户提供的是一条项目级自动化闭环：自动安装上游、自动配置工作流、自动喂数据、自动加工数据，并在 `memark init` 之后把结果持续提供给项目里的 AI 消费。
 
 上游项目：
 
@@ -13,31 +15,59 @@ Sponsor placeholder.
 
 If you want to sponsor `MemArk`, open an issue or contact the maintainer first.
 
-## 先给 AI 用
+## 为什么会想用它
 
-如果你是让 AI 帮你安装和接入，优先把下面两个文件之一直接给 AI：
+如果你已经在用 AI 写项目，通常会遇到这几个问题：
 
-- 正式用户安装入口：[`SKILL.md`](SKILL.md)
-- 开发期隔离验收入口：[`skill-dev.md`](skill-dev.md)
+- 聊天很多，但关键决策几天后就很难找回
+- 原始会话太长，后续 AI 每次都要重新补上下文
+- 只有记忆，没有整理；只有代码图，又吃不到过程知识
+- 项目文档、代码、AI 对话、研究记录分散在不同地方，消费面不统一
 
-可以直接把文件内容贴给 AI，也可以把文档链接发给 AI，再让它按文档执行。
+`MemArk` 想解决的不是“再做一个 AI 工具”，而是这条断裂链路：
 
-人工手动执行时，也建议先看这两个文件：
+1. AI 对话里其实已经有很多项目知识
+2. `MemPalace` / `mempal` 擅长把这些内容记住、找回、溯源
+3. `Graphify` 擅长把稳定语料编译成图谱、报告和查询面
+4. `MemArk` 自动操作这些上游，把中间这段真正跑通
 
-- `SKILL.md` 负责正式安装与项目接入
-- `skill-dev.md` 负责开发期重装、假 `HOME`、隔离验证
+一句话说，`MemArk` 解决的是：
 
-## 它是什么
+让项目记忆不再只停留在聊天记录里，而是逐步变成后续 AI 和人都能继续使用的项目知识。
+
+## 三者关系
+
+可以把三者理解成一条流水线：
+
+```mermaid
+flowchart LR
+    A["AI chats / sessions<br/>项目对话、决策、上下文"] --> B["MemPalace / mempal<br/>记住、搜索、找回原始记忆"]
+    B --> C["MemArk<br/>自动操作上游，筛选、治理、晋升为项目语料"]
+    D["Project docs / code<br/>项目代码与正式文档"] --> E["Graphify<br/>图谱、报告、查询、导航"]
+    C --> E
+    E --> F["AI and humans<br/>继续消费项目知识"]
+    B -. wake-up / recall .-> F
+```
+
+最短解释是：
+
+- `MemPalace` / `mempal` 负责原始记忆能力
+- `MemArk` 自动调用和编排这些能力，把原始记忆变成项目知识输入
+- `Graphify` 提供图谱、报告、查询和导航这类消费面
+
+## 它到底是什么
 
 `MemArk` 不是新的记忆系统，也不是新的图谱引擎。
 
-它的职责是桥接和治理：
+它对用户真正承诺的是一个 `CLI-first` 的自动化层：
 
-- `MemPalace` 负责记忆存储、搜索、wake-up、会话 ingest
-- `Graphify` 负责图谱、报告、查询等知识消费面
-- `MemArk` 负责把项目相关记忆整理成更适合 AI 消费和图谱编译的项目语料
+- 自动安装并校验 `MemPalace`、`mempal`、`Graphify` 和 `MemArk` 自己的 runtime / skill bundle
+- 自动配置这些工具之间的项目级工作流
+- 自动把项目相关会话、项目文档和代码上下文送进正确的入口
+- 自动把原始记忆加工成更适合 AI 和图谱继续消费的项目语料
+- 自动把结果持续提供给项目中的 AI 使用，而不是只做一次 ingest 就结束
 
-最核心的目标不是“把两个上游串起来”，而是让下面这条链路尽量自动化：
+内部实现上，它仍然是桥接与治理层；但在用户视角里，更重要的是这五层自动化：
 
 1. 自动安装
 2. 自动配置
@@ -45,17 +75,64 @@ If you want to sponsor `MemArk`, open an issue or contact the maintainer first.
 4. 自动加工
 5. 自动消费
 
+## 现在已经做到什么
+
+当前仓库已经不是纯概念稿，而是一个可运行的最小实现，重点是：
+
+- 自动安装用户级 `MemArk` runtime 和 AI skill bundle
+- 自动初始化项目 workspace
+- 自动同步 `Codex` / 会话目录输入
+- 自动操作 `MemPalace` ingest 项目会话输入
+- 自动把值得保留的项目记忆晋升为 `promoted` Markdown
+- 自动提供本地 corpus 的 `query` / `context` 消费入口
+- 在需要时自动触发或兼容构建本地图谱产物
+
+但它也还不是“什么都自动完成”的最终形态。
+
+当前更准确的口径是：
+
+- 已有可运行主路径
+- 已能自己吃自己的狗粮
+- 已能解决一部分真实痛点
+- 仍在继续收敛“默认体验应该是什么”
+
+如果你想看更完整的能力边界，不应该把所有细节都塞在 `README`，继续看这些文档：
+
+- 项目范围与定位：[`docs/PROJECT_SCOPE.md`](docs/PROJECT_SCOPE.md)
+- 功能清单：[`docs/FEATURE_LIST.md`](docs/FEATURE_LIST.md)
+- 重新评估：[`docs/MEMARK_REASSESSMENT.md`](docs/MEMARK_REASSESSMENT.md)
+
+## 先给 AI 用
+
+现在大多数场景下，最顺手的用法不是你先手抄命令，而是直接把安装文档交给 AI。
+
+优先把下面两个文件之一直接给 AI：
+
+- 正式用户安装入口：[`SKILL.md`](SKILL.md)
+- 开发期隔离验收入口：[`skill-dev.md`](skill-dev.md)
+
+你可以：
+
+- 直接把文件内容贴给 AI
+- 或把文档链接发给 AI
+- 或告诉 AI 按这两个文件执行
+
+人工手动执行时，也建议先看这两个文件：
+
+- `SKILL.md` 负责正式安装与项目接入
+- `skill-dev.md` 负责开发期重装、假 `HOME`、隔离验证
+
 ## 快速开始
 
 ```bash
-# 先安装 MemArk
+# 安装 MemArk
 python3 -m venv .memark-bootstrap
 .memark-bootstrap/bin/python -m pip install --upgrade pip
 .memark-bootstrap/bin/python -m pip install .
 .memark-bootstrap/bin/python -m memark install --platform codex --source-spec "$(pwd)"
 memark doctor --platform codex
 
-# 再在任意项目目录接入
+# 在目标项目目录接入
 cd your-project
 memark init
 ```
@@ -73,7 +150,7 @@ memark init
 memark init --no-auto
 ```
 
-## 安装和项目接入是两回事
+## 安装和项目接入不是一回事
 
 - `memark install`
   - 面向这台机器
@@ -85,30 +162,17 @@ memark init --no-auto
   - 面向已经存在的 workspace
   - 给一个 workspace 追加或更新项目登记
 
-这也是为什么：
+所以通常是：
 
-- 机器通常只需要执行一次 `memark install`
-- 一个项目通常执行一次 `memark init`
-- 多项目共享 workspace 时，后续更多是执行 `memark project-set`
+- 机器先执行一次 `memark install`
+- 一个项目再执行一次 `memark init`
+- 多项目共享 workspace 时，后续更多用 `memark project-set`
 
-## AI 和人工各自怎么用
+详情继续看：
 
-### AI 驱动
-
-推荐顺序：
-
-1. 把 [`SKILL.md`](SKILL.md) 或 [`skill-dev.md`](skill-dev.md) 交给 AI
-2. 让 AI 完成安装
-3. 再让 AI 在目标项目目录执行 `memark init`
-4. 后续通过 `memark context`、`memark query`、`memark automation-run` 持续消费
-
-### 手工执行
-
-如果你不打算让 AI 直接读 skill 文件，也可以手工按下面理解：
-
-- `SKILL.md` 是正式用户路径
-- `skill-dev.md` 是开发者验证路径
-- `README.md` 只保留总览，不再重复完整安装细节
+- 正式安装入口：[`SKILL.md`](SKILL.md)
+- 开发验证入口：[`skill-dev.md`](skill-dev.md)
+- 安装验证记录：[`docs/INSTALL_VERIFICATION.md`](docs/INSTALL_VERIFICATION.md)
 
 ## 常用命令
 
@@ -129,35 +193,44 @@ memark init --no-auto
 - `memark service-status --workspace . --json`
   - 查看后台调度状态
 
+如果你想看更完整的命令面和边界，继续看：
+
+- 接口与契约：[`docs/INTERFACE_CONTRACT.md`](docs/INTERFACE_CONTRACT.md)
+- AI 消费模型：[`docs/AI_CONSUMPTION_MODEL.md`](docs/AI_CONSUMPTION_MODEL.md)
+
 ## 当前边界
-
-当前仓库的公开边界是一个 CLI-first 的最小可用实现，重点在：
-
-- 安装用户级 runtime
-- 安装 AI skill bundle
-- 初始化项目 workspace
-- 同步会话
-- 驱动记忆挖掘与晋升
-- 提供本地 corpus 查询和上下文消费
-- 在需要时构建本地图谱产物
 
 当前仅支持 **macOS**。后台调度依赖 `launchd`。
 
+`README` 只负责三件事：
+
+- 一句话说明 `MemArk` 值不值得试
+- 讲清楚它解决什么问题、现在做到哪里
+- 把你导到更具体的安装、设计、研究、发布文档
+
+不该继续堆在 `README` 的内容包括：
+
+- 完整研究过程
+- 全量设计推导
+- 所有 CLI 细节
+- 发布操作细则
+
+这些内容都已经拆到专门文档里。
+
 ## 详细文档
 
-如果需要更细的背景、研究和设计，按主题看下面这些文档：
-
-- 发布流程：[`docs/GITFLOW_RELEASE_FLOW.md`](docs/GITFLOW_RELEASE_FLOW.md)
-- 发布检查：[`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md)
-- Dogfood 运行：[`docs/DOGFOOD_RUNBOOK.md`](docs/DOGFOOD_RUNBOOK.md)
-- 能力清单：[`docs/FEATURE_LIST.md`](docs/FEATURE_LIST.md)
+- 项目范围与定位：[`docs/PROJECT_SCOPE.md`](docs/PROJECT_SCOPE.md)
+- 功能清单：[`docs/FEATURE_LIST.md`](docs/FEATURE_LIST.md)
 - 接口与边界：[`docs/INTERFACE_CONTRACT.md`](docs/INTERFACE_CONTRACT.md)
 - AI 消费模型：[`docs/AI_CONSUMPTION_MODEL.md`](docs/AI_CONSUMPTION_MODEL.md)
 - 安装验证：[`docs/INSTALL_VERIFICATION.md`](docs/INSTALL_VERIFICATION.md)
 - MemPalace 调研：[`docs/RESEARCH_MEMPALACE_USAGE.md`](docs/RESEARCH_MEMPALACE_USAGE.md)
-- Graphify 调研：[`docs/RESEARCH_GRAPHIFY_USAGE.md`](docs/RESEARCH_GRAPHIFY_USAGE.md)
 - `mempal` 调研：[`docs/RESEARCH_MEMPAL_EVALUATION.md`](docs/RESEARCH_MEMPAL_EVALUATION.md)
+- Graphify 调研：[`docs/RESEARCH_GRAPHIFY_USAGE.md`](docs/RESEARCH_GRAPHIFY_USAGE.md)
 - 重新评估：[`docs/MEMARK_REASSESSMENT.md`](docs/MEMARK_REASSESSMENT.md)
+- Dogfood 运行：[`docs/DOGFOOD_RUNBOOK.md`](docs/DOGFOOD_RUNBOOK.md)
+- 发布流程：[`docs/GITFLOW_RELEASE_FLOW.md`](docs/GITFLOW_RELEASE_FLOW.md)
+- 发布检查：[`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md)
 
 ## 维护者说明
 
