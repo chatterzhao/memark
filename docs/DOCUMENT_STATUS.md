@@ -11,6 +11,7 @@
 - [`docs/MILESTONES.md`](<repo-root>/docs/MILESTONES.md)
 - [`docs/MILESTONE_NEXT.md`](<repo-root>/docs/MILESTONE_NEXT.md)
 - [`docs/RELEASE_CHECKLIST.md`](<repo-root>/docs/RELEASE_CHECKLIST.md)
+- [`docs/GITFLOW_RELEASE_FLOW.md`](<repo-root>/docs/GITFLOW_RELEASE_FLOW.md)
 - [`docs/DOGFOOD_RUNBOOK.md`](<repo-root>/docs/DOGFOOD_RUNBOOK.md)
 - [`docs/DOGFOOD_LOG.md`](<repo-root>/docs/DOGFOOD_LOG.md)
 - [`docs/AI_CONSUMPTION_MODEL.md`](<repo-root>/docs/AI_CONSUMPTION_MODEL.md)
@@ -24,6 +25,7 @@
 - `MILESTONES.md` 作为阶段能力账本，汇总各里程碑已经做成的功能
 - `MILESTONE_NEXT.md` 定义 Beta 之后下一条更合理的里程碑
 - `RELEASE_CHECKLIST.md` 定义当前 Beta 口径对外说明前必须执行的发布检查
+- `GITFLOW_RELEASE_FLOW.md` 定义 `develop -> main -> tag -> push` 的正式发布流程真源
 - `DOGFOOD_RUNBOOK.md` 定义当前仓库持续自己吃自己时的运维与排障入口
 - `DOGFOOD_LOG.md` 记录按时间推进的真实 dogfood 证据
 - `AI_CONSUMPTION_MODEL.md` 定义当前 AI 应如何消费这些产物
@@ -45,6 +47,7 @@
 - [`docs/MILESTONES.md`](<repo-root>/docs/MILESTONES.md)
 - [`docs/MILESTONE_NEXT.md`](<repo-root>/docs/MILESTONE_NEXT.md)
 - [`docs/RELEASE_CHECKLIST.md`](<repo-root>/docs/RELEASE_CHECKLIST.md)
+- [`docs/GITFLOW_RELEASE_FLOW.md`](<repo-root>/docs/GITFLOW_RELEASE_FLOW.md)
 - [`docs/DOGFOOD_RUNBOOK.md`](<repo-root>/docs/DOGFOOD_RUNBOOK.md)
 - [`docs/DOGFOOD_LOG.md`](<repo-root>/docs/DOGFOOD_LOG.md)
 - [`docs/FEATURE_LIST.md`](<repo-root>/docs/FEATURE_LIST.md)

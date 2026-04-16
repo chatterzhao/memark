@@ -26,6 +26,9 @@ memark init
 
 当前仅支持 **macOS**。后台调度依赖 `launchd`，后续版本将支持 Linux（systemd/cron）和 Windows（Task Scheduler）。
 
+维护者如果要执行正式 Gitflow 发布，统一参考
+[`docs/GITFLOW_RELEASE_FLOW.md`](docs/GITFLOW_RELEASE_FLOW.md)。
+
 ## 当前判断
 
 基于 2026-04-08 的实际使用结果，而不是只看 README 或源码，当前可以把三者关系收敛为：
