@@ -48,6 +48,7 @@ memark-work/
 .experiments/
 
 # Corpus runtime artifacts
+corpus/
 corpus/*/.codex/
 corpus/*/AGENTS.md
 corpus/*/imports/
