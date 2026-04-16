@@ -197,6 +197,8 @@ class MemArkCliTests(unittest.TestCase):
         self.assertIn("requires local runtime paths to already be ignored", result.stderr)
         self.assertIn(".memark/", result.stderr)
         self.assertIn("corpus/", result.stderr)
+        self.assertIn("protected", result.stderr)
+        self.assertIn("feature branch", result.stderr)
 
     def test_init_accepts_local_git_exclude_coverage(self) -> None:
         self._write_local_git_exclude(".memark/", "corpus/")
@@ -258,6 +260,17 @@ class MemArkCliTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("worktree", result.stderr.lower())
         self.assertIn("worktree-attach", result.stderr)
+        self.assertIn("main repository root", result.stderr)
+        self.assertIn(".gitignore", result.stderr)
+
+    def test_init_help_mentions_gitignore_and_protected_branch_flow(self) -> None:
+        result = run_cli("init", "--help", cwd=ROOT)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(".gitignore", result.stdout)
+        self.assertIn(".memark/", result.stdout)
+        self.assertIn("corpus/", result.stdout)
+        self.assertIn("protected", result.stdout)
+        self.assertIn("worktree-attach", result.stdout)
 
     def test_project_document_scan_ignores_memark_bootstrap(self) -> None:
         docs_dir = self.workspace / "docs"

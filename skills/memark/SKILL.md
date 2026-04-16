@@ -30,6 +30,13 @@ When starting work on a new project, first check installation health:
 __MEMARK_BIN__ doctor --platform auto
 ```
 
+Before project setup, verify the repository root is ready:
+
+- run `memark init` only from the main git repository root, not from a linked worktree
+- the repository root must already ignore `.memark/` and `corpus/` via `.gitignore` or `.git/info/exclude`
+- if the root branch is protected and `.gitignore` is missing those entries, add them on a feature branch or dedicated worktree, merge that change back into the protected root branch, then return to the main repository root and run `memark init`
+- only after the main repository root has been initialized should linked worktrees use `memark worktree-attach`
+
 For project setup, the simplest path is:
 
 ```bash
@@ -78,6 +85,6 @@ If the user creates a new `git worktree`, do not re-install everything manually.
 __MEMARK_BIN__ worktree-attach --source-dir <repo-dir> --target-dir <worktree-dir>
 ```
 
-That command copies directory-local `.memark`, `.mempalace`, `.codex`, `.claude`, and `AGENTS.md` config into the new worktree.
+That command copies directory-local `.memark`, `.mempalace`, `.codex`, `.claude`, and `AGENTS.md` config into the new worktree. It assumes the main repository root has already completed `memark init`.
 
 If the user asks for installation or repair, use the scripts in `bin/` or the install skill from the repository root.
